@@ -55,6 +55,10 @@ export class Companion {
   }
 
   bond(): void { this.bound = true; }
+  retreat(): void {
+    this.bound = false;
+    this.root.position.copy(this.wildPosition).add(new THREE.Vector3(0, 1.5, 0));
+  }
 
   triggerPulse(): void { this.pulseTime = 0.5; }
 

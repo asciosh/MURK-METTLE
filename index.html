@@ -8,7 +8,7 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — Prototype 0.4</title>
+    <title>Murk &amp; Mettle — Prototype 0.5</title>
   </head>
   <body>
     <div id="app">
@@ -22,8 +22,8 @@
         </a>
         <div class="build-tag">
           <span class="status-dot"></span>
-          <span>CREATURE PLAYTEST</span>
-          <b>0.4</b>
+          <span>LOOT & BOND TEST</span>
+          <b>0.5</b>
         </div>
       </header>
 
@@ -31,16 +31,16 @@
         <div class="reticle" aria-hidden="true"><span></span></div>
 
         <section class="welcome-card" aria-live="polite">
-          <p class="eyebrow">THE QUARANTINE ZONE · FIELD TEST 004</p>
+          <p class="eyebrow">THE QUARANTINE ZONE · FIELD TEST 005</p>
           <h1>THE WILD<br /><em>FIGHTS BACK.</em></h1>
           <p class="welcome-copy">
-            The Bloom is spreading. Meet the glowing Lanternkin, bond with it using E, and use Q to unleash its pulse against the infected.
+            The Bloom is spreading. Salvage resources from the infected, collect them using E, and watch Lanternkin’s bond strain when using Q.
           </p>
           <div class="enter-prompt">
             <span class="enter-key">CLICK</span>
             <span>TO ENTER THE FIELD</span>
           </div>
-          <p class="welcome-footnote">Prototype 0.4 · RPG progression and creature XP</p>
+          <p class="welcome-footnote">Prototype 0.5 · RPG progression and creature XP</p>
         </section>
 
         <section class="player-status" aria-label="Player vitality">
@@ -67,7 +67,21 @@
           <div class="progress-top"><span class="creature-eyebrow">COMPANION PROGRESSION</span><b id="creature-level">UNBONDED</b></div>
           <div class="progress-track"><div id="creature-xp-fill" class="progress-fill creature-xp-fill" style="width: 0%"></div></div>
           <div id="creature-xp-text" class="progress-bottom">BOND TO EARN XP</div>
+          <div class="strain-top"><span>BOND STRAIN</span><span id="bond-strain-label">0% STRAIN</span></div>
+          <div class="strain-track"><div id="bond-strain-fill" class="strain-fill"></div></div>
           <button id="ability-button" class="ability-button" type="button" disabled>LOCKED · FIND LANTERNKIN</button>
+        </section>
+        <section id="inventory-panel" class="inventory-panel" aria-label="Field backpack">
+          <div class="inventory-title"><strong>FIELD BACKPACK</strong><span>3 SLOTS · MAX 20 EACH</span></div>
+          <p>Salvage from defeated infected. Crafting arrives in a later milestone.</p>
+          <div id="inventory-grid" class="inventory-grid"></div>
+          <p class="inventory-footnote">Press I to close or use the BACKPACK button.</p>
+        </section>
+        <button id="inventory-button" class="inventory-toggle" type="button" aria-expanded="false">I · BACKPACK</button>
+        <div id="loot-hint" class="loot-hint" role="status"></div>
+        <section id="radio-panel" class="radio-panel" aria-live="polite" aria-label="Field radio">
+          <div class="radio-caption">◉ FIELD RADIO · ROOK</div>
+          <div id="radio-line" class="radio-line"></div>
         </section>
         <div id="bond-hint" class="bond-hint" role="status">PRESS <kbd>E</kbd> TO BOND WITH LANTERNKIN</div>
 
@@ -75,7 +89,7 @@
         <div id="damage-flash" class="damage-flash" aria-hidden="true"></div>
 
         <section id="defeat-overlay" class="defeat-overlay" aria-live="assertive">
-          <p class="eyebrow">FIELD TEST 004 · FAILED</p>
+          <p class="eyebrow">FIELD TEST 005 · FAILED</p>
           <h2>YOU'RE<br /><em>DOWN.</em></h2>
           <p>The infected overpowered you. Regroup and try again.</p>
           <div class="retry-hint"><kbd>R</kbd> RESTART ENCOUNTER</div>

@@ -4,6 +4,8 @@ import { Player } from './Player';
 import { World } from './World';
 import { Zombie } from './Zombie';
 import { Companion } from './Companion';
+import { Inventory, ITEM_DEFINITIONS, type ItemId } from './Inventory';
+import { Loot } from './Loot';
 import { Progression, levelFromXp, xpInLevel, CREATURE_XP_PER_PULSE_HIT, CREATURE_XP_PER_PULSE_KILL } from './Progression';
 
 export class Game {
@@ -20,7 +22,32 @@ export class Game {
   private readonly bondHint: HTMLElement | null;
   private readonly abilityButton: HTMLButtonElement | null;
   private abilityCooldown = 0;
-  private hasCollectedLanternkin = false;
+  private readonly inventory = new Inventory();
+  private readonly drops: Loot[] = [];
+  private dropSequence = 0;
+  private readonly inventoryPanel: HTMLElement | null;
+  private readonly inventoryGrid: HTMLElement | null;
+  private readonly inventoryButton: HTMLButtonElement | null;
+  private readonly lootHint: HTMLElement | null;
+  private readonly bondStrainFill: HTMLElement | null;
+  private readonly bondStrainLabel: HTMLElement | null;
+  private readonly radioPanel: HTMLElement | null;
+  private readonly radioLine: HTMLElement | null;
+  private radioTimer = 0;
+  private radioIndex = 0;
+  private bondStrain = 0;
+  private recoveringBond = false;
+  private readonly bondRetreatKey = 'murk-mettle-v05-bond-retreat';
+  private inventoryOpen = false;
+  private readonly radioLines = {
+    intro: 'Rook: Signal is clear. Mostly. Stay sharp out there.',
+    bond: 'Rook: Look at that. It chose you. Try not to disappoint it.',
+    pulse: 'Rook: That light leaves a trail. Watch the strain.',
+    loot: 'Rook: If it glows and it is not trying to eat you, bag it.',
+    lost: 'Rook: Bond signal lost. It is not gone forever. Find it.',
+    recovered: 'Rook: Signal restored. Second chances are rare out here.',
+    defeat: 'Rook: I am not writing your obituary. Get back up.',
+  } as const;
   private readonly progression = new Progression();
   private readonly playerLevelText: HTMLElement | null;
   private readonly playerXpFill: HTMLElement | null;
@@ -73,8 +100,8 @@ export class Game {
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
     this.companion = new Companion(this.scene);
     if (this.progression.state.lanternkinBonded) {
-      this.companion.bond();
-      this.hasCollectedLanternkin = true;
+      try { this.recoveringBond = localStorage.getItem(this.bondRetreatKey) === '1'; } catch { /* Storage disabled. */ }
+      if (!this.recoveringBond) this.companion.bond();
     }
     this.input = new InputController(this.renderer.domElement, (locked) => {
       document.body.classList.toggle('is-pointer-locked', locked);
@@ -101,6 +128,17 @@ export class Game {
     this.bondHint = document.querySelector<HTMLElement>('#bond-hint');
     this.abilityButton = document.querySelector<HTMLButtonElement>('#ability-button');
     this.abilityButton?.addEventListener('click', this.handleAbilityClick);
+    this.inventoryPanel = document.querySelector<HTMLElement>('#inventory-panel');
+    this.inventoryGrid = document.querySelector<HTMLElement>('#inventory-grid');
+    this.inventoryButton = document.querySelector<HTMLButtonElement>('#inventory-button');
+    this.lootHint = document.querySelector<HTMLElement>('#loot-hint');
+    this.bondStrainFill = document.querySelector<HTMLElement>('#bond-strain-fill');
+    this.bondStrainLabel = document.querySelector<HTMLElement>('#bond-strain-label');
+    this.radioPanel = document.querySelector<HTMLElement>('#radio-panel');
+    this.radioLine = document.querySelector<HTMLElement>('#radio-line');
+    this.inventoryButton?.addEventListener('click', this.handleInventoryClick);
+    this.updateInventoryHud();
+    this.say('intro');
     this.updateCompanionHud();
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -143,6 +181,11 @@ export class Game {
     this.attackCooldown = Math.max(0, this.attackCooldown - deltaSeconds);
     this.abilityCooldown = Math.max(0, this.abilityCooldown - deltaSeconds);
     this.toastTimer = Math.max(0, this.toastTimer - deltaSeconds);
+    this.radioTimer = Math.max(0, this.radioTimer - deltaSeconds);
+    this.radioPanel?.classList.toggle('visible', this.radioTimer > 0);
+    for (const drop of this.drops) drop.update(deltaSeconds);
+    // Low-strain resting is a deliberate choice, not an unlimited damage-free pulse.
+    if (this.companion.isBound()) this.bondStrain = Math.max(0, this.bondStrain - deltaSeconds * 2.5);
     this.damageFlashTimer = Math.max(0, this.damageFlashTimer - deltaSeconds);
 
     const mouse = this.input.consumeMouseDelta();
@@ -159,7 +202,8 @@ export class Game {
     this.player.update(movement, deltaSeconds, this.input.isSprinting(), this.world);
 
     this.companion.update(deltaSeconds, this.player.getPosition(), this.player.root.rotation.y, this.world);
-    if (this.input.consumeInteractPressed()) this.handleBond();
+    if (this.input.consumeInventoryPressed()) this.toggleInventory();
+    if (this.input.consumeInteractPressed()) this.handleInteract();
     if (this.input.consumeAbilityPressed()) this.handleCreatureAbility();
     if (this.input.consumeAttackPressed()) this.handlePlayerAttack();
     if (this.input.consumeRestartPressed() && this.player.getHealth() <= 0) this.resetEncounter();
@@ -167,12 +211,14 @@ export class Game {
     if (!this.zombie.isDead()) {
       const landedHit = this.zombie.update(this.player.getPosition(), deltaSeconds, this.world);
       if (landedHit && this.player.getHealth() > 0) {
-        const appliedDamage = this.player.takeDamage(12);
+        const appliedDamage = this.player.takeDamage(this.zombie.damage);
         if (appliedDamage > 0) {
           this.damageFlashTimer = 0.2;
+          if (this.companion.isBound()) this.addBondStrain(18);
           this.showToast(`YOU WERE HIT  //  -${appliedDamage} VITALITY`, 'danger');
           if (this.player.getHealth() <= 0) {
             this.defeatOverlay?.classList.add('visible');
+            this.say('defeat');
             this.showToast('EXPEDITION FAILED  //  Press R to try again.', 'danger');
           }
         }
@@ -181,7 +227,7 @@ export class Game {
       this.zombieRespawnTimer += deltaSeconds;
       if (this.zombieRespawnTimer >= 6) {
         this.spawnZombie();
-        this.showToast('NEW INFECTED CONTACT  //  Stay alert.', 'warning');
+        this.showToast(`NEW STRAIN  //  ${this.zombie.displayName.toUpperCase()} detected.`, 'warning');
       }
     }
 
@@ -192,6 +238,79 @@ export class Game {
   };
 
   private readonly handleAbilityClick = (): void => { this.handleCreatureAbility(); };
+  private readonly handleInventoryClick = (): void => { this.toggleInventory(); };
+
+  private toggleInventory(): void {
+    this.inventoryOpen = !this.inventoryOpen;
+    this.inventoryPanel?.classList.toggle('visible', this.inventoryOpen);
+    if (this.inventoryButton) this.inventoryButton.setAttribute('aria-expanded', String(this.inventoryOpen));
+    this.updateInventoryHud();
+  }
+
+  private updateInventoryHud(): void {
+    if (!this.inventoryGrid) return;
+    this.inventoryGrid.replaceChildren();
+    for (const [id, def] of Object.entries(ITEM_DEFINITIONS) as [ItemId, typeof ITEM_DEFINITIONS[ItemId]][]) {
+      const row = document.createElement('div');
+      row.className = 'inventory-item';
+      const title = document.createElement('span');
+      title.textContent = def.name;
+      title.title = def.description;
+      const count = document.createElement('strong');
+      count.textContent = `${this.inventory.state[id]} / 20`;
+      row.append(title, count);
+      this.inventoryGrid.append(row);
+    }
+  }
+
+  private say(key: keyof Game['radioLines']): void {
+    // Rook is an original radio operator, not a character or voice from another game.
+    if (this.radioLine) this.radioLine.textContent = this.radioLines[key];
+    this.radioTimer = 4.8;
+    this.radioPanel?.classList.add('visible');
+  }
+
+  private spawnLoot(): void {
+    const ids: ItemId[] = ['spore', 'scrap', 'fiber'];
+    const id = ids[this.dropSequence % ids.length];
+    this.dropSequence++;
+    const drop = new Loot(this.scene, id, this.zombie.getPosition().clone());
+    this.drops.push(drop);
+    // Keep the prototype from accumulating unbounded 3D meshes.
+    if (this.drops.length > 12) this.drops.shift()?.dispose(this.scene);
+  }
+
+  private handleInteract(): void {
+    if (this.player.getHealth() <= 0) return;
+    const playerPos = this.player.getPosition();
+    const candidate = this.drops.find(drop => drop.canPickUp(playerPos));
+    if (candidate) {
+      if (!this.inventory.add(candidate.id)) {
+        this.showToast(`PACK FULL  //  ${ITEM_DEFINITIONS[candidate.id].name} has reached 20 / 20.`, 'warning');
+        return;
+      }
+      this.drops.splice(this.drops.indexOf(candidate), 1);
+      candidate.dispose(this.scene);
+      this.updateInventoryHud();
+      this.showToast(`SALVAGED  //  +1 ${ITEM_DEFINITIONS[candidate.id].name}. Press I for pack.`, 'success');
+      if (++this.radioIndex === 1) this.say('loot');
+      return;
+    }
+    this.handleBond();
+  }
+
+  private addBondStrain(amount: number): void {
+    if (!this.companion.isBound()) return;
+    this.bondStrain = Math.min(100, this.bondStrain + amount);
+    if (this.bondStrain >= 100) {
+      this.recoveringBond = true;
+      try { localStorage.setItem(this.bondRetreatKey, '1'); } catch { /* Storage disabled. */ }
+      this.companion.retreat();
+      this.abilityCooldown = 0;
+      this.showToast('BOND FRACTURED  //  Lanternkin retreated. Find it and press E.', 'warning');
+      this.say('lost');
+    }
+  }
 
   private handleBond(): void {
     if (this.player.getHealth() <= 0 || this.companion.isBound()) return;
@@ -200,9 +319,17 @@ export class Game {
       return;
     }
     this.companion.bond();
-    this.hasCollectedLanternkin = true;
-    this.progression.bondLanternkin();
-    this.showToast('NEW BOND  //  Lanternkin joined your field collection! Press Q to pulse.', 'success');
+    if (this.recoveringBond) {
+      this.recoveringBond = false;
+      try { localStorage.removeItem(this.bondRetreatKey); } catch { /* Storage disabled. */ }
+      this.bondStrain = 25;
+      this.say('recovered');
+      this.showToast('BOND RESTORED  //  Lanternkin is safe. Its levels were preserved.', 'success');
+    } else {
+      this.progression.bondLanternkin();
+      this.say('bond');
+      this.showToast('NEW BOND  //  Lanternkin joined your field collection! Press Q to pulse.', 'success');
+    }
     this.updateCompanionHud();
   }
 
@@ -211,6 +338,10 @@ export class Game {
     if (this.abilityCooldown > 0) return;
     this.abilityCooldown = 8;
     this.companion.triggerPulse();
+    if (this.companion.isBound() && this.bondStrain >= 20 && this.radioIndex <= 1) {
+      this.radioIndex = 2;
+      this.say('pulse');
+    }
     if (!this.zombie.isDead() && this.zombie.getPosition().distanceTo(this.companion.getPosition()) <= 7.5) {
       const killed = this.zombie.takeDamage(35);
       if (killed) {
@@ -224,19 +355,24 @@ export class Game {
     } else {
       this.showToast('LANTERN PULSE  //  No infected within range.', 'info');
     }
+    this.addBondStrain(35);
     this.updateCompanionHud();
   }
 
   private updateCompanionHud(): void {
-    this.creaturePanel?.classList.toggle('bonded', this.hasCollectedLanternkin);
+    this.creaturePanel?.classList.toggle('bonded', this.companion.isBound());
+    this.creaturePanel?.classList.toggle('retreated', this.recoveringBond);
+    if (this.bondStrainFill) this.bondStrainFill.style.width = `${this.bondStrain}%`;
+    if (this.bondStrainLabel) this.bondStrainLabel.textContent = this.recoveringBond ? 'SIGNAL LOST · RECOVER LANTERNKIN' : `${Math.round(this.bondStrain)}% STRAIN`;
     if (this.bondHint) {
       const near = this.companion.canBond(this.player.getPosition());
       this.bondHint.classList.toggle('visible', near && this.player.getHealth() > 0);
+      this.bondHint.textContent = this.recoveringBond ? 'PRESS E TO RECOVER LANTERNKIN' : 'PRESS E TO BOND WITH LANTERNKIN';
     }
     if (this.abilityButton) {
-      this.abilityButton.disabled = !this.hasCollectedLanternkin || this.abilityCooldown > 0 || this.player.getHealth() <= 0;
-      this.abilityButton.textContent = !this.hasCollectedLanternkin
-        ? 'LOCKED · FIND LANTERNKIN'
+      this.abilityButton.disabled = !this.companion.isBound() || this.abilityCooldown > 0 || this.player.getHealth() <= 0;
+      this.abilityButton.textContent = !this.companion.isBound()
+        ? (this.recoveringBond ? 'BOND LOST · RECOVER COMPANION' : 'LOCKED · FIND LANTERNKIN')
         : this.abilityCooldown > 0
           ? `PULSE RECHARGING · ${Math.ceil(this.abilityCooldown)}s`
           : 'Q · LANTERN PULSE READY';
@@ -276,6 +412,7 @@ export class Game {
   }
 
   private registerKill(fromPulse: boolean): void {
+    this.spawnLoot();
     const leveled = this.progression.recordKill();
     const creatureLeveled = fromPulse && this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_KILL);
     if (leveled || creatureLeveled) {
@@ -295,13 +432,15 @@ export class Game {
 
   private resetEncounter(): void {
     this.player.reset();
+    // On defeat, strain is reset but a retreating companion remains recoverable.
+    if (this.companion.isBound()) this.bondStrain = Math.max(0, this.bondStrain - 20);
     this.cameraYaw = 0;
     this.attackCooldown = 0;
     this.zombieRespawnTimer = 0;
     this.defeatOverlay?.classList.remove('visible');
     this.zombie.dispose();
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
-    this.showToast('EXPEDITION RESTARTED  //  The infected is ahead.', 'info');
+    this.showToast(`EXPEDITION RESTARTED  //  ${this.zombie.displayName.toUpperCase()} ahead.`, 'info');
   }
 
   private showToast(message: string, type: 'info' | 'success' | 'warning' | 'danger'): void {
@@ -343,14 +482,19 @@ export class Game {
     if (!this.zombie.isDead()) {
       const enemyHealth = this.zombie.getHealth();
       this.enemyPanel?.classList.add('visible');
-      if (this.enemyHealthFill) this.enemyHealthFill.style.width = `${enemyHealth}%`;
-      if (this.enemyHealthText) this.enemyHealthText.textContent = `${enemyHealth} / 100`;
-      if (this.enemyStateText) this.enemyStateText.textContent = 'INFECTED RUNNER';
+      if (this.enemyHealthFill) this.enemyHealthFill.style.width = `${(enemyHealth / this.zombie.getMaxHealth()) * 100}%`;
+      if (this.enemyHealthText) this.enemyHealthText.textContent = `${enemyHealth} / ${this.zombie.getMaxHealth()}`;
+      if (this.enemyStateText) this.enemyStateText.textContent = this.zombie.displayName.toUpperCase();
     } else {
       this.enemyPanel?.classList.remove('visible');
     }
 
     this.updateCompanionHud();
+    const nearestDrop = this.drops.find(drop => drop.canPickUp(position));
+    if (this.lootHint) {
+      this.lootHint.textContent = nearestDrop ? `PRESS E · COLLECT ${ITEM_DEFINITIONS[nearestDrop.id].name.toUpperCase()}` : '';
+      this.lootHint.classList.toggle('visible', Boolean(nearestDrop) && health > 0);
+    }
     this.updateProgressHud();
     if (this.toastTimer <= 0) this.combatToast?.classList.remove('visible');
   }
@@ -382,6 +526,9 @@ export class Game {
     this.renderer.setAnimationLoop(null);
     this.input.dispose();
     this.abilityButton?.removeEventListener('click', this.handleAbilityClick);
+    this.inventoryButton?.removeEventListener('click', this.handleInventoryClick);
+    for (const drop of this.drops) drop.dispose(this.scene);
+    this.drops.length = 0;
     this.companion.dispose();
     this.resizeObserver?.disconnect();
     this.player.dispose();

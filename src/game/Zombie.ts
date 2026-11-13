@@ -3,6 +3,39 @@ import type { World } from './World';
 
 type ZombieState = 'idle' | 'chase' | 'attack' | 'dead';
 
+/** Original mutated infection strains, not human ethnicities or licensed characters. */
+export type InfectedStrain = 'runner' | 'barkhide' | 'sporeling' | 'ashwalker';
+
+interface StrainProfile {
+  name: string;
+  skin: number;
+  dark: number;
+  eyes: number;
+  spores: number;
+  scale: [number, number, number];
+  health: number;
+  speed: number;
+  damage: number;
+}
+
+const STRAINS: Record<InfectedStrain, StrainProfile> = {
+  runner: { name: 'Feral Runner', skin: 0x64745a, dark: 0x29372c, eyes: 0xff8b58, spores: 0x9fb96d, scale: [0.88, 1.02, 0.88], health: 80, speed: 3.05, damage: 10 },
+  barkhide: { name: 'Barkhide', skin: 0x756746, dark: 0x382b1e, eyes: 0xf2d96b, spores: 0x8f7542, scale: [1.25, 1.13, 1.20], health: 145, speed: 1.58, damage: 17 },
+  sporeling: { name: 'Sporeling', skin: 0x79956b, dark: 0x405a3e, eyes: 0xa6f3ce, spores: 0xadd879, scale: [0.79, 0.83, 0.83], health: 65, speed: 2.75, damage: 8 },
+  ashwalker: { name: 'Ashwalker', skin: 0x797d85, dark: 0x30333a, eyes: 0xfc6e62, spores: 0xaa746f, scale: [0.99, 1.20, 0.96], health: 110, speed: 2.08, damage: 13 },
+};
+const STRAIN_IDS = Object.keys(STRAINS) as InfectedStrain[];
+let previousStrain: InfectedStrain | null = null;
+
+function randomStrain(): InfectedStrain {
+  // Avoid two identical consecutive encounters to make variation obvious in solo tests.
+  const candidates = STRAIN_IDS.filter(id => id !== previousStrain);
+  const selected = candidates[Math.floor(Math.random() * candidates.length)];
+  previousStrain = selected;
+  return selected;
+}
+
+
 /** Original procedural infected enemy for the first combat encounter. */
 export class Zombie {
   readonly root = new THREE.Group();
@@ -18,14 +51,30 @@ export class Zombie {
   private readonly eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff8b58 });
   private readonly leftArm = new THREE.Group();
   private readonly rightArm = new THREE.Group();
-  private health = 100;
+  readonly strain: InfectedStrain;
+  readonly maxHealth: number;
+  readonly displayName: string;
+  readonly damage: number;
+  private readonly movementSpeed: number;
+  private health: number;
   private state: ZombieState = 'idle';
   private attackCooldown = 0.6;
   private animationClock = 0;
   private hitFlashTime = 0;
 
   constructor(private readonly scene: THREE.Scene, position: THREE.Vector3) {
-    this.root.name = 'infected-runner';
+    this.strain = randomStrain();
+    const profile = STRAINS[this.strain];
+    this.displayName = profile.name;
+    this.maxHealth = profile.health;
+    this.health = profile.health;
+    this.movementSpeed = profile.speed;
+    this.damage = profile.damage;
+    this.bodyMaterial.color.setHex(profile.skin);
+    this.darkMaterial.color.setHex(profile.dark);
+    this.eyeMaterial.color.setHex(profile.eyes);
+    this.root.name = `infected-${this.strain}`;
+    this.root.scale.set(...profile.scale);
     this.root.position.copy(position);
     this.createModel();
     this.scene.add(this.root);
@@ -89,7 +138,7 @@ export class Zombie {
 
     const spore = new THREE.Mesh(
       new THREE.SphereGeometry(0.16, 10, 8),
-      new THREE.MeshStandardMaterial({ color: 0x9fb96d, emissive: 0x3c5520, emissiveIntensity: 0.7 }),
+      new THREE.MeshStandardMaterial({ color: STRAINS[this.strain].spores, emissive: 0x3c5520, emissiveIntensity: 0.7 }),
     );
     spore.position.set(-0.26, 1.52, 0.25);
     spore.scale.set(1, 0.75, 1);
@@ -133,7 +182,7 @@ export class Zombie {
       if (distance > 0.001) {
         toPlayer.normalize();
         this.faceDirection(toPlayer);
-        this.root.position.addScaledVector(toPlayer, 2.35 * deltaSeconds);
+        this.root.position.addScaledVector(toPlayer, this.movementSpeed * deltaSeconds);
         world.constrainActorPosition(this.root.position, 0.43);
       }
       const gait = Math.sin(this.animationClock * 8.5);
@@ -171,6 +220,8 @@ export class Zombie {
     }
     return false;
   }
+
+  getMaxHealth(): number { return this.maxHealth; }
 
   getHealth(): number {
     return this.health;

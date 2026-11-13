@@ -241,3 +241,32 @@ kbd { min-width: 16px; padding: 3px 4px; border: 1px solid rgba(226,237,214,.2);
   .creature-panel { top: 251px; }
   .progress-bottom { font-size: 7px; }
 }
+
+/* Prototype 0.5 — original field radio, inventory and recoverable creature strain */
+.strain-top { display:flex; justify-content:space-between; gap:8px; font:8px 'DM Mono',monospace; letter-spacing:.08em; color:#c9e2b5; margin:10px 0 6px; }
+.strain-track { height:5px; background:rgba(238,244,224,.15); overflow:hidden; margin-bottom:12px; }
+.strain-fill { height:100%; width:0%; background:#e6ac66; transition:width .2s; }
+.creature-panel.retreated { border-color:rgba(230,172,102,.65); }
+.creature-panel.retreated .creature-name { color:#edc18a; }
+.inventory-toggle { position:absolute; z-index:7; top:100px; left:50%; transform:translateX(-50%); cursor:pointer; padding:10px 14px; border:1px solid rgba(199,224,170,.45); background:rgba(12,22,17,.85); color:#d6edb7; font:10px 'DM Mono',monospace; }
+.inventory-panel { position:absolute; z-index:8; top:145px; left:50%; transform:translateX(-50%) translateY(-8px); width:min(380px,calc(100vw - 28px)); background:rgba(12,22,17,.96); border:1px solid rgba(199,224,170,.38); box-shadow:0 18px 60px rgba(0,0,0,.4); padding:18px; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .15s,transform .15s; }
+.inventory-panel.visible { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+.inventory-title { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.inventory-title strong { color:#e5f5cc; font:800 20px 'Barlow Condensed',sans-serif; letter-spacing:.09em; }
+.inventory-title span,.inventory-footnote { font:8px 'DM Mono',monospace; color:#a3b79e; }
+.inventory-panel p { font-size:11px; line-height:1.6; color:#b8c7b3; }
+.inventory-item { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 0; border-top:1px solid rgba(234,242,214,.14); font:11px 'Manrope',sans-serif; }
+.inventory-item strong { font:10px 'DM Mono',monospace; color:#d9eab8; }
+.radio-panel { position:absolute; z-index:5; left:50%; bottom:165px; transform:translateX(-50%) translateY(7px); width:min(410px,calc(100vw - 35px)); pointer-events:none; padding:11px 15px; background:rgba(11,25,20,.83); border-left:3px solid #a6cc94; opacity:0; transition:opacity .2s,transform .2s; }
+.radio-panel.visible { opacity:1; transform:translateX(-50%) translateY(0); }
+.radio-caption { font:8px 'DM Mono',monospace; letter-spacing:.14em; color:#b2dfa2; margin-bottom:7px; }
+.radio-line { font:11px 'Manrope',sans-serif; color:#f0f2e9; line-height:1.45; }
+.loot-hint { position:absolute; z-index:6; left:50%; top:43%; transform:translateX(-50%); pointer-events:none; padding:11px 16px; background:rgba(20,29,17,.85); color:#e4d6a7; font:10px 'DM Mono',monospace; white-space:nowrap; opacity:0; transition:opacity .15s; }
+.loot-hint.visible { opacity:1; }
+@media (max-width:680px) {
+ .inventory-toggle { top:78px; padding:7px 10px; font-size:9px; }
+ .inventory-panel { top:113px; }
+ .radio-panel { bottom:165px; }
+ .loot-hint { font-size:8px; top:50%; }
+ .creature-panel { top:251px; }
+}
