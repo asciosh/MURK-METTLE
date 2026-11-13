@@ -8,7 +8,7 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — Prototype 0.2</title>
+    <title>Murk &amp; Mettle — Prototype 0.3</title>
   </head>
   <body>
     <div id="app">
@@ -22,8 +22,8 @@
         </a>
         <div class="build-tag">
           <span class="status-dot"></span>
-          <span>COMBAT PLAYTEST</span>
-          <b>0.2</b>
+          <span>CREATURE PLAYTEST</span>
+          <b>0.3</b>
         </div>
       </header>
 
@@ -31,16 +31,16 @@
         <div class="reticle" aria-hidden="true"><span></span></div>
 
         <section class="welcome-card" aria-live="polite">
-          <p class="eyebrow">THE QUARANTINE ZONE · FIELD TEST 002</p>
+          <p class="eyebrow">THE QUARANTINE ZONE · FIELD TEST 003</p>
           <h1>THE WILD<br /><em>FIGHTS BACK.</em></h1>
           <p class="welcome-copy">
-            An infected is moving through the clearing. Close the distance, face it and take it down.
+            The Bloom is spreading. Meet the glowing Lanternkin, bond with it using E, and use Q to unleash its pulse against the infected.
           </p>
           <div class="enter-prompt">
             <span class="enter-key">CLICK</span>
             <span>TO ENTER THE FIELD</span>
           </div>
-          <p class="welcome-footnote">Prototype 0.2 · First infected encounter</p>
+          <p class="welcome-footnote">Prototype 0.3 · First creature bonding and combat</p>
         </section>
 
         <section class="player-status" aria-label="Player vitality">
@@ -54,11 +54,19 @@
           <div class="enemy-subtitle">HOSTILE · THE BLOOM</div>
         </section>
 
+        <section id="creature-panel" class="creature-panel" aria-label="Field companion collection">
+          <div class="creature-eyebrow">FIELD JOURNAL · 001 / 001</div>
+          <div class="creature-name">✦ LANTERNKIN <span class="creature-status-wild">WILD</span><span class="creature-status-bonded">BONDED ✓</span></div>
+          <p>Floating woodland companion. Its light pulse damages infected nearby.</p>
+          <button id="ability-button" class="ability-button" type="button" disabled>LOCKED · FIND LANTERNKIN</button>
+        </section>
+        <div id="bond-hint" class="bond-hint" role="status">PRESS <kbd>E</kbd> TO BOND WITH LANTERNKIN</div>
+
         <div id="combat-toast" class="combat-toast" role="status" aria-live="polite"></div>
         <div id="damage-flash" class="damage-flash" aria-hidden="true"></div>
 
         <section id="defeat-overlay" class="defeat-overlay" aria-live="assertive">
-          <p class="eyebrow">FIELD TEST 002 · FAILED</p>
+          <p class="eyebrow">FIELD TEST 003 · FAILED</p>
           <h2>YOU'RE<br /><em>DOWN.</em></h2>
           <p>The infected overpowered you. Regroup and try again.</p>
           <div class="retry-hint"><kbd>R</kbd> RESTART ENCOUNTER</div>
@@ -74,6 +82,8 @@
           <div class="control-chip"><kbd>SHIFT</kbd><span>SPRINT</span></div>
           <div class="control-chip"><kbd>MOUSE</kbd><span>LOOK</span></div>
           <div class="control-chip attack-chip"><kbd>SPACE / LMB</kbd><span>MELEE</span></div>
+          <div class="control-chip"><kbd>E</kbd><span>BOND</span></div>
+          <div class="control-chip"><kbd>Q</kbd><span>PULSE</span></div>
           <div class="control-chip"><kbd>ESC</kbd><span>RELEASE</span></div>
         </div>
 

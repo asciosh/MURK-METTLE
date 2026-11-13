@@ -17,6 +17,8 @@ export class InputController {
   private mouseY = 0;
   private attackPressed = false;
   private restartPressed = false;
+  private interactPressed = false;
+  private abilityPressed = false;
   private disposed = false;
 
   constructor(
@@ -54,6 +56,18 @@ export class InputController {
     return pressed;
   }
 
+  consumeInteractPressed(): boolean {
+    const pressed = this.interactPressed;
+    this.interactPressed = false;
+    return pressed;
+  }
+
+  consumeAbilityPressed(): boolean {
+    const pressed = this.abilityPressed;
+    this.abilityPressed = false;
+    return pressed;
+  }
+
   consumeMouseDelta(): MouseDelta {
     const delta = { x: this.mouseX, y: this.mouseY };
     this.mouseX = 0;
@@ -77,6 +91,8 @@ export class InputController {
     }
     if (event.code === 'Space' && !event.repeat) this.attackPressed = true;
     if (event.code === 'KeyR' && !event.repeat) this.restartPressed = true;
+    if (event.code === 'KeyE' && !event.repeat) this.interactPressed = true;
+    if (event.code === 'KeyQ' && !event.repeat) this.abilityPressed = true;
     this.keys.add(event.code);
   };
 
@@ -106,6 +122,8 @@ export class InputController {
     this.mouseY = 0;
     this.attackPressed = false;
     this.restartPressed = false;
+    this.interactPressed = false;
+    this.abilityPressed = false;
   };
 
   dispose(): void {

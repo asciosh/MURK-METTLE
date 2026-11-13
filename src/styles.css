@@ -191,3 +191,31 @@ kbd { min-width: 16px; padding: 3px 4px; border: 1px solid rgba(226,237,214,.2);
 @media (max-width: 680px) {
   .corner-note { top: 154px; }
 }
+
+
+/* Prototype 0.3 — collectible creature and ability HUD */
+.creature-panel {
+  position: absolute; z-index: 5; left: clamp(18px, 3.8vw, 58px); top: 192px;
+  width: min(282px, calc(100% - 36px)); padding: 13px 14px;
+  background: rgba(12, 25, 19, .83); border: 1px solid rgba(139, 229, 159, .36);
+  color: #eaf4df; backdrop-filter: blur(9px);
+}
+.creature-eyebrow { font: 8px 'DM Mono', monospace; letter-spacing: .16em; color: #a4d7ae; }
+.creature-name { margin-top: 7px; font: 700 17px 'Barlow Condensed', sans-serif; letter-spacing: .06em; }
+.creature-name span { display: inline-block; margin-left: 5px; font: 8px 'DM Mono', monospace; color: #e7b96d; }
+.creature-name .creature-status-bonded { display: none; color: #a4f0b0; }
+.creature-panel.bonded .creature-status-wild { display: none; }
+.creature-panel.bonded .creature-status-bonded { display: inline-block; }
+.creature-panel p { font-size: 10px; line-height: 1.5; margin: 7px 0 12px; color: rgba(234, 244, 223, .7); }
+.ability-button { cursor: pointer; font: 9px 'DM Mono', monospace; color: #122c1d; background: #b6ebaf; padding: 10px 12px; border: 0; width: 100%; }
+.ability-button:disabled { cursor: not-allowed; background: rgba(190, 222, 184, .14); color: rgba(234, 244, 223, .55); }
+.bond-hint { position: absolute; z-index: 5; left: 50%; top: 33%; transform: translateX(-50%); text-align: center; white-space: nowrap; pointer-events: none; padding: 11px 16px; background: rgba(14, 30, 21, .82); color: #c9f2b6; font: 10px 'DM Mono', monospace; opacity: 0; transition: opacity .15s; }
+.bond-hint.visible { opacity: 1; }
+@media (max-width: 680px) {
+  .creature-panel { left: 12px; top: 158px; width: min(240px, calc(100vw - 24px)); padding: 10px; }
+  .creature-name { font-size: 15px; }
+  .creature-panel p { font-size: 9px; }
+  .bond-hint { top: 47%; font-size: 8px; }
+  .hud-bottom-right { flex-wrap: wrap; }
+  .corner-note { display: none; }
+}

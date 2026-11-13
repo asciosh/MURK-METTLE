@@ -3,6 +3,7 @@ import { InputController } from './InputController';
 import { Player } from './Player';
 import { World } from './World';
 import { Zombie } from './Zombie';
+import { Companion } from './Companion';
 
 export class Game {
   private readonly scene = new THREE.Scene();
@@ -13,6 +14,13 @@ export class Game {
   private readonly player: Player;
   private readonly input: InputController;
   private zombie: Zombie;
+  private readonly companion: Companion;
+  private readonly creaturePanel: HTMLElement | null;
+  private readonly bondHint: HTMLElement | null;
+  private readonly abilityButton: HTMLButtonElement | null;
+  private abilityCooldown = 0;
+  private hasCollectedLanternkin = false;
+  private readonly saveKey = 'murk-mettle-v03-creatures';
   private readonly positionElement: HTMLElement | null;
   private readonly playerHealthFill: HTMLElement | null;
   private readonly playerHealthText: HTMLElement | null;
@@ -56,6 +64,14 @@ export class Game {
     this.world = new World(this.scene);
     this.player = new Player(this.scene);
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
+    this.companion = new Companion(this.scene);
+    try {
+      const saved = JSON.parse(localStorage.getItem(this.saveKey) ?? '{}') as { lanternkin?: boolean };
+      if (saved.lanternkin === true) {
+        this.companion.bond();
+        this.hasCollectedLanternkin = true;
+      }
+    } catch { /* Private browsing or invalid save data: begin with no creature. */ }
     this.input = new InputController(this.renderer.domElement, (locked) => {
       document.body.classList.toggle('is-pointer-locked', locked);
     });
@@ -70,6 +86,11 @@ export class Game {
     this.combatToast = document.querySelector<HTMLElement>('#combat-toast');
     this.damageFlash = document.querySelector<HTMLElement>('#damage-flash');
     this.defeatOverlay = document.querySelector<HTMLElement>('#defeat-overlay');
+    this.creaturePanel = document.querySelector<HTMLElement>('#creature-panel');
+    this.bondHint = document.querySelector<HTMLElement>('#bond-hint');
+    this.abilityButton = document.querySelector<HTMLButtonElement>('#ability-button');
+    this.abilityButton?.addEventListener('click', this.handleAbilityClick);
+    this.updateCompanionHud();
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.viewport);
@@ -108,6 +129,7 @@ export class Game {
     if (!this.running) return;
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
     this.attackCooldown = Math.max(0, this.attackCooldown - deltaSeconds);
+    this.abilityCooldown = Math.max(0, this.abilityCooldown - deltaSeconds);
     this.toastTimer = Math.max(0, this.toastTimer - deltaSeconds);
     this.damageFlashTimer = Math.max(0, this.damageFlashTimer - deltaSeconds);
 
@@ -124,6 +146,9 @@ export class Game {
 
     this.player.update(movement, deltaSeconds, this.input.isSprinting(), this.world);
 
+    this.companion.update(deltaSeconds, this.player.getPosition(), this.player.root.rotation.y, this.world);
+    if (this.input.consumeInteractPressed()) this.handleBond();
+    if (this.input.consumeAbilityPressed()) this.handleCreatureAbility();
     if (this.input.consumeAttackPressed()) this.handlePlayerAttack();
     if (this.input.consumeRestartPressed() && this.player.getHealth() <= 0) this.resetEncounter();
 
@@ -153,6 +178,58 @@ export class Game {
     this.updateHud(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
   };
+
+  private readonly handleAbilityClick = (): void => { this.handleCreatureAbility(); };
+
+  private handleBond(): void {
+    if (this.player.getHealth() <= 0 || this.companion.isBound()) return;
+    if (!this.companion.canBond(this.player.getPosition())) {
+      this.showToast('GET CLOSER  //  Approach the glowing creature.', 'info');
+      return;
+    }
+    this.companion.bond();
+    this.hasCollectedLanternkin = true;
+    try { localStorage.setItem(this.saveKey, JSON.stringify({ lanternkin: true })); }
+    catch { this.showToast('LANTERNKIN BONDED  //  Saving unavailable in this browser.', 'warning'); }
+    this.showToast('NEW BOND  //  Lanternkin joined your field collection! Press Q to pulse.', 'success');
+    this.updateCompanionHud();
+  }
+
+  private handleCreatureAbility(): void {
+    if (this.player.getHealth() <= 0 || !this.companion.isBound()) return;
+    if (this.abilityCooldown > 0) return;
+    this.abilityCooldown = 8;
+    this.companion.triggerPulse();
+    if (!this.zombie.isDead() && this.zombie.getPosition().distanceTo(this.companion.getPosition()) <= 7.5) {
+      const killed = this.zombie.takeDamage(35);
+      if (killed) {
+        this.killCount += 1;
+        this.zombieRespawnTimer = 0;
+        this.showToast(`LANTERN PULSE  //  Infected eliminated! ${this.killCount} cleared.`, 'success');
+      } else {
+        this.showToast('LANTERN PULSE  //  35 damage to nearby infected.', 'success');
+      }
+    } else {
+      this.showToast('LANTERN PULSE  //  No infected within range.', 'info');
+    }
+    this.updateCompanionHud();
+  }
+
+  private updateCompanionHud(): void {
+    this.creaturePanel?.classList.toggle('bonded', this.hasCollectedLanternkin);
+    if (this.bondHint) {
+      const near = this.companion.canBond(this.player.getPosition());
+      this.bondHint.classList.toggle('visible', near && this.player.getHealth() > 0);
+    }
+    if (this.abilityButton) {
+      this.abilityButton.disabled = !this.hasCollectedLanternkin || this.abilityCooldown > 0 || this.player.getHealth() <= 0;
+      this.abilityButton.textContent = !this.hasCollectedLanternkin
+        ? 'LOCKED · FIND LANTERNKIN'
+        : this.abilityCooldown > 0
+          ? `PULSE RECHARGING · ${Math.ceil(this.abilityCooldown)}s`
+          : 'Q · LANTERN PULSE READY';
+    }
+  }
 
   private handlePlayerAttack(): void {
     if (this.player.getHealth() <= 0 || this.attackCooldown > 0) return;
@@ -253,6 +330,7 @@ export class Game {
       this.enemyPanel?.classList.remove('visible');
     }
 
+    this.updateCompanionHud();
     if (this.toastTimer <= 0) this.combatToast?.classList.remove('visible');
   }
 
@@ -269,6 +347,8 @@ export class Game {
     this.running = false;
     this.renderer.setAnimationLoop(null);
     this.input.dispose();
+    this.abilityButton?.removeEventListener('click', this.handleAbilityClick);
+    this.companion.dispose();
     this.resizeObserver?.disconnect();
     this.player.dispose();
     this.zombie.dispose();

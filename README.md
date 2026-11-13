@@ -4,7 +4,7 @@
 
 A browser-based, stylized 3D, third-person cooperative creature-collection action-survival RPG. This repository currently contains a local combat prototype. It is not multiplayer yet.
 
-## Current build: Prototype 0.2 — First infected encounter
+## Current build: Prototype 0.3 — First infected encounter
 
 Added on top of the 0.1 movement foundation:
 
@@ -108,3 +108,14 @@ npm run dev
 ```
 
 Do not run `cd MURK-METTLE` when your terminal prompt already ends in `/workspaces/MURK-METTLE`.
+
+
+## Prototype 0.3 — Lanternkin companion
+
+- An original floating Lanternkin appears in the clearing, around X 4.2 / Z -3.8.
+- Walk within 2.7 meters of it and press **E** to bond. A prompt appears when close.
+- The Lanternkin now follows the player. The collection is saved in browser `localStorage`.
+- Press **Q**, or click the companion panel button, to fire **Lantern Pulse**: 35 damage to an infected within 7.5 meters of the creature, with an 8-second cooldown.
+- Existing zombie AI, melee, HP and restart remain. Restart does **not** remove a collected companion.
+- This is a **local-only prototype**; saves do not sync across browsers/devices, and there is no multiplayer yet.
+- To reset your collection for testing, open your browser DevTools Console and run `localStorage.removeItem('murk-mettle-v03-creatures')`, then refresh.
