@@ -45,6 +45,31 @@ export class PlayerAccount extends DurableObject {
     if (!/^[a-z0-9_]{3,20}$/.test(username)) return json({ error: 'Invalid username' }, 400);
     const now = Date.now();
     const storage = this.ctx.storage;
+    // Private Durable Object-to-Durable Object route. This operation is never
+    // exposed by worker/index.mjs, and its payload is computed by GameRoom.
+    if (op === 'coop-reward') {
+      if (request.method !== 'POST' || request.headers.get('X-MM-Reward-Source') !== 'game-room-v1')
+        return json({ error: 'Forbidden' }, 403);
+      let event;
+      try { event = await request.json(); } catch { return json({ error: 'Invalid payload' }, 400); }
+      if (typeof event?.id !== 'string' || !/^[a-zA-Z0-9:_-]{10,100}$/.test(event.id))
+        return json({ error: 'Invalid reward identifier' }, 400);
+      if (event.pulse !== true && event.pulse !== false)
+        return json({ error: 'Invalid kill type' }, 400);
+      const result = await storage.transaction(async txn => {
+        const key = `coop-reward:${event.id}`;
+        const prior = await txn.get(key);
+        let stats = await txn.get('coop-stats') || { xp: 0, kills: 0, creatureXp: 0 };
+        if (prior) return { ok: true, duplicate: true, stats };
+        stats = { xp: stats.xp + 50, kills: stats.kills + 1,
+          creatureXp: stats.creatureXp + (event.pulse ? 40 : 0) };
+        await txn.put(key, true);
+        await txn.put('coop-stats', stats);
+        return { ok: true, duplicate: false, stats };
+      });
+      return json(result);
+    }
+
     const record = await storage.get('account');
     if (op === 'register' || op === 'login') {
       if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -94,7 +119,7 @@ export class PlayerAccount extends DurableObject {
       headers.append('Set-Cookie', clearLegacyCookie);
       return Response.json({ ok: true }, { headers });
     }
-    if (op === 'me') return json({ username, hasSave: !!(await storage.get('save')) }, 200, { 'Set-Cookie': sessionCookie(username, token) });
+    if (op === 'me') return json({ username, hasSave: !!(await storage.get('save')), coop: await storage.get('coop-stats') || { xp: 0, kills: 0, creatureXp: 0 } }, 200, { 'Set-Cookie': sessionCookie(username, token) });
     if (op === 'save') {
       if (request.method === 'GET') {
         const saved = await storage.get('save');

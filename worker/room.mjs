@@ -15,7 +15,7 @@ const selectZombie = (last = null, generation = 0) => {
   const options = TYPES.filter(type => type.id !== last);
   const type = options[Math.floor(Math.random() * options.length)];
   return { x: 0.7, z: -9.5, hp: type.hp, max: type.hp, strain: type.id,
-    speed: type.speed, damage: type.damage, generation, lastHit: 0, deadAt: 0 };
+    speed: type.speed, damage: type.damage, generation, encounterId: crypto.randomUUID(), lastHit: 0, deadAt: 0 };
 };
 
 export class GameRoom extends DurableObject {
@@ -29,7 +29,7 @@ export class GameRoom extends DurableObject {
     for (const ws of this.ctx.getWebSockets()) {
       const data = ws.deserializeAttachment();
       if (data?.id && this.players.size < MAX_PLAYERS) this.players.set(ws, {
-        id: data.id, x: data.x ?? 0, z: data.z ?? 0, yaw: data.yaw ?? 0,
+        id: data.id, username: data.username || '', x: data.x ?? 0, z: data.z ?? 0, yaw: data.yaw ?? 0,
         hp: data.hp ?? 100, lastMove: Date.now(), attackAt: 0, pulseAt: 0,
         messageAt: 0,
       });
@@ -45,10 +45,15 @@ export class GameRoom extends DurableObject {
     const url = new URL(request.url);
     const code = (url.searchParams.get('code') || '').trim().toUpperCase();
     if (!/^[A-Z0-9]{3,12}$/.test(code)) return new Response('Invalid code', { status: 400 });
+    const username = request.headers.get('X-MM-Verified-User') || '';
+    if (!/^[a-z0-9_]{3,20}$/.test(username)) return new Response('Verified account required', { status: 401 });
+    // Block two simultaneous sockets for the same account in one room.
+    if ([...this.players.values()].some(p => p.username === username))
+      return new Response('Account already connected to this room', { status: 409 });
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
-    const player = { id: crypto.randomUUID(), x: 0, z: 0, yaw: 0,
+    const player = { id: crypto.randomUUID(), username, x: 0, z: 0, yaw: 0,
       hp: 100, lastMove: Date.now(), attackAt: 0, pulseAt: 0, messageAt: 0 };
     this.players.set(server, player);
     this.saveAttachment(server, player);
@@ -68,11 +73,11 @@ export class GameRoom extends DurableObject {
   }
   broadcast(msg) { for (const socket of this.players.keys()) this.send(socket, msg); }
   saveAttachment(socket, player) {
-    socket.serializeAttachment({ id: player.id, x: player.x, z: player.z,
+    socket.serializeAttachment({ id: player.id, username: player.username, x: player.x, z: player.z,
       yaw: player.yaw, hp: player.hp });
   }
 
-  webSocketMessage(socket, raw) {
+  async webSocketMessage(socket, raw) {
     const player = this.players.get(socket);
     if (!player || typeof raw !== 'string' || raw.length > 2048) return;
     let msg;
@@ -120,6 +125,26 @@ export class GameRoom extends DurableObject {
     zombie.hp = Math.max(0, zombie.hp - (pulse ? 35 : 40));
     if (zombie.hp === 0) {
       zombie.deadAt = now;
+      // Co-op XP is awarded by the room, never by a player-supplied packet.
+      // Account storage uses the unique encounter ID to reject duplicate awards.
+      const eventId = `kill:${zombie.encounterId}`;
+      try {
+        const target = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
+        const response = await target.fetch(new Request('https://internal/api/account/coop-reward', {
+          method: 'POST', headers: { 'Content-Type': 'application/json',
+            'X-MM-Account': player.username, 'X-MM-Reward-Source': 'game-room-v1' },
+          body: JSON.stringify({ id: eventId, pulse }),
+        }));
+        if (!response.ok) throw new Error(`Reward store returned ${response.status}`);
+        const result = await response.json();
+        this.send(socket, { type: 'reward', xp: 50, creatureXp: pulse ? 40 : 0,
+          totals: result.stats, duplicate: !!result.duplicate });
+      } catch (error) {
+        // No client-side award fallback: failure must remain visible and
+        // investigated rather than creating untrusted progression.
+        this.send(socket, { type: 'error', message: 'Cloud reward could not be saved. Please report this match.' });
+        console.error('Co-op reward failed', error);
+      }
       this.broadcast({ type: 'kill', by: player.id, pulse, x: zombie.x, z: zombie.z });
     }
   }

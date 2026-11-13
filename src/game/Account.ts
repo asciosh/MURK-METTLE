@@ -1,6 +1,6 @@
 import { loadCloudProgress, snapshotProgress, progressIsDirty, progressGeneration, markProgressSaved, type ProgressSave } from './ProgressStore';
 
-type ResponseData = { ok?: boolean; username?: string; error?: string; revision?: number; data?: ProgressSave | null };
+type ResponseData = { ok?: boolean; username?: string; error?: string; revision?: number; data?: ProgressSave | null; coop?: { xp: number; kills: number; creatureXp: number } };
 const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const panel = byId<HTMLElement>('account-panel');
 const message = byId<HTMLElement>('account-message');
@@ -65,7 +65,9 @@ async function startAuthenticated(name: string): Promise<void> {
   register.hidden = true;
   beginGame?.();
   if (syncTimer === null) syncTimer = setInterval(() => { if (document.visibilityState === 'visible') void saveProgress(); }, 12000);
-  status('Signed in. Cloud account progress is active.');
+  const verified = await api('me');
+  const coop = verified.coop;
+  status(coop ? `Cloud account active · Trusted co-op: ${coop.kills} kills, ${coop.xp} XP` : 'Signed in. Cloud account progress is active.');
 }
 async function authenticate(kind: 'login' | 'register'): Promise<void> {
   const name = username.value.trim().toLowerCase();

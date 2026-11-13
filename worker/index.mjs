@@ -44,9 +44,12 @@ export default {
         headers: { 'Cookie': cookie, 'X-MM-Account': match[1] },
       }));
       if (!check.ok) return new Response('Session expired', { status: 401 });
+      // Only the edge Worker may assert this verified account identity.
+      const forwarded = new Request(request);
+      forwarded.headers.set('X-MM-Verified-User', match[1]);
       // A separate Durable Object instance is identified by each room code.
       const id = env.GAME_ROOMS.idFromName(code);
-      return env.GAME_ROOMS.get(id).fetch(request);
+      return env.GAME_ROOMS.get(id).fetch(forwarded);
     }
     return env.ASSETS.fetch(request);
   },

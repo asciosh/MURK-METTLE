@@ -372,7 +372,7 @@ export class Game {
     this.remoteZombieGeneration = -1;
     this.zombie.dispose();
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
-    if (this.roomStatus) this.roomStatus.textContent = 'Solo · local save';
+    if (this.roomStatus) this.roomStatus.textContent = 'Solo · Cloud account';
     this.updateMissionHud();
   };
   private readonly onRoomEvent = (event: RoomEvent): void => {
@@ -397,11 +397,10 @@ export class Game {
     } else if (event.type === 'kill') {
       // Prototype: shared enemy kill; each player receives an individual salvage drop.
       this.spawnLoot();
-      if (event.by === this.multiplayer.id) {
-        const leveled = this.progression.recordKill();
-        if (event.pulse) this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_KILL);
-        this.showToast(leveled ? 'LEVEL UP  //  Co-op kill!' : 'INFECTED ELIMINATED  //  +50 XP', 'success');
-      } else this.showToast('TEAM KILL  //  Salvage available!', 'success');
+      if (event.by === this.multiplayer.id) this.showToast('KILL CONFIRMED  //  Crediting Cloudflare account…', 'success');
+      else this.showToast('TEAM KILL  //  Salvage available!', 'success');
+    } else if (event.type === 'reward') {
+      if (!event.duplicate) this.showToast(`CLOUD REWARD  //  +${event.xp} co-op XP · ${event.totals.kills} trusted kills`, 'success');
     }
   };
   private updateRemotePlayers(_deltaSeconds: number): void {
