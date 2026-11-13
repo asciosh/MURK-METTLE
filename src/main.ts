@@ -30,6 +30,15 @@ function arrangeHud(root: HTMLElement): void {
 }
 arrangeHud(viewport);
 
+// Compact menu keeps account, room, and legacy backups out of the gameplay status strip.
+const menuToggle = document.querySelector<HTMLButtonElement>('#field-menu-toggle');
+const fieldMenu = document.querySelector<HTMLElement>('#field-menu');
+menuToggle?.addEventListener('click', () => {
+  if (!fieldMenu) return;
+  fieldMenu.hidden = !fieldMenu.hidden;
+  menuToggle.setAttribute('aria-expanded', String(!fieldMenu.hidden));
+});
+
 initCloudSave();
 initAccount();
 const game = new Game(viewport);

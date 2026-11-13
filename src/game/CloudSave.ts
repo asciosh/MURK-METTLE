@@ -34,7 +34,7 @@ async function save(): Promise<void> {
   setStatus('Saving…');
   try {
     await request('PUT', collect());
-    localStorage.setItem('murk-mettle-cloud-enabled', '1');
+    // Keep existing backup data, but no automatic legacy sync.
     setStatus('Cloud backup saved');
   } catch (error) { setStatus(error instanceof Error ? error.message : 'Cloud backup failed'); }
   finally { busy = false; }
@@ -62,7 +62,10 @@ async function restore(): Promise<void> {
       else localStorage.removeItem(k);
     }
     localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem('murk-mettle-cloud-enabled', '1');
+    // A legacy restore changes the local data. Require account sync review.
+    localStorage.removeItem('mm-account-sync');
+    localStorage.removeItem('mm-local-owner');
+    // Keep existing backup data, but no automatic legacy sync.
     window.location.reload();
   } catch (error) {
     token = previousToken;
@@ -79,8 +82,6 @@ export function initCloudSave(): void {
       () => setStatus('Clipboard unavailable; use a secure manual backup'),
     );
   });
-  // Opt-in only. Do not automatically overwrite a cloud save when first visiting.
-  window.setInterval(() => {
-    if (localStorage.getItem('murk-mettle-cloud-enabled') === '1' && document.visibilityState === 'visible') void save();
-  }, 60000);
+  // Legacy backups are manual in v0.13.1; avoid competing autosave timelines.
+  // Existing keys and recovery-key restores remain supported.
 }

@@ -92,16 +92,27 @@ export class PlayerAccount extends DurableObject {
     }
     if (op === 'me') return json({ username, hasSave: !!(await storage.get('save')) });
     if (op === 'save') {
-      if (request.method === 'GET') return json((await storage.get('save')) || { version: 1, data: null, updatedAt: null });
+      if (request.method === 'GET') {
+        const saved = await storage.get('save');
+        return json(saved ? { ...saved, revision: saved.revision ?? 0 } : { version: 1, revision: 0, data: null, updatedAt: null });
+      }
       if (request.method !== 'PUT') return json({ error: 'Method not allowed' }, 405);
       const text = await request.text();
       if (text.length > MAX_BODY) return json({ error: 'Save is too large' }, 413);
-      let data;
-      try { data = JSON.parse(text); } catch { return json({ error: 'Invalid JSON' }, 400); }
-      if (!validSave(data)) return json({ error: 'Invalid save format' }, 400);
-      const value = { version: 1, data, updatedAt: now };
-      await storage.put('save', value);
-      return json({ ok: true, updatedAt: now });
+      let body;
+      try { body = JSON.parse(text); } catch { return json({ error: 'Invalid JSON' }, 400); }
+      if (!body || !Number.isSafeInteger(body.revision) || body.revision < 0 || !validSave(body.data))
+        return json({ error: 'Invalid save or missing revision' }, 400);
+      // Transactional compare-and-swap: two sessions using the same revision cannot both win.
+      const result = await storage.transaction(async txn => {
+        const previous = await txn.get('save');
+        const revision = previous?.revision ?? 0; // v0.13 saves migrate without deleting data.
+        if (body.revision !== revision) return { conflict: true, revision, updatedAt: previous?.updatedAt ?? null };
+        const value = { version: 2, revision: revision + 1, data: body.data, updatedAt: now };
+        await txn.put('save', value);
+        return { ok: true, revision: value.revision, updatedAt: now };
+      });
+      return result.conflict ? json({ error: 'Cloud save changed on another device. Restore or review before uploading again.', ...result }, 409) : json(result);
     }
     return json({ error: 'Not found' }, 404);
   }

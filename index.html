@@ -8,22 +8,34 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — v0.13</title>
+    <title>Murk &amp; Mettle — v0.13.1</title>
   </head>
   <body>
     <div id="app">
-      <section class="co-op-bar" aria-label="Cooperative room controls">
-        <span class="co-op-title">V0.13 · PLAYER ACCOUNTS</span>
-        <input id="room-code" maxlength="12" value="BLOOM" aria-label="Room code" placeholder="Room code" />
-        <button id="room-join" type="button">JOIN / CREATE</button>
-        <button id="room-leave" type="button">SOLO</button>
-        <span id="room-status">Solo · local save</span>
-        <button id="account-toggle" type="button">ACCOUNT</button>
+      <section class="co-op-bar" aria-label="Session status and field menu">
+        <span class="co-op-title">V0.13.1 · PRIVATE BETA</span>
+        <span id="room-status" role="status" aria-live="polite">Solo · local save</span>
         <span id="account-state" role="status" aria-live="polite">Guest</span>
-        <button id="cloud-save" type="button" title="Legacy recovery-key backup">LEGACY SAVE</button>
-        <button id="cloud-copy-key" type="button" title="Copy your secret recovery key">LEGACY KEY</button>
-        <button id="cloud-restore" type="button" title="Restore progress on another device">LEGACY RESTORE</button>
-        <span id="cloud-save-status" role="status" aria-live="polite"></span>
+        <button id="field-menu-toggle" type="button" aria-controls="field-menu" aria-expanded="false">☰ FIELD MENU</button>
+        <div id="field-menu" class="field-menu" hidden>
+          <strong>CO-OP ROOM</strong>
+          <div class="field-menu-row">
+            <input id="room-code" maxlength="12" value="BLOOM" aria-label="Room code" placeholder="Room code" />
+            <button id="room-join" type="button">JOIN / CREATE</button>
+            <button id="room-leave" type="button">SOLO</button>
+          </div>
+          <strong>PLAYER PROGRESS</strong>
+          <div class="field-menu-row"><button id="account-toggle" type="button">ACCOUNT & CLOUD SAVE</button></div>
+          <details class="legacy-tools"><summary>Legacy recovery-key backup (manual)</summary>
+            <p>Old v0.12 backup tools. These no longer autosync; account saves use separate cloud storage.</p>
+            <div class="field-menu-row">
+              <button id="cloud-save" type="button">LEGACY SAVE</button>
+              <button id="cloud-copy-key" type="button">COPY KEY</button>
+              <button id="cloud-restore" type="button">RESTORE</button>
+            </div>
+            <span id="cloud-save-status" role="status" aria-live="polite"></span>
+          </details>
+        </div>
       </section>
       <section id="account-panel" class="account-panel" hidden aria-label="Player account">
         <div class="account-heading"><strong>PLAYER ACCOUNT</strong><button id="account-close" type="button" aria-label="Close account panel">×</button></div>
@@ -31,9 +43,9 @@
         <label>Username <input id="account-username" maxlength="20" autocomplete="username" placeholder="your_username" /></label>
         <label>PIN <input id="account-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="6–8 digits" /></label>
         <div class="account-buttons"><button id="account-register" type="button">CREATE ACCOUNT</button><button id="account-login" type="button">LOGIN</button></div>
-        <div class="account-buttons"><button id="account-upload" type="button" hidden>UPLOAD LOCAL SAVE</button><button id="account-download" type="button" hidden>RESTORE ACCOUNT SAVE</button><button id="account-logout" type="button" hidden>LOG OUT</button></div>
+        <div class="account-buttons"><button id="account-upload" type="button" hidden>REVIEW & UPLOAD</button><button id="account-download" type="button" hidden>RESTORE ACCOUNT SAVE</button><button id="account-logout" type="button" hidden>LOG OUT</button></div>
         <p id="account-message" role="status" aria-live="polite"></p>
-        <p class="account-caption">Existing v0.12 backups: use LEGACY RESTORE first, then UPLOAD LOCAL SAVE. This does not create a verified public-game identity.</p>
+        <p class="account-caption">Cloud sync is paused when account ownership or save revisions differ. Legacy recovery-key tools are in FIELD MENU. This is a private-beta identity, not public-grade authentication.</p>
       </section>
       <header class="topbar">
         <a class="wordmark" href="#" aria-label="Murk and Mettle home">
@@ -149,7 +161,7 @@
           <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
           <p class="title-hint">WASD MOVE · SHIFT SPRINT · SPACE ATTACK · E INTERACT · Q COMPANION</p>
         </div>
-        <p class="title-build">MURK &amp; METTLE / v0.13 · ORIGINAL INDIE PROTOTYPE</p>
+        <p class="title-build">MURK &amp; METTLE / v0.13.1 · ORIGINAL INDIE PROTOTYPE</p>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>

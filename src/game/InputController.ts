@@ -28,6 +28,7 @@ export class InputController {
   ) {
     element.addEventListener('click', this.handleClick);
     document.addEventListener('keydown', this.handleKeyDown);
+    document.addEventListener('focusin', this.handleFocusIn);
     document.addEventListener('keyup', this.handleKeyUp);
     document.addEventListener('mousemove', this.handleMouseMove);
     document.addEventListener('mousedown', this.handleMouseDown);
@@ -98,7 +99,16 @@ export class InputController {
     }
   };
 
+  private readonly handleFocusIn = (event: FocusEvent): void => {
+    if (this.isEditable(event.target)) this.handleWindowBlur();
+  };
+
+  private isEditable(target: EventTarget | null): boolean {
+    return target instanceof Element && !!target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]');
+  }
+
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (this.isEditable(event.target) || this.isEditable(document.activeElement)) return;
     if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'Space'].includes(event.code)) {
       event.preventDefault();
     }
@@ -145,6 +155,7 @@ export class InputController {
     this.disposed = true;
     this.element.removeEventListener('click', this.handleClick);
     document.removeEventListener('keydown', this.handleKeyDown);
+    document.removeEventListener('focusin', this.handleFocusIn);
     document.removeEventListener('keyup', this.handleKeyUp);
     document.removeEventListener('mousemove', this.handleMouseMove);
     document.removeEventListener('mousedown', this.handleMouseDown);

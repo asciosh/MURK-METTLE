@@ -511,3 +511,30 @@ button:focus-visible, input:focus-visible, .wordmark:focus-visible { outline: 2p
 .account-panel .account-buttons button[hidden] { display: none; }
 #account-message { min-height: 28px; color: #c4e1a4; line-height: 1.5; }
 #account-state { color: #d0efae; font-size: 11px; }
+
+/* v0.13.1 compact field menu and accessible scrollable HUD */
+.co-op-bar { flex-wrap: nowrap; gap: 12px; z-index: 20; }
+.co-op-bar #room-status { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-op-bar #field-menu-toggle { margin-left: 2px; white-space: nowrap; }
+.field-menu[hidden] { display: none !important; }
+.field-menu { position: absolute; top: 100%; right: 12px; width: min(440px, calc(100vw - 24px)); max-height: min(75dvh, 590px); overflow-y: auto; padding: 15px; background: #10241df5; border: 1px solid #66846e; border-radius: 0 0 12px 12px; box-shadow: 0 15px 30px #0009; color: #eaf0e1; }
+.field-menu strong { display: block; margin: 10px 0 8px; font-size: 11px; letter-spacing: .1em; }
+.field-menu-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 5px 0 13px; align-items: center; }
+.field-menu-row input { flex: 1; min-width: 95px; width: auto; font-size: 14px; }
+.field-menu button { min-height: 36px; font-size: 11px; }
+.legacy-tools { border-top: 1px solid #64877266; padding-top: 12px; font-size: 12px; }
+.legacy-tools summary { cursor: pointer; color: #c9e6b5; }
+.legacy-tools p { color: #bacbbd; line-height: 1.55; }
+#cloud-save-status { display: block; white-space: normal; max-width: none; font-size: 11px; }
+.hud-stack { pointer-events: auto; scrollbar-width: thin; }
+.hud-stack > section { pointer-events: auto; }
+@media (max-width: 680px) {
+  .co-op-bar { min-height: 48px; flex-wrap: nowrap; gap: 6px; font-size: 11px; }
+  .co-op-title { display: none; }
+  #account-state { white-space: nowrap; }
+  .co-op-bar #room-status { flex: 1; font-size: 11px; }
+  .hud-stack { width: min(45vw, 205px); }
+  .hud-stack .mission-panel, .hud-stack .mission-panel strong, .hud-stack .mission-panel small { font-size: 10px; line-height: 1.45; }
+  .hud-stack .creature-panel .ability-button { font-size: 11px; }
+  .hud-stack > .creature-panel, .hud-stack > .mission-panel { max-height: 230px; overflow-y: auto; }
+}

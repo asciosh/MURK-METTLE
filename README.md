@@ -1,3 +1,5 @@
+> **v0.13.1 stability patch (private beta).** Account uploads now use revision-based conflict checks; old v0.13 cloud saves are readable and migrate on the next accepted upload. Guest play and the existing five local save keys are preserved. Account autosync is only re-enabled after a verified matching revision or an explicit restore/upload. The legacy recovery-key backup remains available manually in FIELD MENU, but its automatic uploads have been disabled. See `CHANGELOG-v0.13.1.md` and `TESTING-v0.13.1.md` before deploying.
+
 ## v0.12 — Smooth co-op + cloud backup (beta)
 
 See [CHANGELOG-v0.12.md](CHANGELOG-v0.12.md) for setup, limits and recovery-key security.
