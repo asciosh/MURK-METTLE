@@ -18,7 +18,7 @@ const randomHex = n => hex(crypto.getRandomValues(new Uint8Array(n)));
 async function sha256(s) { return hex(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(s)))); }
 async function pinHash(pin, salt) {
   const key = await crypto.subtle.importKey('raw', encoder.encode(pin), 'PBKDF2', false, ['deriveBits']);
-  const bytes = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: encoder.encode(salt), iterations: 210000, hash: 'SHA-256' }, key, 256);
+  const bytes = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: encoder.encode(salt), iterations: 100000, hash: 'SHA-256' }, key, 256);
   return hex(new Uint8Array(bytes));
 }
 function validSave(data) {
@@ -32,9 +32,10 @@ function parseCookie(request) {
   return part ? part.slice('mm_session='.length) : '';
 }
 function sessionCookie(username, token) {
-  return `mm_session=${username}.${token}; HttpOnly; Secure; SameSite=Strict; Path=/api/account; Max-Age=${SESSION_LIFETIME / 1000}`;
+  return `mm_session=${username}.${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_LIFETIME / 1000}`;
 }
-const clearCookie = 'mm_session=; HttpOnly; Secure; SameSite=Strict; Path=/api/account; Max-Age=0';
+const clearCookie = 'mm_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
+const clearLegacyCookie = 'mm_session=; HttpOnly; Secure; SameSite=Strict; Path=/api/account; Max-Age=0';
 
 export class PlayerAccount extends DurableObject {
   async fetch(request) {
@@ -88,9 +89,12 @@ export class PlayerAccount extends DurableObject {
       if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
       delete sessions[tokenHash];
       await storage.put('sessions', sessions);
-      return json({ ok: true }, 200, { 'Set-Cookie': clearCookie });
+      const headers = new Headers({ 'Cache-Control': 'no-store' });
+      headers.append('Set-Cookie', clearCookie);
+      headers.append('Set-Cookie', clearLegacyCookie);
+      return Response.json({ ok: true }, { headers });
     }
-    if (op === 'me') return json({ username, hasSave: !!(await storage.get('save')) });
+    if (op === 'me') return json({ username, hasSave: !!(await storage.get('save')) }, 200, { 'Set-Cookie': sessionCookie(username, token) });
     if (op === 'save') {
       if (request.method === 'GET') {
         const saved = await storage.get('save');

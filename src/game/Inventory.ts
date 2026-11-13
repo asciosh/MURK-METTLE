@@ -1,3 +1,4 @@
+import { progressStore } from './ProgressStore';
 /** Local single-player inventory; multiplayer will validate pickups on the server. */
 export const ITEM_DEFINITIONS = {
   spore: { name: 'Spore Sample', color: 0x95da92, description: 'A sealed trace of the Bloom.' },
@@ -14,7 +15,7 @@ export class Inventory {
   readonly state: InventoryState = fresh();
   constructor() {
     try {
-      const raw: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      const raw: unknown = JSON.parse(progressStore.getItem(STORAGE_KEY) || 'null');
       if (raw && typeof raw === 'object') {
         for (const id of ids) {
           const count = (raw as Record<string, unknown>)[id];
@@ -40,6 +41,6 @@ export class Inventory {
     return true;
   }
   private save(): void {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); } catch { /* Storage unavailable. */ }
+    try { progressStore.setItem(STORAGE_KEY, JSON.stringify(this.state)); } catch { /* Storage unavailable. */ }
   }
 }

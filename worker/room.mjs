@@ -117,7 +117,7 @@ export class GameRoom extends DurableObject {
     }
     // Deliberately preserve v0.10 combat protocol. Equipment ownership remains
     // client-reported for now; server-side progression validation is future work.
-    zombie.hp = Math.max(0, zombie.hp - (pulse ? 35 : msg.sharpened === true ? 55 : 40));
+    zombie.hp = Math.max(0, zombie.hp - (pulse ? 35 : 40));
     if (zombie.hp === 0) {
       zombie.deadAt = now;
       this.broadcast({ type: 'kill', by: player.id, pulse, x: zombie.x, z: zombie.z });

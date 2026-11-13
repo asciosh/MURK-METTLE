@@ -1,3 +1,4 @@
+import { progressStore } from './ProgressStore';
 import { Inventory, type ItemId } from './Inventory';
 export type RecipeId = 'sharpened' | 'balanced' | 'restorative';
 export const RECIPES: Record<RecipeId, { name: string; description: string; cost: Partial<Record<ItemId, number>> }> = {
@@ -10,7 +11,7 @@ export class Crafting {
   readonly upgrades: Record<'sharpened' | 'balanced', boolean> = { sharpened: false, balanced: false };
   constructor(private readonly inventory: Inventory) {
     try {
-      const saved = JSON.parse(localStorage.getItem(KEY) || 'null') as Partial<typeof this.upgrades> | null;
+      const saved = JSON.parse(progressStore.getItem(KEY) || 'null') as Partial<typeof this.upgrades> | null;
       if (saved) { this.upgrades.sharpened = saved.sharpened === true; this.upgrades.balanced = saved.balanced === true; }
     } catch { /* corrupted saves should not break play */ }
   }
@@ -20,7 +21,7 @@ export class Crafting {
     if (!this.inventory.consume(cost)) return false;
     if (id !== 'restorative') {
       this.upgrades[id] = true;
-      try { localStorage.setItem(KEY, JSON.stringify(this.upgrades)); } catch { /* no storage */ }
+      try { progressStore.setItem(KEY, JSON.stringify(this.upgrades)); } catch { /* no storage */ }
     }
     return true;
   }

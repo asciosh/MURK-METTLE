@@ -1,3 +1,4 @@
+import { progressStore } from './ProgressStore';
 import * as THREE from 'three';
 import { InputController } from './InputController';
 import { Player } from './Player';
@@ -127,7 +128,7 @@ export class Game {
     this.companion = new Companion(this.scene);
     void this.loadOptionalModels();
     if (this.progression.state.lanternkinBonded) {
-      try { this.recoveringBond = localStorage.getItem(this.bondRetreatKey) === '1'; } catch { /* Storage disabled. */ }
+      try { this.recoveringBond = progressStore.getItem(this.bondRetreatKey) === '1'; } catch { /* Storage disabled. */ }
       if (!this.recoveringBond) this.companion.bond();
     }
     this.missionStatus = document.querySelector('#mission-status');
@@ -486,7 +487,7 @@ export class Game {
     this.bondStrain = Math.min(100, this.bondStrain + amount);
     if (this.bondStrain >= 100) {
       this.recoveringBond = true;
-      try { localStorage.setItem(this.bondRetreatKey, '1'); } catch { /* Storage disabled. */ }
+      try { progressStore.setItem(this.bondRetreatKey, '1'); } catch { /* Storage disabled. */ }
       this.companion.retreat();
       this.abilityCooldown = 0;
       this.showToast('BOND FRACTURED  //  Lanternkin retreated. Find it and press E.', 'warning');
@@ -503,7 +504,7 @@ export class Game {
     this.companion.bond();
     if (this.recoveringBond) {
       this.recoveringBond = false;
-      try { localStorage.removeItem(this.bondRetreatKey); } catch { /* Storage disabled. */ }
+      try { progressStore.removeItem(this.bondRetreatKey); } catch { /* Storage disabled. */ }
       this.bondStrain = this.antidotePending ? 0 : 25;
       this.antidotePending = false;
       this.say('recovered');

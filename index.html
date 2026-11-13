@@ -8,14 +8,14 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — v0.13.1</title>
+    <title>Murk &amp; Mettle — v0.14</title>
   </head>
   <body>
     <div id="app">
       <section class="co-op-bar" aria-label="Session status and field menu">
-        <span class="co-op-title">V0.13.1 · PRIVATE BETA</span>
-        <span id="room-status" role="status" aria-live="polite">Solo · local save</span>
-        <span id="account-state" role="status" aria-live="polite">Guest</span>
+        <span class="co-op-title">V0.14 · PRIVATE BETA</span>
+        <span id="room-status" role="status" aria-live="polite">Solo · Cloud account</span>
+        <span id="account-state" role="status" aria-live="polite">Sign in</span>
         <button id="field-menu-toggle" type="button" aria-controls="field-menu" aria-expanded="false">☰ FIELD MENU</button>
         <div id="field-menu" class="field-menu" hidden>
           <strong>CO-OP ROOM</strong>
@@ -25,16 +25,7 @@
             <button id="room-leave" type="button">SOLO</button>
           </div>
           <strong>PLAYER PROGRESS</strong>
-          <div class="field-menu-row"><button id="account-toggle" type="button">ACCOUNT & CLOUD SAVE</button></div>
-          <details class="legacy-tools"><summary>Legacy recovery-key backup (manual)</summary>
-            <p>Old v0.12 backup tools. These no longer autosync; account saves use separate cloud storage.</p>
-            <div class="field-menu-row">
-              <button id="cloud-save" type="button">LEGACY SAVE</button>
-              <button id="cloud-copy-key" type="button">COPY KEY</button>
-              <button id="cloud-restore" type="button">RESTORE</button>
-            </div>
-            <span id="cloud-save-status" role="status" aria-live="polite"></span>
-          </details>
+          <div class="field-menu-row"><button id="account-toggle" type="button">PLAYER ACCOUNT</button></div>
         </div>
       </section>
       <section id="account-panel" class="account-panel" hidden aria-label="Player account">
@@ -43,10 +34,11 @@
         <label>Username <input id="account-username" maxlength="20" autocomplete="username" placeholder="your_username" /></label>
         <label>PIN <input id="account-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="6–8 digits" /></label>
         <div class="account-buttons"><button id="account-register" type="button">CREATE ACCOUNT</button><button id="account-login" type="button">LOGIN</button></div>
-        <div class="account-buttons"><button id="account-upload" type="button" hidden>REVIEW & UPLOAD</button><button id="account-download" type="button" hidden>RESTORE ACCOUNT SAVE</button><button id="account-logout" type="button" hidden>LOG OUT</button></div>
+        <div class="account-buttons"><button id="account-save-now" type="button" hidden>SAVE NOW</button><button id="account-logout" type="button" hidden>LOG OUT</button></div>
         <p id="account-message" role="status" aria-live="polite"></p>
-        <p class="account-caption">Cloud sync is paused when account ownership or save revisions differ. Legacy recovery-key tools are in FIELD MENU. This is a private-beta identity, not public-grade authentication.</p>
+        <p class="account-caption">Cloudflare is the only progression store. Save frequently; 6–8 digit PINs are private-beta security, not public account protection.</p>
       </section>
+      <div id="auth-gate" class="auth-gate" role="status">Sign in to your Cloudflare account to enter the Wildlands.</div>
       <header class="topbar">
         <a class="wordmark" href="#" aria-label="Murk and Mettle home">
           <span class="wordmark-mark">M<span>/</span>M</span>
@@ -58,7 +50,7 @@
         <div class="build-tag">
           <span class="status-dot"></span>
           <span>THE WILDLANDS</span>
-          <b>0.13</b>
+          <b>0.14</b>
         </div>
       </header>
 
@@ -161,7 +153,7 @@
           <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
           <p class="title-hint">WASD MOVE · SHIFT SPRINT · SPACE ATTACK · E INTERACT · Q COMPANION</p>
         </div>
-        <p class="title-build">MURK &amp; METTLE / v0.13.1 · ORIGINAL INDIE PROTOTYPE</p>
+        <p class="title-build">MURK &amp; METTLE / v0.14 · ORIGINAL INDIE PROTOTYPE</p>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>

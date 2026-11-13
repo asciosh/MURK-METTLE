@@ -1,6 +1,5 @@
 import './styles.css';
 import { Game } from './game/Game';
-import { initCloudSave } from './game/CloudSave';
 import { initAccount } from './game/Account';
 
 const viewport = document.querySelector<HTMLElement>('#game-viewport');
@@ -30,7 +29,7 @@ function arrangeHud(root: HTMLElement): void {
 }
 arrangeHud(viewport);
 
-// Compact menu keeps account, room, and legacy backups out of the gameplay status strip.
+// Compact menu keeps co-op and account controls out of the gameplay status strip.
 const menuToggle = document.querySelector<HTMLButtonElement>('#field-menu-toggle');
 const fieldMenu = document.querySelector<HTMLElement>('#field-menu');
 menuToggle?.addEventListener('click', () => {
@@ -39,14 +38,17 @@ menuToggle?.addEventListener('click', () => {
   menuToggle.setAttribute('aria-expanded', String(!fieldMenu.hidden));
 });
 
-initCloudSave();
-initAccount();
-const game = new Game(viewport);
-game.start();
+let game: Game | null = null;
+void initAccount(() => {
+  if (game) return;
+  game = new Game(viewport);
+  game.start();
+});
 
 const enterButton = document.querySelector<HTMLButtonElement>('#enter-field');
 const titleScreen = document.querySelector<HTMLElement>('#title-screen');
 enterButton?.addEventListener('click', () => {
+  if (!game) return;
   game.enterField();
   titleScreen?.classList.add('is-hidden');
   titleScreen?.setAttribute('aria-hidden', 'true');
@@ -55,5 +57,5 @@ enterButton?.addEventListener('click', () => {
 });
 
 window.addEventListener('beforeunload', () => {
-  game.dispose();
+  game?.dispose();
 });
