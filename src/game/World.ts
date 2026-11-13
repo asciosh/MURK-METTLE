@@ -16,6 +16,9 @@ export class World {
     this.createVegetation();
     this.createRuins();
     this.createAtmosphereDetails();
+    this.createForestFloor();
+    this.createLandmarks();
+    this.createCanopyDetails();
   }
 
   private createGround(): void {
@@ -178,6 +181,93 @@ export class World {
       const mote = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), glowMaterial);
       mote.position.set(x, y, z);
       this.scene.add(mote);
+    }
+  }
+
+  /** Seeded decoration makes every visit to the mission area visually consistent. */
+  private createForestFloor(): void {
+    let seed = 70421;
+    const random = (): number => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    const fernMaterial = new THREE.MeshStandardMaterial({ color: 0x688d58, side: THREE.DoubleSide, roughness: 1 });
+    const grassMaterial = new THREE.MeshStandardMaterial({ color: 0x8a9c5c, side: THREE.DoubleSide, roughness: 1 });
+    const bladeGeometry = new THREE.ConeGeometry(0.16, 0.75, 3);
+    const fern = new THREE.InstancedMesh(bladeGeometry, fernMaterial, 290);
+    const grass = new THREE.InstancedMesh(bladeGeometry, grassMaterial, 270);
+    const dummy = new THREE.Object3D();
+    for (const [mesh, amount] of [[fern, 290], [grass, 270]] as const) {
+      for (let i = 0; i < amount; i++) {
+        const x = random() * 48 - 24;
+        const z = random() * 48 - 24;
+        dummy.position.set(x, 0.25, z);
+        dummy.rotation.set(0, random() * Math.PI * 2, 0);
+        const size = 0.5 + random() * 0.95;
+        dummy.scale.set(size, size, size);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.frustumCulled = false;
+      this.scene.add(mesh);
+    }
+    const wildflowers = new THREE.InstancedMesh(
+      new THREE.IcosahedronGeometry(0.085, 0),
+      new THREE.MeshBasicMaterial({ color: 0xe6be83 }), 95,
+    );
+    for (let i = 0; i < 95; i++) {
+      dummy.position.set(random() * 45 - 22.5, 0.44, random() * 45 - 22.5);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.setScalar(0.6 + random() * 0.7);
+      dummy.updateMatrix(); wildflowers.setMatrixAt(i, dummy.matrix);
+    }
+    wildflowers.instanceMatrix.needsUpdate = true;
+    this.scene.add(wildflowers);
+  }
+
+  /** Landmarks intentionally stay in the existing 46m playable area; mission positions do not change. */
+  private createLandmarks(): void {
+    const stone = new THREE.MeshStandardMaterial({ color: 0x536b63, roughness: 0.96 });
+    const metal = new THREE.MeshStandardMaterial({ color: 0x789487, metalness: 0.55, roughness: 0.5 });
+    const amber = new THREE.MeshStandardMaterial({ color: 0xffaa67, emissive: 0xa75b32, emissiveIntensity: 1.35 });
+    const cyan = new THREE.MeshStandardMaterial({ color: 0x81eee2, emissive: 0x2d9e9b, emissiveIntensity: 1.25 });
+    // A weather station that marks the eastern route, away from zombie spawn and extraction.
+    const station = new THREE.Group();
+    station.position.set(13, 0, -8);
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.3, 0.28, 8), stone);
+    pad.position.y = 0.14; station.add(pad);
+    for (const x of [-1.05, 1.05]) {
+      const support = new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.3, 0.16), metal);
+      support.position.set(x, 1.72, 0); station.add(support);
+    }
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.23, 2.1), stone);
+    roof.position.y = 3.35; station.add(roof);
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.9, 0.12), cyan);
+    screen.position.set(0, 2.15, 0.02); station.add(screen);
+    this.scene.add(station);
+    // A warm field camp to orient the spawn side of the clearing.
+    const camp = new THREE.Group(); camp.position.set(-11, 0, 8);
+    const tent = new THREE.Mesh(new THREE.ConeGeometry(2.2, 2.7, 4), new THREE.MeshStandardMaterial({ color: 0xb28a60, roughness: 1 }));
+    tent.rotation.y = Math.PI / 4; tent.position.y = 1.35; camp.add(tent);
+    const fire = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.8, 6), amber);
+    fire.position.set(3.1, 0.42, 0); camp.add(fire);
+    const glow = new THREE.PointLight(0xffa15c, 4.5, 9, 2);
+    glow.position.set(3.1, 1.0, 0); camp.add(glow);
+    this.scene.add(camp);
+    // Simple orientation monolith near the ruin corridor.
+    const marker = new THREE.Mesh(new THREE.BoxGeometry(0.75, 2.6, 0.55), stone);
+    marker.position.set(-9, 1.3, -16); marker.rotation.y = 0.3; this.scene.add(marker);
+    const rune = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.65, 0.04), cyan);
+    rune.position.set(-9, 1.7, -15.7); this.scene.add(rune);
+  }
+
+  private createCanopyDetails(): void {
+    const soil = new THREE.MeshStandardMaterial({ color: 0x3d5547, roughness: 1 });
+    for (const [x, z, r] of [[-15,-11,3], [16,7,3.5], [-14,15,2.4], [17,-18,2.8]] as const) {
+      const mound = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 7), soil);
+      mound.scale.set(1, 0.12, 0.85); mound.position.set(x, -0.24, z);
+      mound.receiveShadow = true; this.scene.add(mound);
     }
   }
 

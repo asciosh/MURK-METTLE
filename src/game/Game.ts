@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { InputController } from './InputController';
 import { Player } from './Player';
 import { World } from './World';
+import { Minimap } from './Minimap';
 import { Zombie } from './Zombie';
 import { Companion } from './Companion';
 import { Inventory, ITEM_DEFINITIONS, type ItemId } from './Inventory';
@@ -17,6 +18,7 @@ export class Game {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly clock = new THREE.Clock();
   private readonly world: World;
+  private readonly minimap = new Minimap();
   private readonly player: Player;
   private readonly input: InputController;
   private zombie: Zombie;
@@ -103,7 +105,7 @@ export class Game {
     this.renderer.setSize(viewport.clientWidth, viewport.clientHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.18;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.domElement.className = 'game-canvas';
@@ -111,8 +113,8 @@ export class Game {
     this.renderer.domElement.tabIndex = 0;
     this.viewport.prepend(this.renderer.domElement);
 
-    this.scene.background = new THREE.Color(0x17231c);
-    this.scene.fog = new THREE.Fog(0x17231c, 28, 76);
+    this.scene.background = new THREE.Color(0x283c32);
+    this.scene.fog = new THREE.FogExp2(0x283c32, 0.018);
     this.createLighting();
 
     this.world = new World(this.scene);
@@ -281,6 +283,7 @@ export class Game {
     this.damageFlash?.classList.toggle('active', this.damageFlashTimer > 0);
     this.updateCamera(deltaSeconds);
     this.updateHud(deltaSeconds);
+    this.minimap.update(this.player.getPosition(), this.zombie.isDead() ? null : this.zombie.getPosition(), this.player.root.rotation.y);
     this.renderer.render(this.scene, this.camera);
   };
 

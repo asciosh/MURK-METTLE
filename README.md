@@ -32,3 +32,14 @@ Four-player room code, remote player movement and shared zombie combat from v0.6
 ## Before committing
 
 Run `npm run build`. Play a complete expedition; confirm killing, salvaging, extracting, receiving XP, repeating, dying/resetting and persisted extraction count. Test v0.6 mechanics for regressions. Do not claim multiplayer acceptance tests passed until testing with friends.
+
+
+## v0.8 — Wildlands visual update
+
+- Reworked responsive HUD layout to separate vitality, progression, companion, objectives and enemy panels.
+- Always-visible north-up minimap: player direction, current infected, field camp, weather station and extraction point.
+- Expanded forest floor detail using seeded instanced foliage, flowers and original geometric field landmarks.
+- Refreshed atmosphere, fog and map color palette. The original mission boundaries, collision props and coordinates remain unchanged.
+- No external art assets or Nintendo IP. No gameplay/save schema or room protocol changes.
+
+**Verification:** Run `npm install && npm run build && npm run dev` in Codespaces. Check HUD on your desktop browser and at 390px mobile responsive width.
