@@ -370,3 +370,86 @@ kbd { min-width: 16px; padding: 3px 4px; border: 1px solid rgba(226,237,214,.2);
   .minimap-panel { bottom: 10px; width: 150px; }
   .hud-bottom-right { bottom: 10px; }
 }
+
+
+/* === v0.9: HUD regions instead of stacked absolute pixel coordinates === */
+#app { display: flex; flex-direction: column; min-height: 0; }
+.co-op-bar { flex: 0 0 auto; min-height: 46px; height: auto; position: relative; }
+#game-viewport { position: relative; inset: auto; top: auto; bottom: auto; flex: 1 1 0; min-height: 0; }
+.topbar { top: 0; height: 64px; }
+.hud-stack { position: absolute; top: 80px; z-index: 5; display: flex; flex-direction: column; gap: 10px;
+  width: clamp(214px, 21vw, 274px); max-height: calc(100% - 160px); min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #577862 transparent;
+  pointer-events: none; padding: 2px 3px 5px; }
+.hud-stack-left { left: clamp(10px, 2vw, 26px); }
+.hud-stack-right { right: clamp(10px, 2vw, 26px); }
+.hud-stack > .player-status, .hud-stack > .progress-panel, .hud-stack > .creature-panel,
+.hud-stack > .mission-panel, .hud-stack > .enemy-panel {
+  position: relative !important; inset: auto !important; left: auto !important; right: auto !important;
+  top: auto !important; bottom: auto !important; width: 100% !important;
+  min-width: 0; flex-shrink: 0; transform: none;
+  margin: 0; padding: 11px 12px; border-radius: 11px;
+  background: linear-gradient(145deg, rgba(14,32,26,.94), rgba(10,20,17,.86));
+  box-shadow: 0 8px 22px rgba(0,0,0,.19); }
+.hud-stack > .enemy-panel:not(.visible) { display: none; }
+.hud-stack .creature-panel p { margin: 5px 0 9px; }
+.hud-stack .health-track { margin-top: 7px; }
+.hud-stack .progress-track { margin: 7px 0 5px; }
+.hud-stack .creature-panel .strain-top { margin: 7px 0 5px; }
+.hud-stack .strain-track { margin-bottom: 8px; }
+.hud-stack .mission-panel { gap: 5px; }
+.hud-stack .mission-panel small { line-height: 1.4; }
+.inventory-toggle { top: 15px; left: 50%; right: auto; transform: translateX(-50%); }
+.inventory-panel { top: 58px; }
+.minimap-panel { bottom: 16px; width: clamp(130px, 15vw, 175px); }
+.hud-bottom-right { right: 212px; bottom: 16px; }
+.hud-bottom-left { bottom: 16px; }
+.radio-panel { bottom: 96px; }
+.combat-toast { bottom: 65px; }
+.corner-note { display: none; }
+/* Depth, contrast and interaction polish */
+.player-status, .creature-panel, .mission-panel, .enemy-panel, .progress-panel { border-color: rgba(177,223,181,.25); }
+.mission-panel { border-left: 3px solid #75cbbf; }
+.creature-panel { border-left: 3px solid #b6e68f; }
+.player-status { border-left: 3px solid #e3a372; }
+.minimap-panel { box-shadow: 0 12px 30px rgba(3,10,7,.28); }
+button:focus-visible, input:focus-visible, .wordmark:focus-visible { outline: 2px solid #d4f3a2; outline-offset: 3px; }
+@media (max-width: 980px) {
+ .hud-stack { top: 72px; width: clamp(176px, 25vw, 224px); max-height: calc(100% - 150px); gap: 7px; }
+ .hud-stack > .player-status, .hud-stack > .progress-panel, .hud-stack > .creature-panel,
+ .hud-stack > .mission-panel, .hud-stack > .enemy-panel { padding: 9px; }
+ .hud-stack .creature-panel p { display: none; }
+ .hud-bottom-right { display:none; }
+}
+@media (max-width: 680px) {
+ .topbar { top: 0; height: 49px; }
+ .hud-stack { top: 57px; width: min(46vw, 192px); max-height: calc(100% - 145px); gap: 5px; padding: 1px; }
+ .hud-stack-left { left: 7px; } .hud-stack-right { right: 7px; }
+ .hud-stack > .player-status, .hud-stack > .progress-panel, .hud-stack > .creature-panel,
+ .hud-stack > .mission-panel, .hud-stack > .enemy-panel { padding: 7px; border-radius: 8px; }
+ .hud-stack .mission-panel { font-size: 8px; }
+ .hud-stack .mission-panel strong { font-size: 9px; }
+ .hud-stack .mission-panel small { font-size: 7px; }
+ .hud-stack .creature-panel .ability-button { font-size: 8px; padding: 8px 5px; }
+ .hud-stack .creature-name { font-size: 14px; }
+ .inventory-toggle { top: 11px; left: auto; right: 8px; transform: none; padding: 6px 8px; font-size: 8px; }
+ .inventory-panel { top: 52px; max-height: calc(100% - 70px); }
+ .minimap-panel { width: min(116px, 31vw); right: 7px; bottom: 7px; padding: 6px; }
+ .minimap-legend { display: none; }
+ .hud-bottom-left { bottom: 9px; left: 8px; }
+ .hud-bottom-right { display:none; }
+ .radio-panel { width: min(310px, 85vw); bottom: 115px; }
+ .combat-toast { bottom: 75px; }
+ .welcome-card { top: 56%; }
+}
+@media (max-height: 650px) {
+ .hud-stack { max-height: calc(100% - 120px); }
+ .hud-stack .creature-panel p { display:none; }
+ .hud-stack .mission-panel small:first-of-type { display:none; }
+ .minimap-panel { width: 125px; }
+}
+@media (prefers-reduced-motion: reduce) {
+ *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+/* Only functional HUD buttons capture clicks; the rest remains click-through for the game. */
+.hud-stack .ability-button { pointer-events: auto; }

@@ -101,7 +101,7 @@ export class Game {
 
   constructor(private readonly viewport: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.renderer.setSize(viewport.clientWidth, viewport.clientHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -114,7 +114,7 @@ export class Game {
     this.viewport.prepend(this.renderer.domElement);
 
     this.scene.background = new THREE.Color(0x283c32);
-    this.scene.fog = new THREE.FogExp2(0x283c32, 0.018);
+    this.scene.fog = new THREE.FogExp2(0x283c32, 0.014);
     this.createLighting();
 
     this.world = new World(this.scene);
@@ -193,7 +193,7 @@ export class Game {
     const sun = new THREE.DirectionalLight(0xffe3bd, 2.35);
     sun.position.set(-14, 24, 12);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1536, 1536);
+    sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.left = -32;
     sun.shadow.camera.right = 32;
     sun.shadow.camera.top = 32;

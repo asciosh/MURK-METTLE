@@ -19,6 +19,7 @@ export class World {
     this.createForestFloor();
     this.createLandmarks();
     this.createCanopyDetails();
+    this.createForestBackdrop();
   }
 
   private createGround(): void {
@@ -209,7 +210,7 @@ export class World {
         mesh.setMatrixAt(i, dummy.matrix);
       }
       mesh.instanceMatrix.needsUpdate = true;
-      mesh.frustumCulled = false;
+      mesh.computeBoundingSphere();
       this.scene.add(mesh);
     }
     const wildflowers = new THREE.InstancedMesh(
@@ -223,6 +224,7 @@ export class World {
       dummy.updateMatrix(); wildflowers.setMatrixAt(i, dummy.matrix);
     }
     wildflowers.instanceMatrix.needsUpdate = true;
+    wildflowers.computeBoundingSphere();
     this.scene.add(wildflowers);
   }
 
@@ -268,6 +270,43 @@ export class World {
       const mound = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 7), soil);
       mound.scale.set(1, 0.12, 0.85); mound.position.set(x, -0.24, z);
       mound.receiveShadow = true; this.scene.add(mound);
+    }
+  }
+
+
+  /** Distant layered trees create a forest horizon with only three instanced draw calls.
+   *  They live beyond playable bounds and intentionally have no collisions. */
+  private createForestBackdrop(): void {
+    const trunks = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.23, 0.46, 3.5, 5),
+      new THREE.MeshStandardMaterial({ color: 0x435043, roughness: 1 }), 68,
+    );
+    const canopies = new THREE.InstancedMesh(
+      new THREE.ConeGeometry(2.1, 6.3, 6),
+      new THREE.MeshStandardMaterial({ color: 0x244b3b, roughness: 1, flatShading: true }), 68,
+    );
+    const lower = new THREE.InstancedMesh(
+      new THREE.ConeGeometry(2.8, 4.7, 6),
+      new THREE.MeshStandardMaterial({ color: 0x36674c, roughness: 1, flatShading: true }), 68,
+    );
+    const item = new THREE.Object3D();
+    for (let i = 0; i < 68; i++) {
+      const angle = (i / 68) * Math.PI * 2;
+      const radius = 30 + 2.8 * Math.sin(i * 1.73);
+      const size = 0.75 + 0.45 * (0.5 + 0.5 * Math.sin(i * 13.7));
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      item.position.set(x, 1.75 * size, z); item.scale.setScalar(size);
+      item.rotation.set(0, i * 1.618, 0); item.updateMatrix(); trunks.setMatrixAt(i, item.matrix);
+      item.position.y = 6.05 * size; item.updateMatrix(); canopies.setMatrixAt(i, item.matrix);
+      item.position.y = 4.65 * size; item.updateMatrix(); lower.setMatrixAt(i, item.matrix);
+    }
+    for (const mesh of [trunks, canopies, lower]) {
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      this.scene.add(mesh);
     }
   }
 
