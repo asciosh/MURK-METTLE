@@ -9,6 +9,8 @@ export class Companion {
   private readonly visual = new THREE.Group();
   private readonly animator = new ActorAnimator(this.root);
   private readonly petals: THREE.Mesh[] = [];
+  private readonly antennae: THREE.Group[] = [];
+  private readonly eyes: THREE.Mesh[] = [];
   private readonly glow: THREE.PointLight;
   private readonly body: THREE.Mesh;
   private readonly aura: THREE.Mesh;
@@ -38,6 +40,22 @@ export class Companion {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), accent);
       eye.position.set(side * 0.12, 0.02, -0.36);
       this.visual.add(eye);
+      this.eyes.push(eye);
+    }
+    // Flexible antennae give the creature a recognizable personality in motion.
+    const stalkMat = new THREE.MeshStandardMaterial({ color: 0x397c5b, roughness: 0.75 });
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.20, 0.24, 0);
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.021, 0.042, 0.45, 6), stalkMat);
+      stalk.position.y = 0.21;
+      stalk.rotation.z = -side * 0.30;
+      pivot.add(stalk);
+      const tip = new THREE.Mesh(new THREE.IcosahedronGeometry(0.105, 1), accent);
+      tip.position.set(side * 0.11, 0.45, 0);
+      pivot.add(tip);
+      this.visual.add(pivot);
+      this.antennae.push(pivot);
     }
     this.aura = new THREE.Mesh(
       new THREE.RingGeometry(0.55, 0.66, 40),
@@ -90,6 +108,13 @@ export class Companion {
     this.root.rotation.y += dt * 0.7;
     this.body.rotation.z = Math.sin(this.elapsed * 2.8) * 0.12;
     this.body.scale.setScalar(1 + Math.sin(this.elapsed * 3.5) * 0.04);
+    for (const [i, antenna] of this.antennae.entries()) {
+      antenna.rotation.z = Math.sin(this.elapsed * 2.3 + i * 1.6) * 0.23;
+      antenna.rotation.x = Math.cos(this.elapsed * 2.1 + i) * 0.12;
+    }
+    const blink = Math.sin(this.elapsed * 0.63) > 0.987 ? 0.14 : 1;
+    for (const eye of this.eyes) eye.scale.y = blink;
+    this.visual.rotation.x = Math.sin(this.elapsed * 1.7) * 0.06;
     for (const [i, leaf] of this.petals.entries()) {
       leaf.rotation.y = Math.sin(this.elapsed * 2.2 + i * 1.25) * 0.2;
     }

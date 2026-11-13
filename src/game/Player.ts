@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { World } from './World';
 import { ActorAnimator, type ModelEntry } from './AnimationController';
+import { decorateSurvivor } from './VisualDetail';
 
 /** Temporary procedural survivor model. Replace with an original rigged GLB later. */
 export class Player {
@@ -15,6 +16,9 @@ export class Player {
   private rightArm!: THREE.Mesh;
   private walkClock = 0;
   private isMoving = false;
+  private movementBlend = 0;
+  private sprintBlend = 0;
+  private idleClock = 0;
   private attackTime = 0;
   private health = 100;
 
@@ -88,6 +92,7 @@ export class Player {
       leg.add(trouser, boot);
       this.fallbackModel.add(leg);
     }
+    decorateSurvivor(this.fallbackModel);
   }
 
   update(direction: THREE.Vector3, deltaSeconds: number, sprinting: boolean, world: World): void {
@@ -107,19 +112,24 @@ export class Player {
       this.root.rotation.y += angleDifference * Math.min(1, deltaSeconds * 13);
     }
 
+    this.movementBlend = THREE.MathUtils.damp(this.movementBlend, this.isMoving ? 1 : 0, 10, deltaSeconds);
+    this.sprintBlend = THREE.MathUtils.damp(this.sprintBlend, this.isMoving && sprinting ? 1 : 0, 9, deltaSeconds);
+    this.idleClock += deltaSeconds;
     this.animator.setState(this.attackTime > 0 ? 'attack' : this.isMoving ? (sprinting ? 'run' : 'walk') : 'idle');
     this.animator.update(deltaSeconds);
     this.walkClock += deltaSeconds * (sprinting ? 13 : 9);
     this.attackTime = Math.max(0, this.attackTime - deltaSeconds);
-    const bob = this.isMoving ? Math.abs(Math.sin(this.walkClock)) * (sprinting ? 0.09 : 0.045) : 0;
+    const bob = this.movementBlend * Math.abs(Math.sin(this.walkClock)) * (0.045 + this.sprintBlend * 0.045)
+      + Math.sin(this.idleClock * 1.9) * 0.009;
     this.visual.position.y = bob;
-    const armSwing = this.isMoving ? Math.sin(this.walkClock) * (sprinting ? 0.48 : 0.28) : 0;
+    const armSwing = this.movementBlend * Math.sin(this.walkClock) * (0.28 + this.sprintBlend * 0.2);
     const attackProgress = this.attackTime > 0 ? 1 - this.attackTime / 0.28 : 0;
     const attackSwing = attackProgress > 0 ? Math.sin(attackProgress * Math.PI) * 1.85 : 0;
     this.fallbackModel.visible = !this.animator.installed;
     this.leftLeg.rotation.x = -armSwing * 1.25;
     this.rightLeg.rotation.x = armSwing * 1.25;
-    this.fallbackModel.rotation.z = this.isMoving ? Math.sin(this.walkClock) * 0.017 : 0;
+    this.fallbackModel.rotation.z = this.movementBlend * Math.sin(this.walkClock) * 0.02;
+    this.fallbackModel.rotation.x = this.sprintBlend * -0.075;
     this.leftArm.rotation.x = armSwing;
     this.rightArm.rotation.x = -armSwing - attackSwing;
   }

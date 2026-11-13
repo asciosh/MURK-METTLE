@@ -20,12 +20,43 @@ export class World {
     this.createLandmarks();
     this.createCanopyDetails();
     this.createForestBackdrop();
+    this.createGroundDetail();
+    this.createForestMotes();
+  }
+
+  /** Tileable pixel-art-inspired soil texture; entirely code-generated and royalty-free. */
+  private makeTerrainTexture(base: number, light: number, dark: number, repeats: number): THREE.CanvasTexture {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 256;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('2D canvas needed to generate terrain texture');
+    context.fillStyle = `#${base.toString(16).padStart(6, '0')}`;
+    context.fillRect(0, 0, 256, 256);
+    let seed = base ^ light ^ dark;
+    const random = (): number => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 0x100000000;
+    };
+    for (let i = 0; i < 1550; i++) {
+      context.globalAlpha = 0.09 + random() * 0.23;
+      context.fillStyle = `#${(random() > 0.5 ? light : dark).toString(16).padStart(6, '0')}`;
+      const size = 1 + random() * 6;
+      context.fillRect(random() * 256, random() * 256, size * 1.8, size * 0.55);
+    }
+    context.globalAlpha = 1;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(repeats, repeats);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return texture;
   }
 
   private createGround(): void {
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(100, 100),
-      new THREE.MeshStandardMaterial({ color: 0x405a43, roughness: 1 }),
+      new THREE.MeshStandardMaterial({ map: this.makeTerrainTexture(0x425d47, 0x63734a, 0x273e35, 12), roughness: 1 }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
@@ -34,7 +65,7 @@ export class World {
 
     const clearing = new THREE.Mesh(
       new THREE.CircleGeometry(23.8, 64),
-      new THREE.MeshStandardMaterial({ color: 0x52684b, roughness: 1 }),
+      new THREE.MeshStandardMaterial({ map: this.makeTerrainTexture(0x526b4f, 0x73885a, 0x425442, 8), roughness: 1 }),
     );
     clearing.rotation.x = -Math.PI / 2;
     clearing.position.y = 0.012;
@@ -45,7 +76,7 @@ export class World {
   private createPath(): void {
     const path = new THREE.Mesh(
       new THREE.PlaneGeometry(6.5, 47),
-      new THREE.MeshStandardMaterial({ color: 0x78694f, roughness: 1 }),
+      new THREE.MeshStandardMaterial({ map: this.makeTerrainTexture(0x786b51, 0xa28d67, 0x5c5644, 12), roughness: 1 }),
     );
     path.rotation.x = -Math.PI / 2;
     path.position.set(0, 0.025, -1.8);
@@ -308,6 +339,65 @@ export class World {
       mesh.receiveShadow = false;
       this.scene.add(mesh);
     }
+  }
+
+  /** Low-cost small set dressing; no new collisions or changed mission coordinates. */
+  private createGroundDetail(): void {
+    const soil = new THREE.MeshStandardMaterial({ color: 0x556243, roughness: 1, flatShading: true });
+    const moss = new THREE.MeshStandardMaterial({ color: 0x75905d, roughness: 1, flatShading: true });
+    const root = new THREE.MeshStandardMaterial({ color: 0x635344, roughness: 1 });
+    const debris = new THREE.MeshStandardMaterial({ color: 0x9f8d70, roughness: 1 });
+    const patch = new THREE.CircleGeometry(1, 9);
+    const dummy = new THREE.Object3D();
+    const patches = new THREE.InstancedMesh(patch, soil, 70);
+    const lichen = new THREE.InstancedMesh(patch, moss, 65);
+    const stones = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.12, 0), debris, 90);
+    let seed = 9418;
+    const rand = (): number => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    for (const [mesh, n, height] of [[patches, 70, 0.045], [lichen, 65, 0.052], [stones, 90, 0.12]] as const) {
+      for (let i = 0; i < n; i++) {
+        const x = rand() * 43 - 21.5, z = rand() * 43 - 21.5;
+        dummy.position.set(x, height, z);
+        dummy.rotation.set(mesh === stones ? rand() * 0.7 : -Math.PI / 2, rand() * Math.PI * 2, 0);
+        const scale = mesh === stones ? 0.6 + rand() * 1.5 : 0.35 + rand() * 1.45;
+        dummy.scale.set(scale, scale * (mesh === stones ? 0.7 : 0.6), scale);
+        dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
+      this.scene.add(mesh);
+    }
+    // Hand-placed exposed roots around old trees.
+    for (const [x, z, angle] of [[-17, -15, 0.3], [19, 10, 1.6], [-16, 12, 2.4], [13, 17, 0.8]] as const) {
+      for (let k = 0; k < 3; k++) {
+        const cylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.16, 2.2, 5), root);
+        cylinder.position.set(x + Math.cos(angle + k * 2.1) * 0.85, 0.13, z + Math.sin(angle + k * 2.1) * 0.85);
+        cylinder.rotation.z = Math.PI / 2;
+        cylinder.rotation.y = angle + k * 2.1;
+        this.scene.add(cylinder);
+      }
+    }
+  }
+
+  private createForestMotes(): void {
+    // Sparse atmospheric pollen; additive blending provides depth without postprocess passes.
+    const count = 140;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    let seed = 34901;
+    const rand = (): number => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = rand() * 44 - 22;
+      positions[i * 3 + 1] = 0.9 + rand() * 5.5;
+      positions[i * 3 + 2] = rand() * 44 - 22;
+    }
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const motes = new THREE.Points(geometry, new THREE.PointsMaterial({
+      color: 0xe0df9b, size: 0.085, sizeAttenuation: true, transparent: true,
+      opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    motes.frustumCulled = false;
+    this.scene.add(motes);
   }
 
   /** Keeps the prototype player within the clearing and outside simple circular props. */

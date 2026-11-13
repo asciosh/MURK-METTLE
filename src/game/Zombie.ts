@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { World } from './World';
 import { ActorAnimator, type ModelEntry } from './AnimationController';
+import { decorateInfected } from './VisualDetail';
 
 type ZombieState = 'idle' | 'chase' | 'attack' | 'dead';
 
@@ -84,6 +85,7 @@ export class Zombie {
     this.root.add(this.modelVisual);
     this.createModel();
     this.addMutationDetails(mutationSeed);
+    decorateInfected(this.modelVisual, profile.spores);
     this.scene.add(this.root);
   }
 
@@ -206,6 +208,7 @@ export class Zombie {
       this.leftArm.rotation.x = -0.85 - swing;
       this.rightArm.rotation.x = -0.85 + swing;
       this.root.position.y = Math.abs(Math.sin(this.animationClock * 7)) * 0.025;
+      this.modelVisual.rotation.z = Math.sin(this.animationClock * 7) * 0.065;
       if (this.attackCooldown <= 0) {
         this.attackCooldown = 1.35;
         return true;
@@ -228,6 +231,8 @@ export class Zombie {
       this.leftArm.rotation.x = -0.48 + gait * 0.28;
       this.rightArm.rotation.x = -0.48 - gait * 0.28;
       this.root.position.y = Math.abs(gait) * 0.035;
+      this.modelVisual.rotation.z = gait * 0.065;
+      this.modelVisual.rotation.x = 0.09;
     } else {
       this.state = 'idle';
       this.animator.setState('idle');
@@ -235,6 +240,8 @@ export class Zombie {
       this.leftArm.rotation.x = -0.3;
       this.rightArm.rotation.x = -0.3;
       this.root.position.y = Math.sin(this.animationClock * 1.6) * 0.018;
+      this.modelVisual.rotation.z = Math.sin(this.animationClock * 1.2) * 0.028;
+      this.modelVisual.rotation.x = 0;
     }
 
     return false;
