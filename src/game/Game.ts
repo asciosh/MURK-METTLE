@@ -4,6 +4,7 @@ import { Player } from './Player';
 import { World } from './World';
 import { Zombie } from './Zombie';
 import { Companion } from './Companion';
+import { Progression, levelFromXp, xpInLevel, CREATURE_XP_PER_PULSE_HIT, CREATURE_XP_PER_PULSE_KILL } from './Progression';
 
 export class Game {
   private readonly scene = new THREE.Scene();
@@ -20,7 +21,14 @@ export class Game {
   private readonly abilityButton: HTMLButtonElement | null;
   private abilityCooldown = 0;
   private hasCollectedLanternkin = false;
-  private readonly saveKey = 'murk-mettle-v03-creatures';
+  private readonly progression = new Progression();
+  private readonly playerLevelText: HTMLElement | null;
+  private readonly playerXpFill: HTMLElement | null;
+  private readonly playerXpText: HTMLElement | null;
+  private readonly creatureLevelText: HTMLElement | null;
+  private readonly creatureXpFill: HTMLElement | null;
+  private readonly creatureXpText: HTMLElement | null;
+  private readonly killText: HTMLElement | null;
   private readonly positionElement: HTMLElement | null;
   private readonly playerHealthFill: HTMLElement | null;
   private readonly playerHealthText: HTMLElement | null;
@@ -41,7 +49,6 @@ export class Game {
   private toastTimer = 0;
   private damageFlashTimer = 0;
   private running = false;
-  private killCount = 0;
 
   constructor(private readonly viewport: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -65,18 +72,22 @@ export class Game {
     this.player = new Player(this.scene);
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
     this.companion = new Companion(this.scene);
-    try {
-      const saved = JSON.parse(localStorage.getItem(this.saveKey) ?? '{}') as { lanternkin?: boolean };
-      if (saved.lanternkin === true) {
-        this.companion.bond();
-        this.hasCollectedLanternkin = true;
-      }
-    } catch { /* Private browsing or invalid save data: begin with no creature. */ }
+    if (this.progression.state.lanternkinBonded) {
+      this.companion.bond();
+      this.hasCollectedLanternkin = true;
+    }
     this.input = new InputController(this.renderer.domElement, (locked) => {
       document.body.classList.toggle('is-pointer-locked', locked);
     });
 
     this.positionElement = document.querySelector<HTMLElement>('#player-position');
+    this.playerLevelText = document.querySelector<HTMLElement>('#player-level');
+    this.playerXpFill = document.querySelector<HTMLElement>('#player-xp-fill');
+    this.playerXpText = document.querySelector<HTMLElement>('#player-xp-text');
+    this.creatureLevelText = document.querySelector<HTMLElement>('#creature-level');
+    this.creatureXpFill = document.querySelector<HTMLElement>('#creature-xp-fill');
+    this.creatureXpText = document.querySelector<HTMLElement>('#creature-xp-text');
+    this.killText = document.querySelector<HTMLElement>('#lifetime-kills');
     this.playerHealthFill = document.querySelector<HTMLElement>('#player-health-fill');
     this.playerHealthText = document.querySelector<HTMLElement>('#player-health-text');
     this.enemyPanel = document.querySelector<HTMLElement>('#enemy-panel');
@@ -97,6 +108,7 @@ export class Game {
     this.resize();
     this.updateCamera(1);
     this.updateHud(1);
+    this.updateProgressHud();
     this.showToast('INFECTED CONTACT  //  Close the distance. SPACE or left-click to strike.', 'info');
   }
 
@@ -189,8 +201,7 @@ export class Game {
     }
     this.companion.bond();
     this.hasCollectedLanternkin = true;
-    try { localStorage.setItem(this.saveKey, JSON.stringify({ lanternkin: true })); }
-    catch { this.showToast('LANTERNKIN BONDED  //  Saving unavailable in this browser.', 'warning'); }
+    this.progression.bondLanternkin();
     this.showToast('NEW BOND  //  Lanternkin joined your field collection! Press Q to pulse.', 'success');
     this.updateCompanionHud();
   }
@@ -203,11 +214,12 @@ export class Game {
     if (!this.zombie.isDead() && this.zombie.getPosition().distanceTo(this.companion.getPosition()) <= 7.5) {
       const killed = this.zombie.takeDamage(35);
       if (killed) {
-        this.killCount += 1;
+        this.registerKill(true);
         this.zombieRespawnTimer = 0;
-        this.showToast(`LANTERN PULSE  //  Infected eliminated! ${this.killCount} cleared.`, 'success');
+        this.showToast('LANTERN PULSE  //  Infected eliminated! +50 XP / +40 companion XP', 'success');
       } else {
-        this.showToast('LANTERN PULSE  //  35 damage to nearby infected.', 'success');
+        const leveled = this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_HIT);
+        this.showToast(leveled ? 'LANTERNKIN LEVEL UP!' : 'LANTERN PULSE  //  35 damage / +10 companion XP', 'success');
       }
     } else {
       this.showToast('LANTERN PULSE  //  No infected within range.', 'info');
@@ -255,11 +267,19 @@ export class Game {
 
     const killed = this.zombie.takeDamage(40);
     if (killed) {
-      this.killCount += 1;
+      this.registerKill(false);
       this.zombieRespawnTimer = 0;
-      this.showToast(`INFECTED ELIMINATED  //  ${this.killCount} CLEARED`, 'success');
+      this.showToast('INFECTED ELIMINATED  //  +50 PLAYER XP', 'success');
     } else {
       this.showToast(`HIT CONFIRMED  //  ${this.zombie.getHealth()} INFECTED HEALTH`, 'success');
+    }
+  }
+
+  private registerKill(fromPulse: boolean): void {
+    const leveled = this.progression.recordKill();
+    const creatureLeveled = fromPulse && this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_KILL);
+    if (leveled || creatureLeveled) {
+      this.showToast(leveled ? 'LEVEL UP  //  Your survivor grew stronger!' : 'LANTERNKIN LEVEL UP!', 'success');
     }
   }
 
@@ -331,7 +351,21 @@ export class Game {
     }
 
     this.updateCompanionHud();
+    this.updateProgressHud();
     if (this.toastTimer <= 0) this.combatToast?.classList.remove('visible');
+  }
+
+  private updateProgressHud(): void {
+    const state = this.progression.state;
+    const playerXp = xpInLevel(state.playerXp);
+    const companionXp = xpInLevel(state.lanternkinXp);
+    if (this.playerLevelText) this.playerLevelText.textContent = `LV ${levelFromXp(state.playerXp)}`;
+    if (this.playerXpFill) this.playerXpFill.style.width = `${playerXp.ratio * 100}%`;
+    if (this.playerXpText) this.playerXpText.textContent = playerXp.required ? `${playerXp.current} / ${playerXp.required} XP` : 'MAX LEVEL';
+    if (this.creatureLevelText) this.creatureLevelText.textContent = state.lanternkinBonded ? `LV ${levelFromXp(state.lanternkinXp)}` : 'UNBONDED';
+    if (this.creatureXpFill) this.creatureXpFill.style.width = `${state.lanternkinBonded ? companionXp.ratio * 100 : 0}%`;
+    if (this.creatureXpText) this.creatureXpText.textContent = !state.lanternkinBonded ? 'BOND TO EARN XP' : companionXp.required ? `${companionXp.current} / ${companionXp.required} XP` : 'MAX LEVEL';
+    if (this.killText) this.killText.textContent = `${state.totalKills} TOTAL CLEARED`;
   }
 
   private resize(): void {

@@ -219,3 +219,25 @@ kbd { min-width: 16px; padding: 3px 4px; border: 1px solid rgba(226,237,214,.2);
   .hud-bottom-right { flex-wrap: wrap; }
   .corner-note { display: none; }
 }
+
+/* Prototype 0.4 — RPG progress readouts */
+.progress-panel {
+  position: absolute; z-index: 5; left: clamp(18px,3.8vw,58px); top: 192px;
+  width: min(282px, calc(100% - 36px)); padding: 12px 14px;
+  background: rgba(12,20,15,.8); border: 1px solid rgba(196,217,139,.24);
+  backdrop-filter: blur(8px); pointer-events: none;
+}
+.progress-top, .progress-bottom { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.progress-top b { color: #d9e7bc; font: 700 11px 'DM Mono', monospace; }
+.progress-track { overflow: hidden; width: 100%; height: 6px; background: rgba(230,238,220,.16); margin: 9px 0 7px; }
+.progress-fill { height: 100%; width: 0; background: #b7d88b; transition: width .2s; }
+.creature-xp-fill { background: #7edcb6; }
+.progress-bottom { color: rgba(230,238,220,.65); font: 8px 'DM Mono', monospace; }
+.creature-panel { top: 291px; }
+.creature-panel .progress-top { margin-top: 9px; }
+.creature-panel .progress-bottom { margin: 0 0 12px; }
+@media (max-width: 680px) {
+  .progress-panel { top: 158px; left: 12px; width: min(240px,calc(100vw - 24px)); padding: 9px; }
+  .creature-panel { top: 251px; }
+  .progress-bottom { font-size: 7px; }
+}
