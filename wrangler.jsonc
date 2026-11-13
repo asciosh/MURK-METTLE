@@ -6,10 +6,35 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/room*"]
+    "run_worker_first": [
+      "/room*",
+      "/api/profile*"
+    ]
   },
   "durable_objects": {
-    "bindings": [{ "name": "GAME_ROOMS", "class_name": "GameRoom" }]
+    "bindings": [
+      {
+        "name": "GAME_ROOMS",
+        "class_name": "GameRoom"
+      },
+      {
+        "name": "PLAYER_PROFILES",
+        "class_name": "PlayerProfile"
+      }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }]
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "GameRoom"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "PlayerProfile"
+      ]
+    }
+  ]
 }

@@ -9,7 +9,7 @@ const TYPES = [
   { id: 'ashwalker', hp: 110, speed: 2.08, damage: 13 },
 ];
 const MAX_PLAYERS = 4;
-const SNAPSHOT_MS = 200; // 5Hz snapshots; client interpolates between them.
+const SNAPSHOT_MS = 100; // 10 Hz snapshots; client renders between buffered samples.
 const isNumber = value => typeof value === 'number' && Number.isFinite(value);
 const selectZombie = (last = null, generation = 0) => {
   const options = TYPES.filter(type => type.id !== last);

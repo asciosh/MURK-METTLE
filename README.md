@@ -1,3 +1,7 @@
+## v0.12 — Smooth co-op + cloud backup (beta)
+
+See [CHANGELOG-v0.12.md](CHANGELOG-v0.12.md) for setup, limits and recovery-key security.
+
 # Murk & Mettle — v0.7: Solo Expeditions
 
 This update retains v0.6 combat, crafting, Lanternkin and experimental WebSocket rooms.

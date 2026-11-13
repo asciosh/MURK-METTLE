@@ -262,11 +262,12 @@ export class Game {
     this.player.update(movement, deltaSeconds, this.input.isSprinting(), this.world);
     if (this.multiplayer.connected) {
       this.networkTimer += deltaSeconds;
-      if (this.networkTimer >= 0.12) {
+      if (this.networkTimer >= 0.065) {
         this.networkTimer = 0;
         const pos = this.player.getPosition();
         this.multiplayer.send('move', { x: pos.x, z: pos.z, yaw: this.player.root.rotation.y });
       }
+      this.multiplayer.updateVisuals();
       this.updateRemotePlayers(deltaSeconds);
       this.syncRoomZombie();
     }
@@ -402,11 +403,11 @@ export class Game {
       } else this.showToast('TEAM KILL  //  Salvage available!', 'success');
     }
   };
-  private updateRemotePlayers(deltaSeconds: number): void {
+  private updateRemotePlayers(_deltaSeconds: number): void {
     for (const [id, state] of this.multiplayer.peers) {
       let actor = this.remotePlayers.get(id);
       if (!actor) { actor = new Player(this.scene); actor.root.name = `ally-${id}`; this.remotePlayers.set(id, actor); }
-      actor.root.position.lerp(new THREE.Vector3(state.x, 0, state.z), Math.min(1, deltaSeconds * 14));
+      actor.root.position.set(state.x, 0, state.z);
       actor.root.rotation.y = state.yaw;
       actor.root.visible = state.hp > 0;
     }
@@ -427,7 +428,7 @@ export class Game {
       this.zombie = new Zombie(this.scene, new THREE.Vector3(state.x, 0, state.z), state.strain as import('./Zombie').InfectedStrain, state.generation);
       this.remoteZombieGeneration = state.generation;
     }
-    this.zombie.root.position.lerp(new THREE.Vector3(state.x, 0, state.z), 0.3);
+    this.zombie.root.position.set(state.x, 0, state.z);
     const damageNeeded = this.zombie.getHealth() - state.hp;
     if (damageNeeded > 0) this.zombie.takeDamage(damageNeeded);
   }

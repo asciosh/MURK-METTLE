@@ -8,16 +8,20 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — v0.10</title>
+    <title>Murk &amp; Mettle — v0.12</title>
   </head>
   <body>
     <div id="app">
       <section class="co-op-bar" aria-label="Cooperative room controls">
-        <span class="co-op-title">V0.10 · NEW DAWN</span>
+        <span class="co-op-title">V0.12 · SMOOTH CO-OP</span>
         <input id="room-code" maxlength="12" value="BLOOM" aria-label="Room code" placeholder="Room code" />
         <button id="room-join" type="button">JOIN / CREATE</button>
         <button id="room-leave" type="button">SOLO</button>
         <span id="room-status">Solo · local save</span>
+        <button id="cloud-save" type="button" title="Back up local progress">CLOUD SAVE</button>
+        <button id="cloud-copy-key" type="button" title="Copy your secret recovery key">COPY KEY</button>
+        <button id="cloud-restore" type="button" title="Restore progress on another device">RESTORE</button>
+        <span id="cloud-save-status" role="status" aria-live="polite"></span>
       </section>
       <header class="topbar">
         <a class="wordmark" href="#" aria-label="Murk and Mettle home">
@@ -30,7 +34,7 @@
         <div class="build-tag">
           <span class="status-dot"></span>
           <span>THE WILDLANDS</span>
-          <b>0.10</b>
+          <b>0.12</b>
         </div>
       </header>
 
@@ -133,7 +137,7 @@
           <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
           <p class="title-hint">WASD MOVE · SHIFT SPRINT · SPACE ATTACK · E INTERACT · Q COMPANION</p>
         </div>
-        <p class="title-build">MURK &amp; METTLE / v0.10 · ORIGINAL INDIE PROTOTYPE</p>
+        <p class="title-build">MURK &amp; METTLE / v0.12 · ORIGINAL INDIE PROTOTYPE</p>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>
