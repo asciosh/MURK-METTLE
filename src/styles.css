@@ -270,3 +270,14 @@ kbd { min-width: 16px; padding: 3px 4px; border: 1px solid rgba(226,237,214,.2);
  .loot-hint { font-size:8px; top:50%; }
  .creature-panel { top:251px; }
 }
+
+/* v0.6 co-op lobby and field crafting */
+.co-op-bar { position:relative; z-index: 15; display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding: 8px 14px; background:#17241e; border-bottom:1px solid #617d68; color:#d8e5d8; font: 600 12px system-ui; }
+.co-op-title { color:#a9cc8d; letter-spacing:.08em; }
+.co-op-bar input { background:#283e31; border:1px solid #66846e; border-radius:5px; padding:7px; color:#fff; width:100px; text-transform:uppercase; }
+.co-op-bar button, .craft-button { background:#385641; border:1px solid #648772; border-radius:5px; color:#eef9ec; padding:7px 10px; cursor:pointer; }
+.co-op-bar button:hover, .craft-button:hover { background:#4d7859; }
+.craft-heading { padding-top:10px; font-size:11px; letter-spacing:.08em; color:#c8e8b9; }
+.crafting-list { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+.craft-button { text-align:left; font-size:11px; line-height:1.5; }
+.craft-button:disabled { opacity:.45; cursor:not-allowed; }

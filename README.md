@@ -1,54 +1,63 @@
-# Murk & Mettle — Prototype 0.5
+# Murk & Mettle — v0.6: Evolution + Co-op Prototype
 
-**Find your wild. Fight the rot.** Original stylized third-person browser action-survival RPG prototype.
+An original stylized third-person browser survival RPG for up to four friends.
 
-## Running locally / GitHub Codespaces
+## Requirements
 
-Requires Node 22.12+ (Vite 8). From the repository root:
+Node.js 22.12+ recommended; npm; modern desktop browser.
 
-```bash
+## Run in GitHub Codespaces
+
+```sh
 npm install
 npm run build
 npm run dev
 ```
 
-Use the port 5173 URL shown by Vite.
+Open the forwarded **port 5173** in your browser. Vite proxies `/room` WebSockets to a local Node.js server on **port 8787**. You only need to forward/expose **5173** to friends, not 8787. For outside friends, set the forwarded 5173 port visibility to an appropriate shareable setting. Do not publish the server directly to the open internet without authentication and rate limiting.
+
+To test co-op without sharing: open the 5173 URL in **two separate tabs** (for separate local saves, use a private window). Both players enter the same code, e.g. `BLOOM`, then press **JOIN / CREATE**. Up to four connected players per room. Click the canvas to capture the mouse; Escape releases it for HUD buttons.
+
+## v0.6 changes
+
+- Three craftable recipes, spending existing salvage resources:
+  - Sharpened Blade: 3 scrap + 1 fiber, melee damage increases from 40 to 55 (solo; prototype client claim in co-op).
+  - Balanced Grip: 2 scrap + 2 fiber, melee range increases from 2.65 to 3.35 (solo only until combat authority is expanded).
+  - Bloom Antidote: 2 spore + 1 fiber, immediately reduces bond strain by 60 if bonded. For a retreated Lanternkin, reduces strain after you return and press E to recover it.
+- Two randomized 3D mutation traits on top of the four enemy strains.
+- Room-based WebSocket connections, up to 4 players. Other players are visible and move in the same world.
+- Shared server-run zombie simulation, health, attack cooldowns, attack hit checks, respawning, and shared death events.
+- Solo gameplay (v0.5 controls, companion, XP, inventory and drops) remains available.
 
 ## Controls
 
-| Input | Action |
-| --- | --- |
-| WASD / arrows | Move |
-| Mouse | Look (click the 3D view to capture pointer; Esc releases) |
-| Shift | Sprint |
-| Space / left mouse | Melee attack |
-| E | Bond with Lanternkin, recover it, or pick up nearby loot |
-| Q | Lantern Pulse (once bonded) |
-| I | Toggle backpack |
-| R | Restart encounter after defeat |
+WASD move, Shift sprint, mouse aim, Space/left mouse melee, E interact/pickup/bond, Q Lanternkin Pulse, I inventory/crafting, R restart after defeat. Joining/leaving a room requires clicking the lobby buttons.
 
-## What's new in 0.5
+## Important multiplayer prototype limitations
 
-- **Variant infected:** every spawn randomly chooses a fresh original mutation strain — Feral Runner (fast), Barkhide (tank), Sporeling (fragile), or Ashwalker (balanced). Each uses distinct palettes, proportions, health, movement speed and damage; consecutive encounters never use the same strain.
-- **Infected loot:** each zombie kill drops one colored resource: Spore Sample, Salvaged Parts or Root Fiber, rotating by kill. Pick it up with **E** while close.
-- **Persistent inventory:** three material types, with a cap of 20 each. Stored in `localStorage` under `murk-mettle-v05-inventory`. Open the backpack with **I** or the HUD button.
-- **Original radio operator, Rook:** short text-only lines react to the mission, collection, pulse and creature loss. Not a Resident Evil character or dialogue.
-- **Bloom Strain:** Lantern Pulse adds 35 strain and infected hits add 18; resting lowers strain by 2.5 per second. Reaching 100 makes Lanternkin retreat to its original wild location. Return there and press **E** to recover it. Its XP, collection entry and levels are retained.
-- **Persistent bond retreat:** refreshing the browser won't magically repair a fractured bond. Its recovery flag is stored in `localStorage` under `murk-mettle-v05-bond-retreat`.
-- Existing v0.4 XP, health, combat and collection saves remain intact.
+This is a **first cooperative vertical slice**, not production-ready authoritative RPG networking.
 
-### Save behavior
+- Server runs in Node.js in Codespaces; it is **not** deployed on Cloudflare, and the server retains rooms **only in memory**.
+- WebSocket room codes are not passwords: anyone with the URL/code may join; there is no authentication or anti-abuse hardening.
+- Player movement is client-predicted and only lightly speed/bounds-checked by the server. The server has simplified collision, so zombie pathing may pass through props in multiplayer.
+- Combat damage is server-validated for distance and basic cooldown, but the server currently accepts a client claim for Sharpened Blade. Do not treat co-op XP or loot as secure against cheating.
+- Individual zombie loot drops locally for every player when a shared enemy dies. XP for killing is awarded only to the final attacker. Creature bonding, strain, inventory, upgrades and XP are **saved locally** per browser, not synchronized or persisted on the server.
+- Players share one zombie; companions are local-only. There is no revive interaction, shared missions, matchmaking, server persistence or synchronized inventory yet.
+- The co-op room code is fixed by the field you enter; there is no friends list. Only four live connections per room.
+- Solo inventory and progression keys from v0.3–v0.5 are retained, and the new upgrade save is separate at `murk-mettle-v06-crafting`.
 
-The v0.4 progression key is not changed. This is a local single-player prototype; no accounts, multiplayer or cloud persistence are implemented yet. Loot on the ground is *not* persistent; only collected inventory is. Do not expect saved material counts on another browser/device.
+## Suggested v0.7 engineering priorities
 
-### Design intent
+1. Add real accounts/player IDs and server persistence.
+2. Move player combat stats, creature abilities, reward grants and item ownership fully server-side.
+3. Server-authoritative drop IDs and pickup validation.
+4. Improve enemy obstacle navigation, interpolation and reconnect recovery.
+5. Shared mission objectives and ally revival.
 
-**Bond Strain** is our first distinctive action/survival mechanic: companion power carries consequences, but loss is recoverable rather than deleting the player's time investment. In future versions strain could interact with biome hazards, weather, player decisions, creature temperament and expedition objectives.
+## Build checks
 
-## Copyright and assets
+`npm run build` runs TypeScript type checking and Vite bundling.
 
-All visuals are made from procedural primitives and authored UI/CSS; the radio dialogue is original. Do not include third-party character names, voice clips, dialogue or models without appropriate permission. The repo's code and art require a separate licensing decision before public distribution.
+### License and originality
 
-## Known limits
-
-This version has one active enemy at a time (four possible enemy strains) and one companion. Drops rotate deterministically for reproducible testing. There is no crafting, equipment, multiplayer, procedural loot tables or voice-over. The gameplay state is not server-authoritative.
+All procedural models and creature designs in this prototype are original. Review asset licenses before adding third-party assets. Do not include Nintendo or Resident Evil characters, dialogue, models or branding.

@@ -30,6 +30,15 @@ export class Inventory {
     this.save();
     return true;
   }
+  has(cost: Partial<Record<ItemId, number>>): boolean {
+    return (Object.entries(cost) as [ItemId, number][]).every(([id, count]) => Number.isInteger(count) && count >= 0 && this.state[id] >= count);
+  }
+  consume(cost: Partial<Record<ItemId, number>>): boolean {
+    if (!this.has(cost)) return false;
+    for (const [id, count] of Object.entries(cost) as [ItemId, number][]) this.state[id] -= count;
+    this.save();
+    return true;
+  }
   private save(): void {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); } catch { /* Storage unavailable. */ }
   }

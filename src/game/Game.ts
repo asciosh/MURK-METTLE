@@ -6,6 +6,8 @@ import { Zombie } from './Zombie';
 import { Companion } from './Companion';
 import { Inventory, ITEM_DEFINITIONS, type ItemId } from './Inventory';
 import { Loot } from './Loot';
+import { Crafting, RECIPES, type RecipeId } from './Crafting';
+import { Multiplayer, type RoomEvent } from './Multiplayer';
 import { Progression, levelFromXp, xpInLevel, CREATURE_XP_PER_PULSE_HIT, CREATURE_XP_PER_PULSE_KILL } from './Progression';
 
 export class Game {
@@ -23,6 +25,16 @@ export class Game {
   private readonly abilityButton: HTMLButtonElement | null;
   private abilityCooldown = 0;
   private readonly inventory = new Inventory();
+  private readonly crafting = new Crafting(this.inventory);
+  private readonly multiplayer = new Multiplayer();
+  private readonly remotePlayers = new Map<string, Player>();
+  private readonly roomStatus: HTMLElement | null;
+  private readonly roomCode: HTMLInputElement | null;
+  private readonly craftingList: HTMLElement | null;
+  private networkTimer = 0;
+  private remoteZombieGeneration = -1;
+  private antidotePending = false;
+
   private readonly drops: Loot[] = [];
   private dropSequence = 0;
   private readonly inventoryPanel: HTMLElement | null;
@@ -103,6 +115,12 @@ export class Game {
       try { this.recoveringBond = localStorage.getItem(this.bondRetreatKey) === '1'; } catch { /* Storage disabled. */ }
       if (!this.recoveringBond) this.companion.bond();
     }
+    this.roomStatus = document.querySelector('#room-status');
+    this.roomCode = document.querySelector<HTMLInputElement>('#room-code');
+    this.craftingList = document.querySelector('#crafting-list');
+    document.querySelector('#room-join')?.addEventListener('click', this.handleJoinRoom);
+    document.querySelector('#room-leave')?.addEventListener('click', this.handleLeaveRoom);
+    this.multiplayer.onEvent = this.onRoomEvent;
     this.input = new InputController(this.renderer.domElement, (locked) => {
       document.body.classList.toggle('is-pointer-locked', locked);
     });
@@ -138,6 +156,7 @@ export class Game {
     this.radioLine = document.querySelector<HTMLElement>('#radio-line');
     this.inventoryButton?.addEventListener('click', this.handleInventoryClick);
     this.updateInventoryHud();
+    this.updateCraftingHud();
     this.say('intro');
     this.updateCompanionHud();
 
@@ -200,6 +219,16 @@ export class Game {
     if (this.player.getHealth() <= 0) movement.set(0, 0, 0);
 
     this.player.update(movement, deltaSeconds, this.input.isSprinting(), this.world);
+    if (this.multiplayer.connected) {
+      this.networkTimer += deltaSeconds;
+      if (this.networkTimer >= 0.05) {
+        this.networkTimer = 0;
+        const pos = this.player.getPosition();
+        this.multiplayer.send('move', { x: pos.x, z: pos.z, yaw: this.player.root.rotation.y });
+      }
+      this.updateRemotePlayers(deltaSeconds);
+      this.syncRoomZombie();
+    }
 
     this.companion.update(deltaSeconds, this.player.getPosition(), this.player.root.rotation.y, this.world);
     if (this.input.consumeInventoryPressed()) this.toggleInventory();
@@ -208,7 +237,7 @@ export class Game {
     if (this.input.consumeAttackPressed()) this.handlePlayerAttack();
     if (this.input.consumeRestartPressed() && this.player.getHealth() <= 0) this.resetEncounter();
 
-    if (!this.zombie.isDead()) {
+    if (!this.multiplayer.connected && !this.zombie.isDead()) {
       const landedHit = this.zombie.update(this.player.getPosition(), deltaSeconds, this.world);
       if (landedHit && this.player.getHealth() > 0) {
         const appliedDamage = this.player.takeDamage(this.zombie.damage);
@@ -223,7 +252,7 @@ export class Game {
           }
         }
       }
-    } else if (this.player.getHealth() > 0) {
+    } else if (!this.multiplayer.connected && this.player.getHealth() > 0) {
       this.zombieRespawnTimer += deltaSeconds;
       if (this.zombieRespawnTimer >= 6) {
         this.spawnZombie();
@@ -263,6 +292,101 @@ export class Game {
     }
   }
 
+  private updateCraftingHud(): void {
+    if (!this.craftingList) return;
+    this.craftingList.replaceChildren();
+    for (const [id, recipe] of Object.entries(RECIPES) as [RecipeId, typeof RECIPES[RecipeId]][]) {
+      const button = document.createElement('button');
+      button.className = 'craft-button';
+      const completed = id !== 'restorative' && this.crafting.upgrades[id];
+      const cost = Object.entries(recipe.cost).map(([item, count]) => `${count} ${item}`).join(' + ');
+      button.textContent = `${recipe.name} · ${recipe.description} · ${completed ? 'CRAFTED' : cost}`;
+      button.disabled = !this.crafting.canCraft(id);
+      button.addEventListener('click', () => {
+        if (!this.crafting.craft(id)) return;
+        if (id === 'restorative') {
+          this.bondStrain = Math.max(0, this.bondStrain - 60);
+          if (this.recoveringBond) this.antidotePending = true;
+        }
+        this.updateInventoryHud();
+        this.updateCraftingHud();
+        this.showToast(`CRAFTED  //  ${recipe.name}`, 'success');
+      });
+      this.craftingList.append(button);
+    }
+  }
+
+  private readonly handleJoinRoom = (): void => {
+    const code = this.roomCode?.value.trim().toUpperCase() || 'BLOOM';
+    this.multiplayer.connect(code);
+    if (this.roomStatus) this.roomStatus.textContent = `Connecting to ${code}…`;
+  };
+  private readonly handleLeaveRoom = (): void => {
+    this.multiplayer.disconnect();
+    this.clearRemotePlayers();
+    this.remoteZombieGeneration = -1;
+    this.zombie.dispose();
+    this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
+    if (this.roomStatus) this.roomStatus.textContent = 'Solo · local save';
+  };
+  private readonly onRoomEvent = (event: RoomEvent): void => {
+    if (event.type === 'welcome') {
+      if (this.roomStatus) this.roomStatus.textContent = `Room ${event.code} · connected`;
+      this.showToast(`ROOM JOINED  //  ${event.code}`, 'success');
+      this.remoteZombieGeneration = -1;
+    } else if (event.type === 'error') {
+      if (this.roomStatus) this.roomStatus.textContent = event.message;
+      this.showToast(event.message, 'warning');
+      if (!this.multiplayer.connected) this.clearRemotePlayers();
+    } else if (event.type === 'damage') {
+      const lost = this.player.getHealth() - event.hp;
+      if (lost > 0) {
+        this.player.takeDamage(lost);
+        this.damageFlashTimer = 0.2;
+        if (this.companion.isBound()) this.addBondStrain(18);
+        if (event.hp <= 0) { this.defeatOverlay?.classList.add('visible'); this.say('defeat'); }
+      }
+      if (event.hp === 100 && this.player.getHealth() < 100) this.player.reset();
+    } else if (event.type === 'kill') {
+      // Prototype: shared enemy kill; each player receives an individual salvage drop.
+      this.spawnLoot();
+      if (event.by === this.multiplayer.id) {
+        const leveled = this.progression.recordKill();
+        if (event.pulse) this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_KILL);
+        this.showToast(leveled ? 'LEVEL UP  //  Co-op kill!' : 'INFECTED ELIMINATED  //  +50 XP', 'success');
+      } else this.showToast('TEAM KILL  //  Salvage available!', 'success');
+    }
+  };
+  private updateRemotePlayers(deltaSeconds: number): void {
+    for (const [id, state] of this.multiplayer.peers) {
+      let actor = this.remotePlayers.get(id);
+      if (!actor) { actor = new Player(this.scene); actor.root.name = `ally-${id}`; this.remotePlayers.set(id, actor); }
+      actor.root.position.lerp(new THREE.Vector3(state.x, 0, state.z), Math.min(1, deltaSeconds * 14));
+      actor.root.rotation.y = state.yaw;
+      actor.root.visible = state.hp > 0;
+    }
+    for (const [id, actor] of this.remotePlayers) {
+      if (!this.multiplayer.peers.has(id)) { actor.dispose(); this.remotePlayers.delete(id); }
+    }
+    if (this.roomStatus && this.multiplayer.code) this.roomStatus.textContent = `Room ${this.multiplayer.code} · ${this.multiplayer.peers.size + 1}/4 players`;
+  }
+  private clearRemotePlayers(): void {
+    for (const actor of this.remotePlayers.values()) actor.dispose();
+    this.remotePlayers.clear();
+  }
+  private syncRoomZombie(): void {
+    const state = this.multiplayer.zombie;
+    if (!state) return;
+    if (state.generation !== this.remoteZombieGeneration) {
+      this.zombie.dispose();
+      this.zombie = new Zombie(this.scene, new THREE.Vector3(state.x, 0, state.z), state.strain as import('./Zombie').InfectedStrain, state.generation);
+      this.remoteZombieGeneration = state.generation;
+    }
+    this.zombie.root.position.lerp(new THREE.Vector3(state.x, 0, state.z), 0.3);
+    const damageNeeded = this.zombie.getHealth() - state.hp;
+    if (damageNeeded > 0) this.zombie.takeDamage(damageNeeded);
+  }
+
   private say(key: keyof Game['radioLines']): void {
     // Rook is an original radio operator, not a character or voice from another game.
     if (this.radioLine) this.radioLine.textContent = this.radioLines[key];
@@ -292,6 +416,7 @@ export class Game {
       this.drops.splice(this.drops.indexOf(candidate), 1);
       candidate.dispose(this.scene);
       this.updateInventoryHud();
+      this.updateCraftingHud();
       this.showToast(`SALVAGED  //  +1 ${ITEM_DEFINITIONS[candidate.id].name}. Press I for pack.`, 'success');
       if (++this.radioIndex === 1) this.say('loot');
       return;
@@ -322,7 +447,8 @@ export class Game {
     if (this.recoveringBond) {
       this.recoveringBond = false;
       try { localStorage.removeItem(this.bondRetreatKey); } catch { /* Storage disabled. */ }
-      this.bondStrain = 25;
+      this.bondStrain = this.antidotePending ? 0 : 25;
+      this.antidotePending = false;
       this.say('recovered');
       this.showToast('BOND RESTORED  //  Lanternkin is safe. Its levels were preserved.', 'success');
     } else {
@@ -342,7 +468,10 @@ export class Game {
       this.radioIndex = 2;
       this.say('pulse');
     }
-    if (!this.zombie.isDead() && this.zombie.getPosition().distanceTo(this.companion.getPosition()) <= 7.5) {
+    if (this.multiplayer.connected) {
+      this.multiplayer.send('pulse');
+      this.showToast('PULSE RELEASED  //  Server checks target distance.', 'info');
+    } else if (!this.zombie.isDead() && this.zombie.getPosition().distanceTo(this.companion.getPosition()) <= 7.5) {
       const killed = this.zombie.takeDamage(35);
       if (killed) {
         this.registerKill(true);
@@ -389,6 +518,10 @@ export class Game {
       return;
     }
 
+    if (this.multiplayer.connected) {
+      this.multiplayer.send('attack', { sharpened: this.crafting.upgrades.sharpened });
+      return;
+    }
     const toEnemy = this.zombie.getPosition().clone().sub(this.player.getPosition());
     toEnemy.y = 0;
     const distance = toEnemy.length();
@@ -396,12 +529,12 @@ export class Game {
     const directionToEnemy = distance > 0.001 ? toEnemy.clone().normalize() : facing.clone();
     const facingDot = facing.dot(directionToEnemy);
 
-    if (distance > 2.65 || facingDot < -0.15) {
+    if (distance > (this.crafting.upgrades.balanced ? 3.35 : 2.65) || facingDot < -0.15) {
       this.showToast('SWING MISSED  //  Get closer and face the infected.', 'info');
       return;
     }
 
-    const killed = this.zombie.takeDamage(40);
+    const killed = this.zombie.takeDamage(this.crafting.upgrades.sharpened ? 55 : 40);
     if (killed) {
       this.registerKill(false);
       this.zombieRespawnTimer = 0;
@@ -432,6 +565,7 @@ export class Game {
 
   private resetEncounter(): void {
     this.player.reset();
+    if (this.multiplayer.connected) this.multiplayer.send('restart');
     // On defeat, strain is reset but a retreating companion remains recoverable.
     if (this.companion.isBound()) this.bondStrain = Math.max(0, this.bondStrain - 20);
     this.cameraYaw = 0;
@@ -440,6 +574,7 @@ export class Game {
     this.defeatOverlay?.classList.remove('visible');
     this.zombie.dispose();
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
+    this.remoteZombieGeneration = -1;
     this.showToast(`EXPEDITION RESTARTED  //  ${this.zombie.displayName.toUpperCase()} ahead.`, 'info');
   }
 
@@ -526,6 +661,10 @@ export class Game {
     this.renderer.setAnimationLoop(null);
     this.input.dispose();
     this.abilityButton?.removeEventListener('click', this.handleAbilityClick);
+    document.querySelector('#room-join')?.removeEventListener('click', this.handleJoinRoom);
+    document.querySelector('#room-leave')?.removeEventListener('click', this.handleLeaveRoom);
+    this.multiplayer.disconnect();
+    this.clearRemotePlayers();
     this.inventoryButton?.removeEventListener('click', this.handleInventoryClick);
     for (const drop of this.drops) drop.dispose(this.scene);
     this.drops.length = 0;

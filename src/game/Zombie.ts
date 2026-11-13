@@ -62,8 +62,8 @@ export class Zombie {
   private animationClock = 0;
   private hitFlashTime = 0;
 
-  constructor(private readonly scene: THREE.Scene, position: THREE.Vector3) {
-    this.strain = randomStrain();
+  constructor(private readonly scene: THREE.Scene, position: THREE.Vector3, forcedStrain?: InfectedStrain, mutationSeed?: number) {
+    this.strain = forcedStrain && STRAINS[forcedStrain] ? forcedStrain : randomStrain();
     const profile = STRAINS[this.strain];
     this.displayName = profile.name;
     this.maxHealth = profile.health;
@@ -77,6 +77,7 @@ export class Zombie {
     this.root.scale.set(...profile.scale);
     this.root.position.copy(position);
     this.createModel();
+    this.addMutationDetails(mutationSeed);
     this.scene.add(this.root);
   }
 
@@ -144,6 +145,29 @@ export class Zombie {
     spore.scale.set(1, 0.75, 1);
     spore.castShadow = true;
     this.root.add(spore);
+  }
+
+  private addMutationDetails(seed?: number): void {
+    const variant = seed === undefined ? Math.floor(Math.random() * 2) : seed % 2;
+    const color = STRAINS[this.strain].spores;
+    if (variant === 0) {
+      // Fungal crown: an asymmetrical silhouette, without copied creature artwork.
+      for (let i = 0; i < 3; i++) {
+        const stalk = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.52 + i * 0.09, 6),
+          new THREE.MeshStandardMaterial({ color, roughness: 0.92 }));
+        stalk.position.set(-0.19 + i * 0.17, 2.20 + i * 0.07, 0.02);
+        stalk.rotation.z = (i - 1) * 0.35;
+        this.root.add(stalk);
+      }
+    } else {
+      // Spore armor: crystal-like fungal colonies over the shoulders.
+      for (let i = 0; i < 4; i++) {
+        const colony = new THREE.Mesh(new THREE.OctahedronGeometry(0.19 + i * 0.035, 0),
+          new THREE.MeshStandardMaterial({ color, roughness: 0.5, emissive: color, emissiveIntensity: 0.16 }));
+        colony.position.set(i % 2 ? 0.35 : -0.35, 1.05 + i * 0.21, i % 2 ? 0.04 : 0.20);
+        this.root.add(colony);
+      }
+    }
   }
 
   /** Returns true when the zombie lands a melee hit this frame. */

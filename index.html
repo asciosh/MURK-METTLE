@@ -8,10 +8,17 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — Prototype 0.5</title>
+    <title>Murk &amp; Mettle — Prototype 0.6</title>
   </head>
   <body>
     <div id="app">
+      <section class="co-op-bar" aria-label="Cooperative room controls">
+        <span class="co-op-title">V0.6 · CO-OP EXPEDITION</span>
+        <input id="room-code" maxlength="12" value="BLOOM" aria-label="Room code" placeholder="Room code" />
+        <button id="room-join" type="button">JOIN / CREATE</button>
+        <button id="room-leave" type="button">SOLO</button>
+        <span id="room-status">Solo · local save</span>
+      </section>
       <header class="topbar">
         <a class="wordmark" href="#" aria-label="Murk and Mettle home">
           <span class="wordmark-mark">M<span>/</span>M</span>
@@ -22,8 +29,8 @@
         </a>
         <div class="build-tag">
           <span class="status-dot"></span>
-          <span>LOOT & BOND TEST</span>
-          <b>0.5</b>
+          <span>CRAFTING & CO-OP</span>
+          <b>0.6</b>
         </div>
       </header>
 
@@ -31,7 +38,7 @@
         <div class="reticle" aria-hidden="true"><span></span></div>
 
         <section class="welcome-card" aria-live="polite">
-          <p class="eyebrow">THE QUARANTINE ZONE · FIELD TEST 005</p>
+          <p class="eyebrow">THE QUARANTINE ZONE · FIELD TEST 006</p>
           <h1>THE WILD<br /><em>FIGHTS BACK.</em></h1>
           <p class="welcome-copy">
             The Bloom is spreading. Salvage resources from the infected, collect them using E, and watch Lanternkin’s bond strain when using Q.
@@ -40,7 +47,7 @@
             <span class="enter-key">CLICK</span>
             <span>TO ENTER THE FIELD</span>
           </div>
-          <p class="welcome-footnote">Prototype 0.5 · RPG progression and creature XP</p>
+          <p class="welcome-footnote">Prototype 0.6 · Crafting and room-based co-op</p>
         </section>
 
         <section class="player-status" aria-label="Player vitality">
@@ -75,6 +82,8 @@
           <div class="inventory-title"><strong>FIELD BACKPACK</strong><span>3 SLOTS · MAX 20 EACH</span></div>
           <p>Salvage from defeated infected. Crafting arrives in a later milestone.</p>
           <div id="inventory-grid" class="inventory-grid"></div>
+          <div class="craft-heading">FIELD CRAFTING (v0.6)</div>
+          <div id="crafting-list" class="crafting-list"></div>
           <p class="inventory-footnote">Press I to close or use the BACKPACK button.</p>
         </section>
         <button id="inventory-button" class="inventory-toggle" type="button" aria-expanded="false">I · BACKPACK</button>
@@ -89,7 +98,7 @@
         <div id="damage-flash" class="damage-flash" aria-hidden="true"></div>
 
         <section id="defeat-overlay" class="defeat-overlay" aria-live="assertive">
-          <p class="eyebrow">FIELD TEST 005 · FAILED</p>
+          <p class="eyebrow">FIELD TEST 006 · FAILED</p>
           <h2>YOU'RE<br /><em>DOWN.</em></h2>
           <p>The infected overpowered you. Regroup and try again.</p>
           <div class="retry-hint"><kbd>R</kbd> RESTART ENCOUNTER</div>
