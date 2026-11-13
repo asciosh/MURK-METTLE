@@ -1,9 +1,15 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "murk-mettle",
   "compatibility_date": "2026-11-13",
+  "main": "./worker/index.mjs",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
-  }
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/room*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "GAME_ROOMS", "class_name": "GameRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }]
 }

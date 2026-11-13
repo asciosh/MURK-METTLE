@@ -51,3 +51,18 @@ Run `npm run build`. Play a complete expedition; confirm killing, salvaging, ext
 - Includes an original self-authored animated `public/models/survivor.glb`, loaded through the existing manifest and `GLTFLoader` / `AnimationMixer` pipeline.
 - The procedural survivor stays as fallback if a model fails or lacks critical animations.
 - All source artwork and the bundled model are original to this update, with no licensed third-party artwork. Review `CHANGELOG-v0.10.md` for test steps.
+
+
+## v0.11 Cloudflare Co-op (beta)
+
+Cloudflare hosts both static Vite assets and WebSocket co-op rooms. The Wrangler config at `wrangler.jsonc` defines a SQLite-backed Durable Object per room.
+
+```sh
+npm install
+npm run build
+npx wrangler deploy
+```
+
+If Wrangler isn't installed, run `npm install -D wrangler` once. For local Codespaces multiplayer, `npm run dev` still starts the original Node/WebSocket room server alongside Vite. The public Worker uses `worker/index.mjs` and `worker/room.mjs`. Open the public URL in two independent browser sessions, enter the same code, and check for shared movement and zombie health.
+
+Co-op is still a beta: no authenticated accounts, shared missions or server-authoritative progression. Check Cloudflare free-tier request/duration usage.

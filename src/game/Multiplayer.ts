@@ -24,7 +24,7 @@ export class Multiplayer {
       } catch { /* bad packet ignored */ }
     };
     socket.onclose = () => { if (this.ws === socket) { this.connected = false; this.id = ''; this.code = ''; this.peers.clear(); this.zombie = null; this.onEvent({ type: 'error', message: 'Room disconnected. Solo mode resumed.' }); } };
-    socket.onerror = () => { if (this.ws === socket) this.onEvent({ type: 'error', message: 'Unable to connect. Check that npm run dev is running.' }); };
+    socket.onerror = () => { if (this.ws === socket) this.onEvent({ type: 'error', message: 'Unable to connect to the room server. Check the deployment and room code.' }); };
   }
   send(type: string, body: Record<string, unknown> = {}): void { if (this.connected && this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type, ...body })); }
   disconnect(): void { this.ws?.close(); this.ws = null; this.connected = false; this.id = ''; this.code = ''; this.peers.clear(); this.zombie = null; }

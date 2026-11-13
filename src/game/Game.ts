@@ -262,7 +262,7 @@ export class Game {
     this.player.update(movement, deltaSeconds, this.input.isSprinting(), this.world);
     if (this.multiplayer.connected) {
       this.networkTimer += deltaSeconds;
-      if (this.networkTimer >= 0.05) {
+      if (this.networkTimer >= 0.12) {
         this.networkTimer = 0;
         const pos = this.player.getPosition();
         this.multiplayer.send('move', { x: pos.x, z: pos.z, yaw: this.player.root.rotation.y });
