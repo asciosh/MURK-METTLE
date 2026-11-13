@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { InputController } from './InputController';
 import { Player } from './Player';
+import { readModelManifest, type ModelManifest } from './AnimationController';
 import { World } from './World';
 import { Minimap } from './Minimap';
 import { Zombie } from './Zombie';
@@ -16,6 +17,7 @@ export class Game {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(58, 1, 0.1, 120);
   private readonly renderer: THREE.WebGLRenderer;
+  private assetManifest: ModelManifest = {};
   private readonly clock = new THREE.Clock();
   private readonly world: World;
   private readonly minimap = new Minimap();
@@ -122,6 +124,7 @@ export class Game {
     this.player = new Player(this.scene);
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
     this.companion = new Companion(this.scene);
+    void this.loadOptionalModels();
     if (this.progression.state.lanternkinBonded) {
       try { this.recoveringBond = localStorage.getItem(this.bondRetreatKey) === '1'; } catch { /* Storage disabled. */ }
       if (!this.recoveringBond) this.companion.bond();
@@ -184,6 +187,14 @@ export class Game {
     this.updateProgressHud();
     this.updateMissionHud();
     this.showToast('INFECTED CONTACT  //  Close the distance. SPACE or left-click to strike.', 'info');
+  }
+
+  private async loadOptionalModels(): Promise<void> {
+    this.assetManifest = await readModelManifest();
+    const models = this.assetManifest;
+    if (models.survivor?.url) void this.player.installModel(models.survivor);
+    if (models.zombie?.url) void this.zombie.installModel(models.zombie);
+    if (models.lanternkin?.url) void this.companion.installModel(models.lanternkin);
   }
 
   private createLighting(): void {
@@ -597,6 +608,7 @@ export class Game {
     const spawnPosition = playerPosition.clone().addScaledVector(spawnDirection, 9.5);
     spawnPosition.y = 0;
     this.zombie = new Zombie(this.scene, spawnPosition);
+    if (this.assetManifest.zombie?.url) void this.zombie.installModel(this.assetManifest.zombie);
     this.zombieRespawnTimer = 0;
   }
 

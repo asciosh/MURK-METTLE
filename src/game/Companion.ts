@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import type { World } from './World';
+import { ActorAnimator, type ModelEntry } from './AnimationController';
 
 /** Original procedural companion species. This class contains no external assets. */
 export class Companion {
   readonly root = new THREE.Group();
   readonly speciesId = 'lanternkin';
+  private readonly visual = new THREE.Group();
+  private readonly animator = new ActorAnimator(this.root);
+  private readonly petals: THREE.Mesh[] = [];
   private readonly glow: THREE.PointLight;
   private readonly body: THREE.Mesh;
   private readonly aura: THREE.Mesh;
@@ -17,21 +21,23 @@ export class Companion {
     const core = new THREE.MeshStandardMaterial({ color: 0x94e8a9, emissive: 0x40cd8b, emissiveIntensity: 0.85, roughness: 0.36 });
     const leaves = new THREE.MeshStandardMaterial({ color: 0x285d42, roughness: 0.8, side: THREE.DoubleSide });
     const accent = new THREE.MeshStandardMaterial({ color: 0xf7f1c1, emissive: 0xcdbf62, emissiveIntensity: 0.45 });
+    this.root.add(this.visual);
     this.body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 1), core);
     this.body.castShadow = true;
-    this.root.add(this.body);
+    this.visual.add(this.body);
     for (let i = 0; i < 5; i++) {
       const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.19, 0.62, 3), leaves);
       const angle = i * Math.PI * 2 / 5;
       leaf.position.set(Math.cos(angle) * 0.28, 0.12, Math.sin(angle) * 0.28);
       leaf.rotation.z = Math.cos(angle) * -0.55;
       leaf.rotation.x = Math.sin(angle) * 0.55;
-      this.root.add(leaf);
+      this.visual.add(leaf);
+      this.petals.push(leaf);
     }
     for (const side of [-1, 1]) {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), accent);
       eye.position.set(side * 0.12, 0.02, -0.36);
-      this.root.add(eye);
+      this.visual.add(eye);
     }
     this.aura = new THREE.Mesh(
       new THREE.RingGeometry(0.55, 0.66, 40),
@@ -60,10 +66,13 @@ export class Companion {
     this.root.position.copy(this.wildPosition).add(new THREE.Vector3(0, 1.5, 0));
   }
 
-  triggerPulse(): void { this.pulseTime = 0.5; }
+  triggerPulse(): void { this.pulseTime = 0.5; this.animator.setState('pulse'); }
 
   update(dt: number, playerPosition: THREE.Vector3, playerYaw: number, world: World): void {
     this.elapsed += dt;
+    this.animator.update(dt);
+    this.animator.setState(this.pulseTime > 0 ? 'pulse' : 'idle');
+    this.visual.visible = !this.animator.installed;
     this.pulseTime = Math.max(0, this.pulseTime - dt);
     const target = this.bound
       ? playerPosition.clone().add(new THREE.Vector3(Math.sin(playerYaw) * 1.45, 1.48, Math.cos(playerYaw) * 1.45))
@@ -80,6 +89,10 @@ export class Companion {
     this.root.position.y = THREE.MathUtils.lerp(oldY, target.y, lerpAmount) + Math.sin(this.elapsed * 3.1) * 0.012;
     this.root.rotation.y += dt * 0.7;
     this.body.rotation.z = Math.sin(this.elapsed * 2.8) * 0.12;
+    this.body.scale.setScalar(1 + Math.sin(this.elapsed * 3.5) * 0.04);
+    for (const [i, leaf] of this.petals.entries()) {
+      leaf.rotation.y = Math.sin(this.elapsed * 2.2 + i * 1.25) * 0.2;
+    }
     const pulseProgress = this.pulseTime > 0 ? 1 - this.pulseTime / 0.5 : 0;
     const scale = this.pulseTime > 0 ? 1 + pulseProgress * 8 : 1;
     this.aura.scale.setScalar(scale);
@@ -87,7 +100,12 @@ export class Companion {
     this.glow.intensity = this.pulseTime > 0 ? 3.5 : 1.8 + Math.sin(this.elapsed * 2) * 0.25;
   }
 
+  async installModel(entry: ModelEntry): Promise<void> {
+    if (await this.animator.load(entry)) this.visual.visible = false;
+  }
+
   dispose(): void {
+    this.animator.dispose();
     this.scene.remove(this.root);
     this.root.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;

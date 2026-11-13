@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { World } from './World';
+import { ActorAnimator, type ModelEntry } from './AnimationController';
 
 type ZombieState = 'idle' | 'chase' | 'attack' | 'dead';
 
@@ -49,6 +50,10 @@ export class Zombie {
     roughness: 1,
   });
   private readonly eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff8b58 });
+  private readonly modelVisual = new THREE.Group();
+  private readonly animator = new ActorAnimator(this.root);
+  private leftLeg!: THREE.Group;
+  private rightLeg!: THREE.Group;
   private readonly leftArm = new THREE.Group();
   private readonly rightArm = new THREE.Group();
   readonly strain: InfectedStrain;
@@ -76,6 +81,7 @@ export class Zombie {
     this.root.name = `infected-${this.strain}`;
     this.root.scale.set(...profile.scale);
     this.root.position.copy(position);
+    this.root.add(this.modelVisual);
     this.createModel();
     this.addMutationDetails(mutationSeed);
     this.scene.add(this.root);
@@ -87,29 +93,29 @@ export class Zombie {
     torso.rotation.z = -0.11;
     torso.castShadow = true;
     torso.receiveShadow = true;
-    this.root.add(torso);
+    this.modelVisual.add(torso);
 
     const chestPatch = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), this.darkMaterial);
     chestPatch.position.set(0.18, 1.19, -0.29);
     chestPatch.scale.set(1.1, 0.75, 0.35);
     chestPatch.castShadow = true;
-    this.root.add(chestPatch);
+    this.modelVisual.add(chestPatch);
 
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), this.bodyMaterial);
     head.position.set(0.04, 1.91, -0.11);
     head.rotation.z = -0.18;
     head.castShadow = true;
-    this.root.add(head);
+    this.modelVisual.add(head);
 
     const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.13, 0.22), this.darkMaterial);
     jaw.position.set(0.04, 1.72, -0.35);
     jaw.rotation.x = -0.16;
-    this.root.add(jaw);
+    this.modelVisual.add(jaw);
 
     for (const x of [-0.105, 0.105]) {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), this.eyeMaterial);
       eye.position.set(x + 0.04, 1.94, -0.39);
-      this.root.add(eye);
+      this.modelVisual.add(eye);
     }
 
     this.leftArm.position.set(-0.43, 1.38, -0.08);
@@ -127,14 +133,17 @@ export class Zombie {
     rightArmMesh.castShadow = true;
     this.leftArm.add(leftArmMesh);
     this.rightArm.add(rightArmMesh);
-    this.root.add(this.leftArm, this.rightArm);
+    this.modelVisual.add(this.leftArm, this.rightArm);
 
     const legGeometry = new THREE.CapsuleGeometry(0.145, 0.46, 4, 8);
-    for (const x of [-0.19, 0.19]) {
+    this.leftLeg = new THREE.Group(); this.rightLeg = new THREE.Group();
+    for (const [i, pivot] of [this.leftLeg, this.rightLeg].entries()) {
+      pivot.position.set(i === 0 ? -0.19 : 0.19, 0.76, 0.025);
       const leg = new THREE.Mesh(legGeometry, this.darkMaterial);
-      leg.position.set(x, 0.38, 0.025);
+      leg.position.y = -0.38;
       leg.castShadow = true;
-      this.root.add(leg);
+      pivot.add(leg);
+      this.modelVisual.add(pivot);
     }
 
     const spore = new THREE.Mesh(
@@ -144,7 +153,7 @@ export class Zombie {
     spore.position.set(-0.26, 1.52, 0.25);
     spore.scale.set(1, 0.75, 1);
     spore.castShadow = true;
-    this.root.add(spore);
+    this.modelVisual.add(spore);
   }
 
   private addMutationDetails(seed?: number): void {
@@ -175,6 +184,8 @@ export class Zombie {
     if (this.state === 'dead') return false;
 
     this.animationClock += deltaSeconds;
+    this.animator.update(deltaSeconds);
+    this.modelVisual.visible = !this.animator.installed;
     this.attackCooldown -= deltaSeconds;
     this.hitFlashTime = Math.max(0, this.hitFlashTime - deltaSeconds);
     this.bodyMaterial.emissive.setHex(this.hitFlashTime > 0 ? 0x492018 : 0x000000);
@@ -189,6 +200,7 @@ export class Zombie {
 
     if (distance <= 1.62) {
       this.state = 'attack';
+      this.animator.setState('attack');
       if (distance > 0.001) this.faceDirection(toPlayer);
       const swing = Math.sin(this.animationClock * 9) * 0.35;
       this.leftArm.rotation.x = -0.85 - swing;
@@ -203,6 +215,7 @@ export class Zombie {
 
     if (distance <= 18) {
       this.state = 'chase';
+      this.animator.setState('run');
       if (distance > 0.001) {
         toPlayer.normalize();
         this.faceDirection(toPlayer);
@@ -210,11 +223,15 @@ export class Zombie {
         world.constrainActorPosition(this.root.position, 0.43);
       }
       const gait = Math.sin(this.animationClock * 8.5);
+      this.leftLeg.rotation.x = gait * 0.52;
+      this.rightLeg.rotation.x = -gait * 0.52;
       this.leftArm.rotation.x = -0.48 + gait * 0.28;
       this.rightArm.rotation.x = -0.48 - gait * 0.28;
       this.root.position.y = Math.abs(gait) * 0.035;
     } else {
       this.state = 'idle';
+      this.animator.setState('idle');
+      this.leftLeg.rotation.x = 0; this.rightLeg.rotation.x = 0;
       this.leftArm.rotation.x = -0.3;
       this.rightArm.rotation.x = -0.3;
       this.root.position.y = Math.sin(this.animationClock * 1.6) * 0.018;
@@ -239,6 +256,7 @@ export class Zombie {
     this.hitFlashTime = 0.16;
     if (this.health <= 0) {
       this.state = 'dead';
+      this.animator.setState('death');
       this.root.visible = false;
       return true;
     }
@@ -259,7 +277,12 @@ export class Zombie {
     return this.state === 'dead';
   }
 
+  async installModel(entry: ModelEntry): Promise<void> {
+    if (await this.animator.load(entry)) this.modelVisual.visible = false;
+  }
+
   dispose(): void {
+    this.animator.dispose();
     this.scene.remove(this.root);
     this.root.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
