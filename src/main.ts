@@ -1,6 +1,7 @@
 import './styles.css';
 import { Game } from './game/Game';
 import { initCloudSave } from './game/CloudSave';
+import { initAccount } from './game/Account';
 
 const viewport = document.querySelector<HTMLElement>('#game-viewport');
 
@@ -30,6 +31,7 @@ function arrangeHud(root: HTMLElement): void {
 arrangeHud(viewport);
 
 initCloudSave();
+initAccount();
 const game = new Game(viewport);
 game.start();
 
