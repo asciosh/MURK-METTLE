@@ -43,3 +43,11 @@ Run `npm run build`. Play a complete expedition; confirm killing, salvaging, ext
 - No external art assets or Nintendo IP. No gameplay/save schema or room protocol changes.
 
 **Verification:** Run `npm install && npm run build && npm run dev` in Codespaces. Check HUD on your desktop browser and at 390px mobile responsive width.
+
+
+## v0.10 — First Light
+
+- A real title screen overlays (and pauses) the expedition until **ENTER THE WILDLANDS** is selected.
+- Includes an original self-authored animated `public/models/survivor.glb`, loaded through the existing manifest and `GLTFLoader` / `AnimationMixer` pipeline.
+- The procedural survivor stays as fallback if a model fails or lacks critical animations.
+- All source artwork and the bundled model are original to this update, with no licensed third-party artwork. Review `CHANGELOG-v0.10.md` for test steps.

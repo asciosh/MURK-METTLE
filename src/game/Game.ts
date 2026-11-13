@@ -19,6 +19,7 @@ export class Game {
   private readonly renderer: THREE.WebGLRenderer;
   private assetManifest: ModelManifest = {};
   private readonly clock = new THREE.Clock();
+  private fieldEntered = false;
   private readonly world: World;
   private readonly minimap = new Minimap();
   private readonly player: Player;
@@ -222,8 +223,17 @@ export class Game {
     this.renderer.setAnimationLoop(this.tick);
   }
 
+  enterField(): void { this.fieldEntered = true; }
+
+  requestMouseCapture(): void { this.input.requestCapture(); }
+
   private readonly tick = (): void => {
     if (!this.running) return;
+    if (!this.fieldEntered) {
+      this.clock.getDelta(); // Do not accumulate a large first gameplay frame.
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
     this.attackCooldown = Math.max(0, this.attackCooldown - deltaSeconds);
     this.abilityCooldown = Math.max(0, this.abilityCooldown - deltaSeconds);

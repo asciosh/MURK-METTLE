@@ -8,7 +8,7 @@ export class Player {
   readonly root = new THREE.Group();
 
   private readonly visual = new THREE.Group();
-  private readonly animator = new ActorAnimator(this.visual);
+  private readonly animator = new ActorAnimator(this.visual, ['idle', 'walk', 'run', 'attack']);
   private leftArm!: THREE.Mesh;
   private leftLeg!: THREE.Group;
   private rightLeg!: THREE.Group;
@@ -93,6 +93,43 @@ export class Player {
       this.fallbackModel.add(leg);
     }
     decorateSurvivor(this.fallbackModel);
+    this.addExpeditionEquipment();
+  }
+
+  /** Original meshes, built at runtime with no external model/IP dependency. */
+  private addExpeditionEquipment(): void {
+    const coat = new THREE.MeshStandardMaterial({ color: 0x365a4a, roughness: 0.93, flatShading: true });
+    const trim = new THREE.MeshStandardMaterial({ color: 0xd2b77f, roughness: 0.8 });
+    const rust = new THREE.MeshStandardMaterial({ color: 0xce764a, roughness: 0.79 });
+    const charcoal = new THREE.MeshStandardMaterial({ color: 0x182c2a, roughness: 0.82 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x8be2c0, emissive: 0x246e58, emissiveIntensity: 0.62, metalness: 0.15, roughness: 0.3 });
+    const add = (geometry: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = this.fallbackModel): THREE.Mesh => {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      parent.add(mesh);
+      return mesh;
+    };
+    // Expedition hood and segmented visor: face looks intentional from frontal and rear angles.
+    const hood = add(new THREE.SphereGeometry(0.327, 14, 12), coat, 0, 1.925, 0.03);
+    hood.scale.set(1.13, 1.04, 1.08);
+    const mask = add(new THREE.BoxGeometry(0.35, 0.19, 0.1), charcoal, 0, 1.785, -0.29);
+    mask.rotation.x = -0.14;
+    add(new THREE.BoxGeometry(0.39, 0.075, 0.04), glass, 0, 1.915, -0.338);
+    for (const side of [-1, 1]) {
+      // Utility pouch, armband and buckles.
+      add(new THREE.BoxGeometry(0.19, 0.25, 0.18), charcoal, side * 0.36, 0.79, 0.11);
+      add(new THREE.BoxGeometry(0.14, 0.04, 0.2), trim, side * 0.36, 0.91, 0.11);
+      add(new THREE.BoxGeometry(0.15, 0.11, 0.02), rust, side * 0.43, 1.2, -0.06);
+      const kneepad = add(new THREE.IcosahedronGeometry(0.14, 1), charcoal, 0, -0.41, -0.145, side < 0 ? this.leftLeg : this.rightLeg);
+      kneepad.scale.set(1.05, 0.82, 0.52);
+    }
+    // Field radio transmitter: unmistakable back silhouette.
+    add(new THREE.CylinderGeometry(0.018, 0.026, 0.5, 6), charcoal, 0.24, 1.75, 0.45);
+    add(new THREE.SphereGeometry(0.055, 8, 6), glass, 0.24, 2.03, 0.45);
+    add(new THREE.BoxGeometry(0.46, 0.22, 0.11), coat, 0, 1.48, 0.54);
+    add(new THREE.BoxGeometry(0.37, 0.055, 0.12), trim, 0, 1.48, 0.61);
   }
 
   update(direction: THREE.Vector3, deltaSeconds: number, sprinting: boolean, world: World): void {
@@ -127,7 +164,9 @@ export class Player {
     const attackSwing = attackProgress > 0 ? Math.sin(attackProgress * Math.PI) * 1.85 : 0;
     this.fallbackModel.visible = !this.animator.installed;
     this.leftLeg.rotation.x = -armSwing * 1.25;
+    this.leftLeg.rotation.z = -0.025 * this.movementBlend;
     this.rightLeg.rotation.x = armSwing * 1.25;
+    this.rightLeg.rotation.z = 0.025 * this.movementBlend;
     this.fallbackModel.rotation.z = this.movementBlend * Math.sin(this.walkClock) * 0.02;
     this.fallbackModel.rotation.x = this.sprintBlend * -0.075;
     this.leftArm.rotation.x = armSwing;

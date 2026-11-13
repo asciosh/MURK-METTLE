@@ -1,6 +1,8 @@
-# Optional original GLB assets (v0.9.1)
+# Original GLB assets (v0.10)
 
-Drop **your own or licensed** `survivor.glb`, `zombie.glb`, and `lanternkin.glb` in this directory. Then edit `manifest.json`:
+The included **survivor.glb** was authored programmatically for Murk & Mettle without third-party game art. It includes node-transform animation clips `Idle`, `Walk`, `Run`, `Attack`, `Hit`, and `Death`. It is an original **animated GLB**, not a skinned/bone-rigged character. For more sophisticated deformation, use a skinned model exported from Blender.
+
+You can replace it with **your own or properly licensed** `survivor.glb`, `zombie.glb`, and `lanternkin.glb` here. Then edit `manifest.json`:
 
 ```json
 {
@@ -10,7 +12,9 @@ Drop **your own or licensed** `survivor.glb`, `zombie.glb`, and `lanternkin.glb`
 }
 ```
 
-Only list assets that actually exist. The game uses improved procedural models when entries are missing.
+Only list assets that actually exist. The survivor requires Idle, Walk, Run and Attack clips; a static GLB is intentionally rejected so it cannot remove movement animations.
+
+No third-party assets ship in this build. For a legal model, create your own in Blender or verify the model license permits redistribution and commercial release (CC0 is simplest). Retain the original license, source link, author and modification notes in an asset register. The game uses improved procedural models when entries are missing.
 
 ## Blender export contract
 - Apply transforms, face forward along **-Z**, ground contact at Y=0, 1 Blender unit = 1 game meter.

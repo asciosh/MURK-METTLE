@@ -35,6 +35,12 @@ export class InputController {
     window.addEventListener('blur', this.handleWindowBlur);
   }
 
+  requestCapture(): void {
+    if (!this.disposed && document.pointerLockElement !== this.element) {
+      void this.element.requestPointerLock().catch(() => { /* May be denied; next canvas click retries. */ });
+    }
+  }
+
   getMovementAxes(): MovementAxes {
     const right = Number(this.isDown('KeyD', 'ArrowRight')) - Number(this.isDown('KeyA', 'ArrowLeft'));
     const forward = Number(this.isDown('KeyW', 'ArrowUp')) - Number(this.isDown('KeyS', 'ArrowDown'));

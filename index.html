@@ -8,12 +8,12 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — Prototype 0.9</title>
+    <title>Murk &amp; Mettle — v0.10</title>
   </head>
   <body>
     <div id="app">
       <section class="co-op-bar" aria-label="Cooperative room controls">
-        <span class="co-op-title">V0.9 · RECLAIMED</span>
+        <span class="co-op-title">V0.10 · NEW DAWN</span>
         <input id="room-code" maxlength="12" value="BLOOM" aria-label="Room code" placeholder="Room code" />
         <button id="room-join" type="button">JOIN / CREATE</button>
         <button id="room-leave" type="button">SOLO</button>
@@ -30,25 +30,12 @@
         <div class="build-tag">
           <span class="status-dot"></span>
           <span>THE WILDLANDS</span>
-          <b>0.9</b>
+          <b>0.10</b>
         </div>
       </header>
 
       <main id="game-viewport" aria-label="Murk and Mettle playable prototype">
         <div class="reticle" aria-hidden="true"><span></span></div>
-
-        <section class="welcome-card" aria-live="polite">
-          <p class="eyebrow">THE QUARANTINE ZONE · FIELD TEST 009</p>
-          <h1>THE WILD<br /><em>FIGHTS BACK.</em></h1>
-          <p class="welcome-copy">
-            The Bloom is spreading. Salvage resources from the infected, collect them using E, and watch Lanternkin’s bond strain when using Q.
-          </p>
-          <div class="enter-prompt">
-            <span class="enter-key">CLICK</span>
-            <span>TO ENTER THE FIELD</span>
-          </div>
-          <p class="welcome-footnote">Prototype 0.9 · Crafting and room-based co-op</p>
-        </section>
 
         <section class="mission-panel" aria-label="Expedition objectives">
           <strong>OPERATION: FIELD RECOVERY</strong>
@@ -135,6 +122,19 @@
 
         <div class="corner-note">THE BLOOM IS SPREADING <span>///</span></div>
       </main>
+      <section id="title-screen" class="title-screen" role="dialog" aria-modal="true" aria-labelledby="title-heading">
+        <div class="title-ambient" aria-hidden="true"><div class="title-orb"></div><div class="title-mountain mountain-one"></div><div class="title-mountain mountain-two"></div><div class="title-ground"></div></div>
+        <div class="title-content">
+          <p class="title-overline">QUARANTINE SECTOR 009 <span>◆</span> YOUR EXPEDITION BEGINS HERE</p>
+          <h1 id="title-heading">MURK <span>&amp;</span><br> METTLE</h1>
+          <p class="title-tagline">FIND YOUR WILD. <strong>FIGHT THE ROT.</strong></p>
+          <div class="title-rule"></div>
+          <p class="title-description">The Bloom is consuming the wildlands. Track the infected, salvage what you can, and protect the creatures that still trust you.</p>
+          <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
+          <p class="title-hint">WASD MOVE · SHIFT SPRINT · SPACE ATTACK · E INTERACT · Q COMPANION</p>
+        </div>
+        <p class="title-build">MURK &amp; METTLE / v0.10 · ORIGINAL INDIE PROTOTYPE</p>
+      </section>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

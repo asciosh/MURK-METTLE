@@ -23,12 +23,18 @@ export class ActorAnimator {
   private mesh: THREE.Object3D | null = null;
   private disposed = false;
   private activeState: ActorAnimation = 'idle';
-  constructor(private readonly target: THREE.Group) {}
+  constructor(private readonly target: THREE.Group, private readonly requiredClips: string[] = []) {}
   async load(entry: ModelEntry): Promise<boolean> {
     if (!entry.url || this.disposed) return false;
     try {
       const gltf = await loader.loadAsync(entry.url);
       if (this.disposed) return false;
+      const clips = new Set(gltf.animations.map(clip => clip.name.trim().toLowerCase()));
+      const missing = this.requiredClips.filter(name => !clips.has(name));
+      if (missing.length) {
+        console.warn(`GLB ${entry.url} missing required clips: ${missing.join(', ')}. Using animated procedural fallback.`);
+        return false;
+      }
       this.mesh = gltf.scene;
       this.mesh.scale.setScalar(entry.scale ?? 1);
       this.mesh.position.y = entry.yOffset ?? 0;

@@ -453,3 +453,42 @@ button:focus-visible, input:focus-visible, .wordmark:focus-visible { outline: 2p
 }
 /* Only functional HUD buttons capture clicks; the rest remains click-through for the game. */
 .hud-stack .ability-button { pointer-events: auto; }
+
+
+/* v0.10: a true title state; all gameplay HUD remains behind the opaque overlay. */
+.title-screen {
+  position: absolute; inset: 0; z-index: 30; isolation: isolate;
+  display: flex; align-items: center; overflow: hidden;
+  background: radial-gradient(ellipse at 73% 43%, #3a6043 0%, #1e362d 38%, #0a1614 78%);
+  transition: opacity .42s ease, visibility .42s ease;
+}
+.title-screen.is-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.title-ambient { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.title-orb { position: absolute; width: min(52vw, 670px); aspect-ratio: 1; right: 7%; top: 2%; border-radius: 50%; background: radial-gradient(circle, rgba(207,233,155,.56) 0, rgba(138,185,119,.18) 33%, transparent 68%); filter: blur(8px); }
+.title-mountain { position: absolute; bottom: 0; right: -7%; height: 88%; width: 76%; clip-path: polygon(0 100%, 9% 39%, 16% 74%, 29% 8%, 36% 52%, 44% 22%, 52% 67%, 64% 6%, 73% 58%, 86% 29%, 100% 100%); background: #152d29; }
+.mountain-one { transform: translateX(2%) scale(1.12); opacity: .82; }
+.mountain-two { background: #091b1b; height: 71%; width: 87%; transform: translateX(22%); opacity: .85; }
+.title-ground { position: absolute; inset: auto 0 0; height: 29%; background: linear-gradient(0deg,#07130f,transparent); }
+.title-screen::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg,rgba(6,16,13,.96),rgba(6,16,13,.69) 43%,transparent 88%); pointer-events:none; }
+.title-content { position: relative; z-index: 1; margin-left: clamp(24px, 8vw, 150px); max-width: 740px; padding: 32px 20px 58px 0; }
+.title-overline { font: 10px 'DM Mono',monospace; letter-spacing: .18em; color: #c5dba9; }
+.title-overline span { color:#d88b59; padding:0 10px; }
+.title-content h1 { margin: 24px 0 18px; font: 900 clamp(76px, 11.6vw, 186px)/.74 'Barlow Condensed', Impact, sans-serif; letter-spacing:-.035em; color:#f1f1e2; text-shadow:0 15px 35px #081510; }
+.title-content h1 span { color:#df9763; }
+.title-tagline { font: 700 clamp(13px,1.5vw,19px) 'Barlow Condensed',sans-serif; letter-spacing:.17em; color:#cadbaa; }
+.title-tagline strong { color:#df9568; }
+.title-rule { height:1px; width:min(440px,85vw); margin:30px 0 20px; background:linear-gradient(90deg,#97bb91,transparent); }
+.title-description { font-size: clamp(12px,1.1vw,15px); line-height:1.85; max-width:440px; color:#bfd0c1; }
+.title-enter { display:inline-flex; align-items:center; justify-content:space-between; gap:32px; margin-top:27px; padding:17px 22px; background:#d1dfa1; border:1px solid #e2ebb7; border-radius:3px; color:#13271d; font:700 12px 'DM Mono',monospace; letter-spacing:.09em; cursor:pointer; box-shadow:0 11px 40px #09170c; transition:transform .18s, background .18s; }
+.title-enter:hover { transform:translateY(-3px); background:#e8f3bb; }
+.title-enter:focus-visible { outline:3px solid #fff; outline-offset:5px; }
+.title-hint { color:#91a69a; font:9px 'DM Mono',monospace; letter-spacing:.06em; margin-top:24px; line-height:1.8; }
+.title-build { position:absolute; z-index:1; right:32px; bottom:24px; color:#9baa99; font:9px 'DM Mono',monospace; letter-spacing:.1em; }
+@media (max-width:680px) {
+ .title-screen::after { background:linear-gradient(90deg,rgba(6,16,13,.91),rgba(6,16,13,.55)); }
+ .title-content { margin-left:24px; padding-right:22px; }
+ .title-content h1 { font-size:clamp(72px,17vw,115px); }
+ .title-build { display:none; }
+ .title-hint { font-size:8px; }
+}
+@media (prefers-reduced-motion:reduce) { .title-screen,.title-enter {transition:none;} }

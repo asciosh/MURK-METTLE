@@ -31,6 +31,16 @@ arrangeHud(viewport);
 const game = new Game(viewport);
 game.start();
 
+const enterButton = document.querySelector<HTMLButtonElement>('#enter-field');
+const titleScreen = document.querySelector<HTMLElement>('#title-screen');
+enterButton?.addEventListener('click', () => {
+  game.enterField();
+  titleScreen?.classList.add('is-hidden');
+  titleScreen?.setAttribute('aria-hidden', 'true');
+  // The lock request must happen synchronously from the user gesture.
+  game.requestMouseCapture();
+});
+
 window.addEventListener('beforeunload', () => {
   game.dispose();
 });
