@@ -1,0 +1,193 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  color-scheme: dark;
+  font-family: 'Manrope', system-ui, sans-serif;
+  background: #101914;
+  color: #edf0e7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --acid: #c4d98b;
+  --muted: rgba(232, 238, 224, 0.62);
+  --panel: rgba(14, 23, 18, 0.72);
+  --line: rgba(226, 237, 214, 0.16);
+}
+
+* { box-sizing: border-box; }
+html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { min-width: 320px; }
+#app { position: relative; isolation: isolate; background: #101914; }
+
+.topbar {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 82px;
+  padding: 0 clamp(18px, 3.8vw, 58px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(225, 237, 216, 0.11);
+  background: linear-gradient(180deg, rgba(10, 17, 13, 0.88), rgba(10, 17, 13, 0.22));
+  pointer-events: none;
+}
+.wordmark { display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
+.wordmark-mark {
+  width: 42px; height: 42px; display: grid; place-items: center;
+  border: 1px solid rgba(196, 217, 139, 0.55); color: var(--acid);
+  font: 800 15px 'DM Mono', monospace; letter-spacing: -2px;
+  background: rgba(196, 217, 139, 0.06);
+}
+.wordmark-mark span { color: #e18a5f; margin: 0 1px; }
+.wordmark-copy { display: flex; flex-direction: column; gap: 3px; }
+.wordmark-copy strong { font: 800 17px 'Barlow Condensed', sans-serif; letter-spacing: 0.105em; }
+.wordmark-copy strong i { color: #d47b54; font-style: normal; }
+.wordmark-copy small { color: var(--muted); font: 8px 'DM Mono', monospace; letter-spacing: 0.13em; }
+.build-tag { display: flex; align-items: center; gap: 9px; color: rgba(232,238,224,.66); font: 9px 'DM Mono', monospace; letter-spacing: .12em; }
+.build-tag b { margin-left: 4px; padding: 6px 8px; border: 1px solid var(--line); color: var(--acid); font-weight: 500; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: #b7d88b; box-shadow: 0 0 12px rgba(183,216,139,.8); }
+
+#game-viewport { position: absolute; inset: 0; overflow: hidden; background: #17231c; }
+.game-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; outline: none; cursor: crosshair; }
+.reticle { position: absolute; z-index: 2; left: 50%; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%); opacity: .64; pointer-events: none; transition: opacity .2s; }
+.reticle::before, .reticle::after { content: ''; position: absolute; background: rgba(240,244,228,.8); }
+.reticle::before { width: 1px; height: 12px; left: 5px; }
+.reticle::after { width: 12px; height: 1px; top: 5px; }
+body:not(.is-pointer-locked) .reticle { opacity: 0; }
+
+.welcome-card {
+  position: absolute; z-index: 3; left: clamp(22px, 8vw, 120px); top: 50%;
+  width: min(460px, calc(100% - 44px)); transform: translateY(-39%);
+  padding: 0 0 0 22px; border-left: 1px solid rgba(196,217,139,.55);
+  pointer-events: none; transition: opacity .25s, transform .25s;
+  text-shadow: 0 2px 25px rgba(0,0,0,.45);
+}
+.eyebrow, .hud-label, .corner-note { color: var(--acid); font: 9px 'DM Mono', monospace; letter-spacing: .17em; }
+.welcome-card h1 { margin: 16px 0 13px; font: 900 clamp(54px, 7.4vw, 94px)/.82 'Barlow Condensed', sans-serif; letter-spacing: -.015em; }
+.welcome-card h1 em { color: var(--acid); font-style: normal; }
+.welcome-copy { max-width: 310px; margin: 0; color: rgba(239,243,229,.78); font-size: 12px; line-height: 1.8; }
+.enter-prompt { display: flex; align-items: center; gap: 11px; margin-top: 33px; color: #edf0e7; font: 9px 'DM Mono', monospace; letter-spacing: .14em; }
+.enter-key { padding: 10px 13px; color: #152017; background: var(--acid); font-weight: 600; letter-spacing: .05em; }
+.welcome-footnote { margin: 30px 0 0; color: rgba(239,243,229,.4); font: 8px 'DM Mono', monospace; letter-spacing: .11em; }
+body.is-pointer-locked .welcome-card { opacity: 0; transform: translate(-10px, -39%); }
+
+.hud-bottom-left, .hud-bottom-right { position: absolute; z-index: 3; bottom: 27px; pointer-events: none; }
+.hud-bottom-left { left: clamp(18px, 3.8vw, 58px); }
+.hud-label { font-size: 8px; color: rgba(228,238,215,.5); }
+.position-value { margin-top: 7px; color: #eaf0e2; font: 11px 'DM Mono', monospace; letter-spacing: .05em; }
+.position-value span { color: #d47b54; padding: 0 4px; }
+.hud-bottom-right { right: clamp(18px, 3.8vw, 58px); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: 54%; }
+.control-chip { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border: 1px solid rgba(226,237,214,.13); background: rgba(12,20,15,.52); color: rgba(233,239,225,.55); font: 8px 'DM Mono', monospace; letter-spacing: .07em; }
+kbd { min-width: 16px; padding: 3px 4px; border: 1px solid rgba(226,237,214,.2); color: #e9efdf; background: rgba(255,255,255,.04); text-align: center; font: 8px 'DM Mono', monospace; }
+.corner-note { position: absolute; right: clamp(18px, 3.8vw, 58px); top: 106px; z-index: 3; color: rgba(230,239,219,.5); font-size: 8px; }
+.corner-note span { color: #d47b54; margin-left: 4px; }
+
+@media (max-width: 680px) {
+  .topbar { height: 68px; padding-inline: 16px; }
+  .wordmark-mark { width: 36px; height: 36px; }
+  .wordmark-copy strong { font-size: 15px; }
+  .wordmark-copy small { font-size: 7px; }
+  .build-tag { font-size: 7px; gap: 6px; }
+  .build-tag b { padding: 5px 6px; }
+  .welcome-card { left: 25px; padding-left: 15px; }
+  .welcome-card h1 { font-size: clamp(54px, 15vw, 78px); }
+  .welcome-copy { max-width: 260px; font-size: 11px; }
+  .hud-bottom-right { left: 16px; right: 16px; bottom: 58px; max-width: none; justify-content: flex-start; gap: 5px; }
+  .control-chip { padding: 6px; gap: 4px; font-size: 7px; }
+  .hud-bottom-left { left: 16px; bottom: 18px; }
+  .corner-note { top: 83px; right: 16px; font-size: 7px; }
+}
+
+/* Prototype 0.2 — combat HUD */
+.player-status,
+.enemy-panel {
+  position: absolute;
+  z-index: 4;
+  top: 105px;
+  width: min(260px, calc(50vw - 26px));
+  padding: 11px 13px 12px;
+  border: 1px solid rgba(226, 237, 214, 0.15);
+  background: rgba(12, 20, 15, 0.68);
+  backdrop-filter: blur(9px);
+  pointer-events: none;
+}
+.player-status { left: clamp(18px, 3.8vw, 58px); }
+.enemy-panel { right: clamp(18px, 3.8vw, 58px); opacity: 0; transform: translateY(-5px); transition: opacity .2s, transform .2s; }
+.enemy-panel.visible { opacity: 1; transform: translateY(0); }
+.status-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.health-number { color: rgba(240, 244, 230, .8); font: 9px 'DM Mono', monospace; white-space: nowrap; }
+.health-track { width: 100%; height: 5px; margin-top: 9px; overflow: hidden; background: rgba(230, 238, 220, .13); }
+.health-fill { height: 100%; background: #b6d487; box-shadow: 0 0 12px rgba(182, 212, 135, .32); transition: width .12s linear, background .12s; }
+.health-fill.low { background: #d47b54; box-shadow: 0 0 12px rgba(212, 123, 84, .4); }
+.enemy-fill { background: #d47b54; box-shadow: 0 0 12px rgba(212, 123, 84, .34); }
+.enemy-subtitle { margin-top: 7px; color: rgba(232, 238, 224, .4); font: 7px 'DM Mono', monospace; letter-spacing: .14em; }
+.attack-chip { border-color: rgba(212, 123, 84, .4); color: rgba(247, 205, 182, .78); }
+.attack-chip kbd { border-color: rgba(212, 123, 84, .45); color: #f1b18e; }
+.combat-toast {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: 104px;
+  max-width: min(620px, calc(100% - 36px));
+  padding: 10px 14px;
+  border: 1px solid rgba(196, 217, 139, .28);
+  background: rgba(12, 20, 15, .78);
+  color: #eaf0e2;
+  font: 9px 'DM Mono', monospace;
+  letter-spacing: .09em;
+  text-align: center;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition: opacity .18s, transform .18s;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+.combat-toast.visible { opacity: 1; transform: translate(-50%, 0); }
+.combat-toast[data-type="success"] { border-color: rgba(182, 212, 135, .5); color: #d7edb0; }
+.combat-toast[data-type="warning"] { border-color: rgba(230, 183, 104, .5); color: #f2d49a; }
+.combat-toast[data-type="danger"] { border-color: rgba(212, 91, 72, .55); color: #ffc0ae; }
+.damage-flash { position: absolute; z-index: 2; inset: 0; border: 0 solid rgba(169, 42, 30, 0); box-shadow: inset 0 0 0 0 rgba(169, 42, 30, 0); opacity: 0; pointer-events: none; transition: opacity .08s; }
+.damage-flash.active { opacity: 1; box-shadow: inset 0 0 100px 22px rgba(169, 42, 30, .38); }
+.defeat-overlay {
+  position: absolute;
+  z-index: 7;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10, 15, 12, .74);
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .2s, visibility .2s;
+  pointer-events: none;
+}
+.defeat-overlay.visible { opacity: 1; visibility: visible; pointer-events: auto; }
+.defeat-overlay h2 { margin: 17px 0 10px; color: #edf0e7; font: 900 clamp(54px, 8vw, 88px)/.82 'Barlow Condensed', sans-serif; }
+.defeat-overlay h2 em { color: #d47b54; font-style: normal; }
+.defeat-overlay > p:not(.eyebrow) { max-width: 310px; color: rgba(239,243,229,.72); font-size: 12px; line-height: 1.7; }
+.retry-hint { display: flex; align-items: center; gap: 10px; margin-top: 20px; color: #edf0e7; font: 9px 'DM Mono', monospace; letter-spacing: .12em; }
+.retry-hint kbd { padding: 8px 11px; border-color: rgba(196,217,139,.55); color: var(--acid); }
+
+@media (max-width: 680px) {
+  .player-status, .enemy-panel { top: 79px; width: calc(50vw - 24px); padding: 9px; }
+  .player-status { left: 12px; }
+  .enemy-panel { right: 12px; }
+  .status-heading .hud-label { font-size: 7px; letter-spacing: .1em; }
+  .health-number { font-size: 8px; }
+  .enemy-subtitle { font-size: 6px; }
+  .combat-toast { bottom: 112px; font-size: 8px; line-height: 1.5; }
+  .hud-bottom-right { bottom: 58px; }
+}
+
+/* Keep the ambient warning clear of the new enemy health panel. */
+.corner-note { top: 188px; }
+@media (max-width: 680px) {
+  .corner-note { top: 154px; }
+}

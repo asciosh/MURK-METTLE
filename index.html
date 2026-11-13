@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101914" />
+    <meta
+      name="description"
+      content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
+    />
+    <title>Murk &amp; Mettle — Prototype 0.2</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <a class="wordmark" href="#" aria-label="Murk and Mettle home">
+          <span class="wordmark-mark">M<span>/</span>M</span>
+          <span class="wordmark-copy">
+            <strong>MURK <i>&amp;</i> METTLE</strong>
+            <small>FIND YOUR WILD. FIGHT THE ROT.</small>
+          </span>
+        </a>
+        <div class="build-tag">
+          <span class="status-dot"></span>
+          <span>COMBAT PLAYTEST</span>
+          <b>0.2</b>
+        </div>
+      </header>
+
+      <main id="game-viewport" aria-label="Murk and Mettle playable prototype">
+        <div class="reticle" aria-hidden="true"><span></span></div>
+
+        <section class="welcome-card" aria-live="polite">
+          <p class="eyebrow">THE QUARANTINE ZONE · FIELD TEST 002</p>
+          <h1>THE WILD<br /><em>FIGHTS BACK.</em></h1>
+          <p class="welcome-copy">
+            An infected is moving through the clearing. Close the distance, face it and take it down.
+          </p>
+          <div class="enter-prompt">
+            <span class="enter-key">CLICK</span>
+            <span>TO ENTER THE FIELD</span>
+          </div>
+          <p class="welcome-footnote">Prototype 0.2 · First infected encounter</p>
+        </section>
+
+        <section class="player-status" aria-label="Player vitality">
+          <div class="status-heading"><span class="hud-label">VITALITY</span><span id="player-health-text" class="health-number">100 / 100</span></div>
+          <div class="health-track"><div id="player-health-fill" class="health-fill" style="width: 100%"></div></div>
+        </section>
+
+        <section id="enemy-panel" class="enemy-panel" aria-label="Enemy health">
+          <div class="status-heading"><span id="enemy-state" class="hud-label">INFECTED RUNNER</span><span id="enemy-health-text" class="health-number">100 / 100</span></div>
+          <div class="health-track enemy-track"><div id="enemy-health-fill" class="health-fill enemy-fill" style="width: 100%"></div></div>
+          <div class="enemy-subtitle">HOSTILE · THE BLOOM</div>
+        </section>
+
+        <div id="combat-toast" class="combat-toast" role="status" aria-live="polite"></div>
+        <div id="damage-flash" class="damage-flash" aria-hidden="true"></div>
+
+        <section id="defeat-overlay" class="defeat-overlay" aria-live="assertive">
+          <p class="eyebrow">FIELD TEST 002 · FAILED</p>
+          <h2>YOU'RE<br /><em>DOWN.</em></h2>
+          <p>The infected overpowered you. Regroup and try again.</p>
+          <div class="retry-hint"><kbd>R</kbd> RESTART ENCOUNTER</div>
+        </section>
+
+        <div class="hud-bottom-left">
+          <div class="hud-label">FIELD POSITION</div>
+          <div id="player-position" class="position-value">X 0.0 <span>·</span> Z 0.0</div>
+        </div>
+
+        <div class="hud-bottom-right">
+          <div class="control-chip"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>MOVE</span></div>
+          <div class="control-chip"><kbd>SHIFT</kbd><span>SPRINT</span></div>
+          <div class="control-chip"><kbd>MOUSE</kbd><span>LOOK</span></div>
+          <div class="control-chip attack-chip"><kbd>SPACE / LMB</kbd><span>MELEE</span></div>
+          <div class="control-chip"><kbd>ESC</kbd><span>RELEASE</span></div>
+        </div>
+
+        <div class="corner-note">THE BLOOM IS SPREADING <span>///</span></div>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
