@@ -8,6 +8,7 @@ import { Inventory, ITEM_DEFINITIONS, type ItemId } from './Inventory';
 import { Loot } from './Loot';
 import { Crafting, RECIPES, type RecipeId } from './Crafting';
 import { Multiplayer, type RoomEvent } from './Multiplayer';
+import { Expedition, EXTRACTION_X, EXTRACTION_Z, EXTRACTION_RADIUS, KILLS_REQUIRED, SALVAGE_REQUIRED } from './Expedition';
 import { Progression, levelFromXp, xpInLevel, CREATURE_XP_PER_PULSE_HIT, CREATURE_XP_PER_PULSE_KILL } from './Progression';
 
 export class Game {
@@ -25,6 +26,13 @@ export class Game {
   private readonly abilityButton: HTMLButtonElement | null;
   private abilityCooldown = 0;
   private readonly inventory = new Inventory();
+  private readonly expedition = new Expedition();
+  private readonly extractionBeacon = new THREE.Group();
+  private readonly missionStatus: HTMLElement | null;
+  private readonly missionKills: HTMLElement | null;
+  private readonly missionSalvage: HTMLElement | null;
+  private readonly missionTotal: HTMLElement | null;
+  private readonly missionHint: HTMLElement | null;
   private readonly crafting = new Crafting(this.inventory);
   private readonly multiplayer = new Multiplayer();
   private readonly remotePlayers = new Map<string, Player>();
@@ -108,6 +116,7 @@ export class Game {
     this.createLighting();
 
     this.world = new World(this.scene);
+    this.createExtractionBeacon();
     this.player = new Player(this.scene);
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
     this.companion = new Companion(this.scene);
@@ -115,6 +124,11 @@ export class Game {
       try { this.recoveringBond = localStorage.getItem(this.bondRetreatKey) === '1'; } catch { /* Storage disabled. */ }
       if (!this.recoveringBond) this.companion.bond();
     }
+    this.missionStatus = document.querySelector('#mission-status');
+    this.missionKills = document.querySelector('#mission-kills');
+    this.missionSalvage = document.querySelector('#mission-salvage');
+    this.missionTotal = document.querySelector('#mission-total');
+    this.missionHint = document.querySelector('#mission-hint');
     this.roomStatus = document.querySelector('#room-status');
     this.roomCode = document.querySelector<HTMLInputElement>('#room-code');
     this.craftingList = document.querySelector('#crafting-list');
@@ -166,6 +180,7 @@ export class Game {
     this.updateCamera(1);
     this.updateHud(1);
     this.updateProgressHud();
+    this.updateMissionHud();
     this.showToast('INFECTED CONTACT  //  Close the distance. SPACE or left-click to strike.', 'info');
   }
 
@@ -203,6 +218,9 @@ export class Game {
     this.radioTimer = Math.max(0, this.radioTimer - deltaSeconds);
     this.radioPanel?.classList.toggle('visible', this.radioTimer > 0);
     for (const drop of this.drops) drop.update(deltaSeconds);
+    this.extractionBeacon.rotation.y += deltaSeconds * 0.28;
+    const beam = this.extractionBeacon.getObjectByName('extract-ring');
+    if (beam) beam.scale.setScalar(1 + 0.055 * Math.sin(this.clock.elapsedTime * 2.2));
     // Low-strain resting is a deliberate choice, not an unlimited damage-free pulse.
     if (this.companion.isBound()) this.bondStrain = Math.max(0, this.bondStrain - deltaSeconds * 2.5);
     this.damageFlashTimer = Math.max(0, this.damageFlashTimer - deltaSeconds);
@@ -319,6 +337,7 @@ export class Game {
   private readonly handleJoinRoom = (): void => {
     const code = this.roomCode?.value.trim().toUpperCase() || 'BLOOM';
     this.multiplayer.connect(code);
+    this.updateMissionHud();
     if (this.roomStatus) this.roomStatus.textContent = `Connecting to ${code}…`;
   };
   private readonly handleLeaveRoom = (): void => {
@@ -328,12 +347,14 @@ export class Game {
     this.zombie.dispose();
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
     if (this.roomStatus) this.roomStatus.textContent = 'Solo · local save';
+    this.updateMissionHud();
   };
   private readonly onRoomEvent = (event: RoomEvent): void => {
     if (event.type === 'welcome') {
       if (this.roomStatus) this.roomStatus.textContent = `Room ${event.code} · connected`;
       this.showToast(`ROOM JOINED  //  ${event.code}`, 'success');
       this.remoteZombieGeneration = -1;
+      this.updateMissionHud();
     } else if (event.type === 'error') {
       if (this.roomStatus) this.roomStatus.textContent = event.message;
       this.showToast(event.message, 'warning');
@@ -407,6 +428,15 @@ export class Game {
   private handleInteract(): void {
     if (this.player.getHealth() <= 0) return;
     const playerPos = this.player.getPosition();
+    if (!this.multiplayer.connected && this.expedition.ready && this.isNearExtraction(playerPos)) {
+      if (this.expedition.extract()) {
+        const levelUp = this.progression.grantPlayerXp(150);
+        this.showToast(levelUp ? 'EXTRACTED  //  +150 XP · LEVEL UP!' : 'EXTRACTED  //  +150 XP · Mission complete!', 'success');
+        this.sayMissionComplete();
+        this.updateMissionHud();
+      }
+      return;
+    }
     const candidate = this.drops.find(drop => drop.canPickUp(playerPos));
     if (candidate) {
       if (!this.inventory.add(candidate.id)) {
@@ -415,8 +445,10 @@ export class Game {
       }
       this.drops.splice(this.drops.indexOf(candidate), 1);
       candidate.dispose(this.scene);
+      if (!this.multiplayer.connected) this.expedition.recordSalvage();
       this.updateInventoryHud();
       this.updateCraftingHud();
+      this.updateMissionHud();
       this.showToast(`SALVAGED  //  +1 ${ITEM_DEFINITIONS[candidate.id].name}. Press I for pack.`, 'success');
       if (++this.radioIndex === 1) this.say('loot');
       return;
@@ -546,6 +578,8 @@ export class Game {
 
   private registerKill(fromPulse: boolean): void {
     this.spawnLoot();
+    if (!this.multiplayer.connected) this.expedition.recordKill();
+    this.updateMissionHud();
     const leveled = this.progression.recordKill();
     const creatureLeveled = fromPulse && this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_KILL);
     if (leveled || creatureLeveled) {
@@ -565,6 +599,8 @@ export class Game {
 
   private resetEncounter(): void {
     this.player.reset();
+    if (!this.multiplayer.connected) this.expedition.resetMission();
+    this.updateMissionHud();
     if (this.multiplayer.connected) this.multiplayer.send('restart');
     // On defeat, strain is reset but a retreating companion remains recoverable.
     if (this.companion.isBound()) this.bondStrain = Math.max(0, this.bondStrain - 20);
@@ -626,11 +662,17 @@ export class Game {
 
     this.updateCompanionHud();
     const nearestDrop = this.drops.find(drop => drop.canPickUp(position));
+    if (this.missionHint) {
+      const extractionPossible = !this.multiplayer.connected && this.expedition.ready && this.isNearExtraction(position) && health > 0;
+      this.missionHint.textContent = extractionPossible ? 'PRESS E · EXTRACT · +150 XP' : '';
+      this.missionHint.classList.toggle('visible', extractionPossible);
+    }
     if (this.lootHint) {
       this.lootHint.textContent = nearestDrop ? `PRESS E · COLLECT ${ITEM_DEFINITIONS[nearestDrop.id].name.toUpperCase()}` : '';
       this.lootHint.classList.toggle('visible', Boolean(nearestDrop) && health > 0);
     }
     this.updateProgressHud();
+    this.updateMissionHud();
     if (this.toastTimer <= 0) this.combatToast?.classList.remove('visible');
   }
 
@@ -645,6 +687,43 @@ export class Game {
     if (this.creatureXpFill) this.creatureXpFill.style.width = `${state.lanternkinBonded ? companionXp.ratio * 100 : 0}%`;
     if (this.creatureXpText) this.creatureXpText.textContent = !state.lanternkinBonded ? 'BOND TO EARN XP' : companionXp.required ? `${companionXp.current} / ${companionXp.required} XP` : 'MAX LEVEL';
     if (this.killText) this.killText.textContent = `${state.totalKills} TOTAL CLEARED`;
+  }
+
+
+  private isNearExtraction(position: THREE.Vector3): boolean {
+    return Math.hypot(position.x - EXTRACTION_X, position.z - EXTRACTION_Z) <= EXTRACTION_RADIUS;
+  }
+
+  private createExtractionBeacon(): void {
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0x9beddc, emissive: 0x157a71, emissiveIntensity: 1.6, transparent: true, opacity: 0.9, roughness: 0.35 });
+    const disk = new THREE.Mesh(new THREE.TorusGeometry(1.9, 0.08, 8, 36), ringMat);
+    disk.rotation.x = Math.PI / 2;
+    disk.position.y = 0.12;
+    disk.name = 'extract-ring';
+    this.extractionBeacon.add(disk);
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.16, 3.8, 8), ringMat);
+    pillar.position.y = 2;
+    this.extractionBeacon.add(pillar);
+    const cap = new THREE.Mesh(new THREE.OctahedronGeometry(0.43), ringMat);
+    cap.position.y = 4.05;
+    this.extractionBeacon.add(cap);
+    this.extractionBeacon.position.set(EXTRACTION_X, 0, EXTRACTION_Z);
+    this.scene.add(this.extractionBeacon);
+  }
+
+  private sayMissionComplete(): void {
+    if (this.radioLine) this.radioLine.textContent = 'Rook: Samples secured, extraction confirmed. That is one more trip home.';
+    this.radioTimer = 5;
+    this.radioPanel?.classList.add('visible');
+  }
+
+  private updateMissionHud(): void {
+    const coOp = this.multiplayer.connected;
+    if (this.missionStatus) this.missionStatus.textContent = coOp ? 'CO-OP MISSIONS · COMING LATER' : this.expedition.ready ? 'OBJECTIVES COMPLETE · REACH BEACON' : 'SOLO EXPEDITION · ACTIVE';
+    if (this.missionKills) this.missionKills.textContent = `${this.expedition.kills}/${KILLS_REQUIRED} infected eliminated`;
+    if (this.missionSalvage) this.missionSalvage.textContent = `${this.expedition.salvage}/${SALVAGE_REQUIRED} salvage collected`;
+    if (this.missionTotal) this.missionTotal.textContent = `${this.expedition.completed} successful extractions`;
+    this.extractionBeacon.visible = !coOp;
   }
 
   private resize(): void {
