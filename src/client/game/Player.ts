@@ -1,3 +1,4 @@
+import { acquireActorSurfaces, releaseActorSurfaces } from './SurfaceMaterials';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { World } from './World';
@@ -40,7 +41,6 @@ export class Player {
   private sprintBlend = 0;
   private idleClock = 0;
   private attackTime = 0;
-  private clothTexture: THREE.CanvasTexture | null = null;
   private health = 100;
   private fallenBlend = 0;
   private hitReaction = 0;
@@ -60,33 +60,13 @@ export class Player {
     this.scene.add(this.root);
   }
 
+  private readonly surfaces = acquireActorSurfaces();
   private createModel(): void {
     this.fallbackModel = new THREE.Group();
     this.visual.add(this.fallbackModel);
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 128;
-    const context = canvas.getContext('2d')!;
-    context.fillStyle = '#989b90';
-    context.fillRect(0, 0, 128, 128);
-    for (let y = 0; y < 128; y += 2)
-      for (let x = 0; x < 128; x += 2) {
-        const value = 205 + ((x * 17 + y * 31) % 35);
-        context.fillStyle = `rgb(${value},${value},${value})`;
-        context.fillRect(x, y, 1, 2);
-      }
-    this.clothTexture = new THREE.CanvasTexture(canvas);
-    this.clothTexture.colorSpace = THREE.SRGBColorSpace;
-    this.clothTexture.wrapS = this.clothTexture.wrapT = THREE.RepeatWrapping;
-    this.clothTexture.repeat.set(4, 4);
-    const bodyMaterial = new THREE.MeshStandardMaterial({
-      color: 0x59614d,
-      map: this.clothTexture,
-      bumpMap: this.clothTexture,
-      bumpScale: 0.015,
-      roughness: 0.96,
-    });
+    const bodyMaterial = this.surfaces.material('fabric', 0xbdc4a9, 4);
     const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x262c28, roughness: 0.92 });
-    const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xd5b89a, roughness: 0.9 });
+    const skinMaterial = this.surfaces.material('skin', 0xffe4ca);
     const accentMaterial = new THREE.MeshStandardMaterial({ color: 0x796e58, roughness: 0.72 });
     const visorMaterial = new THREE.MeshStandardMaterial({ color: 0x17231e, roughness: 0.3, metalness: 0.15 });
 
@@ -162,7 +142,7 @@ export class Player {
     belt.position.y = 0.87;
     belt.scale.y = 0.72;
     this.fallbackModel.add(belt);
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x384b3e, roughness: 0.94 });
+    const legMat = this.surfaces.material('fabric', 0x646b60, 3);
     const bootMat = new THREE.MeshStandardMaterial({ color: 0x1e2723, roughness: 0.93 });
     const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.23, 18, 12), legMat);
     pelvis.scale.set(1.04, 0.62, 0.72);
@@ -209,7 +189,7 @@ export class Player {
 
   /** Original meshes, built at runtime with no external model/IP dependency. */
   private addExpeditionEquipment(): void {
-    const coat = new THREE.MeshStandardMaterial({ color: 0x434b43, roughness: 0.93, flatShading: false });
+    const coat = this.surfaces.material('fabric', 0xabb69e, 3);
     const trim = new THREE.MeshStandardMaterial({ color: 0x8c826b, roughness: 0.8 });
     const rust = new THREE.MeshStandardMaterial({ color: 0x796958, roughness: 0.79 });
     const charcoal = new THREE.MeshStandardMaterial({ color: 0x182c2a, roughness: 0.82 });
@@ -255,6 +235,13 @@ export class Player {
         side < 0 ? this.leftKnee : this.rightKnee,
       );
       kneepad.scale.set(1.05, 0.82, 0.52);
+    }
+    for (const side of [-1, 1]) {
+      const seam = add(new THREE.BoxGeometry(0.013, 0.47, 0.014), trim, side * 0.155, 1.15, 0.365);
+      seam.rotation.z = side * 0.03;
+      for (let k = 0; k < 6; k++)
+        add(new THREE.BoxGeometry(0.024, 0.009, 0.014), trim, side * 0.12, 1.08 + k * 0.035, 0.369);
+      add(new THREE.BoxGeometry(0.15, 0.016, 0.04), charcoal, side * 0.115, 1.35, -0.17);
     }
     // Field radio transmitter: unmistakable back silhouette.
     add(new THREE.CylinderGeometry(0.018, 0.026, 0.5, 6), charcoal, 0.18, 1.6, 0.3);
@@ -466,7 +453,7 @@ export class Player {
 
   dispose(): void {
     this.gun.dispose();
-    this.clothTexture?.dispose();
+    releaseActorSurfaces();
     this.animator.dispose();
     this.scene.remove(this.root);
     this.root.traverse((object) => {

@@ -8,12 +8,12 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — v0.24</title>
+    <title>Murk &amp; Mettle — v0.25</title>
   </head>
   <body>
     <div id="app">
       <section class="co-op-bar" aria-label="Session status and field menu">
-        <span class="co-op-title">V0.24 · PRIVATE BETA</span>
+        <span class="co-op-title">V0.25 · PRIVATE BETA</span>
         <span id="room-status" role="status" aria-live="polite">Solo · Cloud account</span>
         <span id="account-state" role="status" aria-live="polite">Sign in</span>
         <button id="field-menu-toggle" type="button" aria-controls="field-menu" aria-expanded="false">☰ FIELD MENU</button>
@@ -32,6 +32,8 @@
             <button id="coop-craft-restorative" type="button" disabled>CO-OP ANTIDOTE</button>
           </div>
           <label class="graphics-label">GRAPHICS <select id="graphics-quality" aria-label="Graphics quality"><option value="balanced">Balanced · shadows</option><option value="cinematic">Cinematic · contact shading</option><option value="low">Performance · no shadows</option></select></label>
+          <label class="graphics-label"><input id="photo-materials" type="checkbox" checked> Photographic surfaces · online (11 MB)</label>
+          <small id="photo-materials-status" role="status">Offline fallback ready</small>
           <strong>PLAYER PROGRESS</strong>
           <div class="field-menu-row"><button id="account-toggle" type="button">PLAYER ACCOUNT</button></div>
         </div>
@@ -58,7 +60,7 @@
         <div class="build-tag">
           <span class="status-dot"></span>
           <span>THE WILDLANDS</span>
-          <b>0.24</b>
+          <b>0.25</b>
         </div>
       </header>
 
@@ -175,7 +177,7 @@
           <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
           <p class="title-hint">WASD MOVE · RMB AIM · LMB FIRE · R RELOAD · 1/2 WEAPON · SPACE MELEE · E INTERACT · Q PULSE · H BANDAGE · C COMPANION</p>
         </div>
-        <p class="title-build">MURK &amp; METTLE / v0.24 · ORIGINAL INDIE PROTOTYPE</p>
+        <p class="title-build">MURK &amp; METTLE / v0.25 · ORIGINAL INDIE PROTOTYPE</p>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>

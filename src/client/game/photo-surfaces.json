@@ -1,0 +1,114 @@
+{
+  "earth": {
+    "asset": "forest_floor",
+    "source": "https://polyhaven.com/a/forest_floor",
+    "license": "CC0-1.0",
+    "maps": [
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_floor/forest_floor_diff_1k.jpg",
+        "integrity": "sha256-8S5a3qF0H563pSi/xiH4JniFuVMLdMOor9uCOJm9vws=",
+        "bytes": 1329853,
+        "width": 1024,
+        "height": 1024
+      },
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_floor/forest_floor_nor_gl_1k.jpg",
+        "integrity": "sha256-aB896MdWxNGbzaMwOflTKVSY84sUJc6dVrN9b5f25Rg=",
+        "bytes": 1380104,
+        "width": 1024,
+        "height": 1024
+      },
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_floor/forest_floor_rough_1k.jpg",
+        "integrity": "sha256-7OCzMfCMA/PtzYq2gVt0pa4gdovu9kzU+WpbL6JuEW4=",
+        "bytes": 736353,
+        "width": 1024,
+        "height": 1024
+      }
+    ]
+  },
+  "forest": {
+    "asset": "brown_mud_leaves_01",
+    "source": "https://polyhaven.com/a/brown_mud_leaves_01",
+    "license": "CC0-1.0",
+    "maps": [
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brown_mud_leaves_01/brown_mud_leaves_01_diff_1k.jpg",
+        "integrity": "sha256-xZjFVfE81TKECf1eKkVJaibjGeUimeOVkELxRJwvGwY=",
+        "bytes": 1206953,
+        "width": 1024,
+        "height": 1024
+      },
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brown_mud_leaves_01/brown_mud_leaves_01_nor_gl_1k.jpg",
+        "integrity": "sha256-jdUWbdzCk879Mx1JHOa5FivJIC3dmZrB5BQWl1YNOOA=",
+        "bytes": 1486072,
+        "width": 1024,
+        "height": 1024
+      },
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brown_mud_leaves_01/brown_mud_leaves_01_rough_1k.jpg",
+        "integrity": "sha256-n4S357X90v+XmGRf3sJDuZT87QXlQ2knYZlLeTIRtdA=",
+        "bytes": 644332,
+        "width": 1024,
+        "height": 1024
+      }
+    ]
+  },
+  "bark": {
+    "asset": "bark_brown_01",
+    "source": "https://polyhaven.com/a/bark_brown_01",
+    "license": "CC0-1.0",
+    "maps": [
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_01/bark_brown_01_diff_1k.jpg",
+        "integrity": "sha256-QhNEGuvLcrmRH1qGDpznSmGo9s47nCPR8gQXPn5/YGY=",
+        "bytes": 729893,
+        "width": 1024,
+        "height": 1024
+      },
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_01/bark_brown_01_nor_gl_1k.jpg",
+        "integrity": "sha256-nRU3s0KVeUNqYokLt8UFCgFyoVznaHh+rN6Bxczvycw=",
+        "bytes": 1226534,
+        "width": 1024,
+        "height": 1024
+      },
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_01/bark_brown_01_rough_1k.jpg",
+        "integrity": "sha256-Tn9iUIz3f66/7uFf+1cf8CxFwY1RdKoZ/Li5hQY1nFw=",
+        "bytes": 201307,
+        "width": 1024,
+        "height": 1024
+      }
+    ]
+  },
+  "plaster": {
+    "asset": "concrete_wall_006",
+    "source": "https://polyhaven.com/a/concrete_wall_006",
+    "license": "CC0-1.0",
+    "maps": [
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_006/concrete_wall_006_diff_1k.jpg",
+        "integrity": "sha256-/qJH3Qhc0F2N6zNSNMg0dk1iICnaNR+LzIkTk1MWus0=",
+        "bytes": 769415,
+        "width": 1024,
+        "height": 1024
+      },
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_006/concrete_wall_006_nor_gl_1k.jpg",
+        "integrity": "sha256-T/FruW/C3z73HSIAcVGv8di/fLEKST0/jpcyE6md1Cg=",
+        "bytes": 1195078,
+        "width": 1024,
+        "height": 1024
+      },
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_006/concrete_wall_006_rough_1k.jpg",
+        "integrity": "sha256-zu6YyUC48eSRaa+IBJeqYOquXeCsWzYDqnU7dvaHxFU=",
+        "bytes": 255004,
+        "width": 1024,
+        "height": 1024
+      }
+    ]
+  }
+}

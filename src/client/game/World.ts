@@ -1,3 +1,6 @@
+import { SurfaceMaterials } from './SurfaceMaterials';
+import { terrainMaterial } from './TerrainMaterial';
+import { addSettlementDetails } from './WorldDetails';
 import * as THREE from 'three';
 import {
   BUILDINGS,
@@ -10,6 +13,7 @@ import {
 
 /** Deterministic 180m sector. Collision geometry is shared with the room server. */
 export class World {
+  private readonly surfaces = new SurfaceMaterials();
   private readonly textures: THREE.Texture[] = [];
   private readonly windTime = { value: 0 };
   private readonly depthMaterials: THREE.Material[] = [];
@@ -21,11 +25,13 @@ export class World {
     this.createWetland();
     this.createSupplies();
     this.createLandmarks();
+    addSettlementDetails(this.scene, this.surfaces);
   }
   private texture(kind: 'soil' | 'bark' | 'concrete' | 'brick' | 'leaf' | 'grass' | 'road'): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 256;
+    canvas.width = canvas.height = 512;
     const ctx = canvas.getContext('2d')!;
+    ctx.scale(2, 2);
     let seed = 542;
     const rand = () => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -44,41 +50,57 @@ export class World {
         ctx.fill();
       }
     } else if (kind === 'leaf') {
-      // Branches connect the leaves, replacing the earlier floating-ellipse pattern.
-      ctx.strokeStyle = '#615c42';
-      ctx.lineWidth = 2.6;
-      ctx.beginPath();
-      ctx.moveTo(128, 256);
-      ctx.quadraticCurveTo(120, 130, 127, 12);
-      ctx.stroke();
-      for (let branch = 0; branch < 13; branch++) {
-        const side = branch % 2 ? 1 : -1,
-          startY = 235 - branch * 15,
-          endX = 128 + side * (40 + rand() * 63),
-          endY = startY - 42 - rand() * 25;
-        ctx.lineWidth = 1.4;
+      const branch = (x: number, y: number, angle: number, length: number, width: number, depth: number): void => {
+        const ex = x + Math.sin(angle) * length,
+          ey = y - Math.cos(angle) * length;
+        ctx.strokeStyle = '#514f36';
+        ctx.lineWidth = width;
         ctx.beginPath();
-        ctx.moveTo(125, startY);
-        ctx.quadraticCurveTo((125 + endX) / 2, startY - 10, endX, endY);
+        ctx.moveTo(x, y);
+        ctx.lineTo(ex, ey);
         ctx.stroke();
-        for (let k = 0; k < 12; k++) {
-          const t = 0.13 + k * 0.075,
-            x = 125 + (endX - 125) * t + (rand() - 0.5) * 22,
-            y = startY + (endY - startY) * t + (rand() - 0.5) * 19;
-          const angle = side * 0.65 + (rand() - 0.5) * 1.1;
-          ctx.fillStyle = `rgb(${60 + rand() * 38},${82 + rand() * 46},${35 + rand() * 27})`;
-          ctx.beginPath();
-          ctx.ellipse(x, y, 5 + rand() * 5, 2 + rand() * 2, angle, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#7c8957';
-          ctx.lineWidth = 0.4;
-          ctx.beginPath();
-          ctx.moveTo(x - 5 * Math.cos(angle), y - 5 * Math.sin(angle));
-          ctx.lineTo(x + 5 * Math.cos(angle), y + 5 * Math.sin(angle));
-          ctx.stroke();
-          ctx.strokeStyle = '#615c42';
+        if (depth > 0) {
+          for (let k = 1; k <= 3; k++) {
+            const t = k / 3;
+            for (const side of [-1, 1])
+              branch(
+                x + (ex - x) * t,
+                y + (ey - y) * t,
+                angle + side * (0.55 + rand() * 0.3),
+                length * 0.42,
+                width * 0.55,
+                depth - 1,
+              );
+          }
+        } else {
+          for (let k = 0; k < 30; k++) {
+            const lx = ex + (rand() - 0.5) * 42,
+              ly = ey + (rand() - 0.5) * 36,
+              a = angle + (rand() - 0.5) * 2;
+            const shade = rand();
+            ctx.fillStyle = `rgb(${48 + shade * 39},${61 + shade * 46},${29 + shade * 25})`;
+            ctx.save();
+            ctx.translate(lx, ly);
+            ctx.rotate(a);
+            ctx.scale(0.62, 0.62);
+            ctx.beginPath();
+            ctx.moveTo(0, -8);
+            ctx.bezierCurveTo(6, -5, 6, 3, 0, 8);
+            ctx.bezierCurveTo(-5, 3, -5, -5, 0, -8);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(156,159,102,.38)';
+            ctx.lineWidth = 0.45;
+            ctx.beginPath();
+            ctx.moveTo(0, -6);
+            ctx.lineTo(0, 6);
+            ctx.stroke();
+            ctx.restore();
+          }
         }
-      }
+      };
+      branch(128, 243, 0, 132, 3, 2);
+      branch(128, 209, -0.65, 100, 2.4, 2);
+      branch(128, 204, 0.67, 102, 2.4, 2);
     } else {
       ctx.fillStyle =
         kind === 'road'
@@ -166,8 +188,6 @@ export class World {
     return m;
   }
   private createTerrain(): void {
-    const map = this.texture('soil');
-    map.repeat.set(95, 95);
     const geometry = new THREE.PlaneGeometry(210, 210, 100, 100);
     geometry.rotateX(-Math.PI / 2);
     const colors = [];
@@ -185,13 +205,7 @@ export class World {
       colors.push(color.r, color.g, color.b);
     }
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    const ground = this.mesh(
-      geometry,
-      new THREE.MeshStandardMaterial({ map, bumpMap: map, bumpScale: 0.025, roughness: 0.96, vertexColors: true }),
-      0,
-      -0.025,
-      0,
-    );
+    const ground = this.mesh(geometry, terrainMaterial(this.surfaces), 0, -0.025, 0);
     ground.castShadow = false;
     // A continuous ridgeline replaces the obvious sphere-shaped background hills.
     const mountains = new THREE.PlaneGeometry(430, 430, 90, 90);
@@ -212,33 +226,10 @@ export class World {
     }
     mountains.setAttribute('color', new THREE.Float32BufferAttribute(tints, 3));
     mountains.computeVertexNormals();
-    const mountain = this.mesh(
-      mountains,
-      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }),
-      0,
-      -0.12,
-      0,
-    );
+    const mountain = this.mesh(mountains, this.surfaces.material('forest', 0xa3ac91, 65), 0, -0.12, 0);
     mountain.castShadow = false;
     // The settlement's worn asphalt is distinct from the forest's dirt path.
-    const roadMap = this.texture('road');
-    roadMap.repeat.set(3, 22);
-    const road = this.mesh(
-      new THREE.PlaneGeometry(7.5, 56),
-      new THREE.MeshStandardMaterial({
-        map: roadMap,
-        bumpMap: roadMap,
-        bumpScale: 0.018,
-        roughness: 0.94,
-        color: 0x909183,
-      }),
-      0,
-      0.003,
-      -56,
-    );
-    road.rotation.x = -Math.PI / 2;
-    road.castShadow = false;
-    const paint = new THREE.MeshStandardMaterial({ color: 0xaca47a, roughness: 1, transparent: true, opacity: 0.45 });
+    const paint = new THREE.MeshStandardMaterial({ color: 0xaca47a, roughness: 1, transparent: true, opacity: 0.22 });
     for (let z = -32; z > -80; z -= 6) {
       const dash = this.mesh(new THREE.PlaneGeometry(0.1, 1.7), paint, 0, 0.008, z);
       dash.rotation.x = -Math.PI / 2;
@@ -261,22 +252,32 @@ export class World {
     pebbles.receiveShadow = true;
     this.scene.add(pebbles);
   }
+  private trunkGeometry(): THREE.CylinderGeometry {
+    const geometry = new THREE.CylinderGeometry(0.12, 0.34, 8.5, 14, 8),
+      position = geometry.getAttribute('position');
+    for (let i = 0; i < position.count; i++) {
+      const x = position.getX(i),
+        z = position.getZ(i),
+        y = position.getY(i),
+        angle = Math.atan2(z, x);
+      const flare = 1 + Math.exp(-(y + 4.25) * 3) * (0.35 + 0.22 * Math.sin(angle * 5));
+      position.setX(i, x * flare + Math.sin((y + 4.25) * 0.4) * 0.075);
+      position.setZ(i, z * flare + Math.sin((y + 4.25) * 0.51) * 0.055);
+    }
+    geometry.computeVertexNormals();
+    return geometry;
+  }
   private createForest(): void {
-    const bark = this.texture('bark');
-    bark.repeat.set(1, 3);
+    const barkMaterial = this.surfaces.material('bark', 0xffffff, 2);
     const leaf = this.texture('leaf');
     const branches = new THREE.InstancedMesh(
       new THREE.CylinderGeometry(0.035, 0.1, 2.8, 6),
-      new THREE.MeshStandardMaterial({ map: bark, roughness: 1 }),
-      TREES.length * 5,
+      barkMaterial,
+      TREES.length * 10,
     );
-    const trunks = new THREE.InstancedMesh(
-      new THREE.CylinderGeometry(0.18, 0.34, 7.5, 9),
-      new THREE.MeshStandardMaterial({ map: bark, bumpMap: bark, bumpScale: 0.08, roughness: 1 }),
-      TREES.length,
-    );
+    const trunks = new THREE.InstancedMesh(this.trunkGeometry(), barkMaterial, TREES.length);
     const foliage = new THREE.InstancedMesh(
-      new THREE.PlaneGeometry(5.3, 6),
+      new THREE.PlaneGeometry(5.4, 5.2),
       new THREE.MeshStandardMaterial({
         map: leaf,
         alphaTest: 0.4,
@@ -284,40 +285,44 @@ export class World {
         side: THREE.DoubleSide,
         roughness: 1,
       }),
-      TREES.length * 5,
+      TREES.length * 10,
     );
     const d = new THREE.Object3D();
     const color = new THREE.Color();
     for (const [i, t] of TREES.entries()) {
-      d.position.set(t.x, 3.75 * t.size, t.z);
+      d.position.set(t.x, 4.25 * t.size, t.z);
       d.rotation.set(0, i * 2.4, 0);
       d.scale.setScalar(t.size);
       d.updateMatrix();
       trunks.setMatrixAt(i, d.matrix);
-      for (let j = 0; j < 5; j++) {
+      for (let j = 0; j < 10; j++) {
         const angle = j * 2.4 + i;
         d.position.set(
           t.x + Math.sin(angle) * 0.7 * t.size,
-          (4.8 + j * 0.55) * t.size,
+          (4.2 + j * 0.38) * t.size,
           t.z + Math.cos(angle) * 0.7 * t.size,
         );
         d.rotation.set(Math.cos(angle) * 1.05, 0, -Math.sin(angle) * 1.05);
         d.scale.setScalar(t.size);
         d.updateMatrix();
-        branches.setMatrixAt(i * 5 + j, d.matrix);
-        d.position.set(t.x + Math.sin(j * 2.3) * t.size, (5 + j * 0.55) * t.size, t.z + Math.cos(j * 2.3) * t.size);
-        d.rotation.set(j * 0.32, j * 2.4 + i, j * 0.11);
+        branches.setMatrixAt(i * 10 + j, d.matrix);
+        d.position.set(
+          t.x + Math.sin(j * 2.3) * (1.5 + (j % 3) * 0.35) * t.size,
+          (6.2 + (j % 4) * 0.58) * t.size,
+          t.z + Math.cos(j * 2.3) * (1.5 + (j % 3) * 0.35) * t.size,
+        );
+        d.rotation.set((j % 3) * 0.38, j * 2.4 + i, Math.sin(j) * 0.32);
         d.scale.set(1.1 * t.size, (0.7 + (j % 2) * 0.2) * t.size, t.size);
         d.updateMatrix();
-        foliage.setMatrixAt(i * 5 + j, d.matrix);
-        color.setHSL(0.2 + (i % 7) * 0.005, 0.16, 0.4 + (i % 4) * 0.025);
-        foliage.setColorAt(i * 5 + j, color);
+        foliage.setMatrixAt(i * 10 + j, d.matrix);
+        color.setHSL(0.2 + (i % 7) * 0.005, 0.1, 0.67 + (i % 4) * 0.045);
+        foliage.setColorAt(i * 10 + j, color);
       }
     }
     trunks.castShadow = true;
     trunks.receiveShadow = true;
     foliage.castShadow = true;
-    foliage.receiveShadow = true;
+    foliage.receiveShadow = false;
     this.applyWind(foliage);
     trunks.computeBoundingSphere();
     foliage.computeBoundingSphere();
@@ -333,12 +338,12 @@ export class World {
         alphaTest: 0.4,
         alphaToCoverage: true,
         side: THREE.DoubleSide,
-        color: 0x81865c,
+        color: 0xb1b293,
         roughness: 1,
       }),
-      4000,
+      6500,
     );
-    for (let i = 0; i < 4000; i++) {
+    for (let i = 0; i < 6500; i++) {
       const x = Math.sin(i * 127.1) * 88,
         z = Math.sin(i * 311.7) * 88;
       d.position.set(x, Math.abs(x) < 5 ? -0.6 : 0.23, z);
@@ -386,7 +391,13 @@ export class World {
       `,
       );
     };
-    mesh.material.onBeforeCompile = patch;
+    mesh.material.onBeforeCompile = (shader) => {
+      patch(shader);
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <lights_fragment_end>',
+        '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(.16,.20,.11);',
+      );
+    };
     mesh.material.customProgramCacheKey = () => 'field-wind-v1';
     const depth = new THREE.MeshDepthMaterial({
       map: mesh.material.map,
@@ -400,21 +411,19 @@ export class World {
     this.depthMaterials.push(depth);
   }
   private createTown(): void {
-    const brick = this.texture('brick');
-    brick.repeat.set(3, 2);
-    const concrete = this.texture('concrete');
-    concrete.repeat.set(2, 2);
-    const wall = new THREE.MeshStandardMaterial({ map: brick, bumpMap: brick, bumpScale: 0.08, roughness: 0.96 });
-    const plaster = new THREE.MeshStandardMaterial({
-      map: concrete,
-      bumpMap: concrete,
-      bumpScale: 0.05,
+    const wall = this.surfaces.material('brick', 0xffffff, 3);
+    const plaster = this.surfaces.material('plaster', 0xd8d5c8, 2);
+    const roof = this.surfaces.material('metal', 0x747f7c, 2);
+    const windowMat = new THREE.MeshStandardMaterial({ color: 0x172327, roughness: 0.16, metalness: 0.55 });
+    const timber = this.surfaces.material('bark', 0xaaa391, 2);
+    const ivyMap = this.texture('leaf');
+    const ivyMaterial = new THREE.MeshStandardMaterial({
+      map: ivyMap,
+      alphaTest: 0.43,
+      side: THREE.DoubleSide,
       roughness: 1,
-      color: 0xaaa99a,
+      color: 0x9ca386,
     });
-    const roof = new THREE.MeshStandardMaterial({ color: 0x424b48, metalness: 0.35, roughness: 0.82 });
-    const windowMat = new THREE.MeshStandardMaterial({ color: 0x192728, roughness: 0.35, metalness: 0.3 });
-    const timber = new THREE.MeshStandardMaterial({ map: this.texture('bark'), color: 0x777060, roughness: 1 });
     for (const [i, b] of BUILDINGS.entries()) {
       this.mesh(new THREE.BoxGeometry(b.w, b.h, b.d), i % 2 ? plaster : wall, b.x, b.h / 2, b.z);
       this.mesh(new THREE.BoxGeometry(b.w + 0.6, 0.3, b.d + 0.6), roof, b.x, b.h + 0.15, b.z);
@@ -442,19 +451,20 @@ export class World {
         );
         gutter.castShadow = false;
       }
-      for (let k = 0; k < 8; k++) {
-        const vine = this.mesh(
-          new THREE.SphereGeometry(0.6, 7, 5),
-          new THREE.MeshStandardMaterial({ color: 0x46523e, roughness: 1 }),
-          b.x - b.w / 2 - 0.05,
-          b.h * (k / 8),
-          b.z + Math.sin(k) * b.d * 0.3,
+      for (let k = 0; k < 5; k++) {
+        const ivy = this.mesh(
+          new THREE.PlaneGeometry(2.5, 3.5),
+          ivyMaterial,
+          b.x - b.w / 2 - 0.035,
+          1.7 + k * 0.7,
+          b.z + Math.sin(k * 1.7) * b.d * 0.3,
         );
-        vine.scale.set(0.2, 1.6, 1.2);
+        ivy.rotation.y = -Math.PI / 2;
+        ivy.rotation.z = Math.sin(k) * 0.2;
       }
     }
     // Abandoned vehicle silhouettes, with weathered bodywork and rubber wheels.
-    const metal = new THREE.MeshStandardMaterial({ map: concrete, color: 0x67766c, metalness: 0.3, roughness: 0.84 });
+    const metal = this.surfaces.material('metal', 0x84938b, 2);
     const rubber = new THREE.MeshStandardMaterial({ color: 0x252a28, roughness: 1 });
     for (const [x, z] of [
       [-6, -37],
@@ -543,7 +553,7 @@ export class World {
     }
     reeds.computeBoundingSphere();
     this.scene.add(reeds);
-    const planks = new THREE.MeshStandardMaterial({ map: this.texture('bark'), color: 0x8a8070, roughness: 1 });
+    const planks = this.surfaces.material('bark', 0xb4aa92, 2);
     for (let i = 0; i < 22; i++) this.mesh(new THREE.BoxGeometry(2.5, 0.16, 0.42), planks, -48, 0.15, -15 - i * 0.48);
   }
   private createSupplies(): void {
@@ -569,7 +579,7 @@ export class World {
     for (const def of Object.values(CREATURES)) {
       const ground = this.mesh(
         new THREE.CircleGeometry(1.2, 24),
-        new THREE.MeshStandardMaterial({ color: 0x737c64, roughness: 1 }),
+        this.surfaces.material('forest', 0xbac0a3, 1),
         def.x,
         0.02,
         def.z,
@@ -577,6 +587,9 @@ export class World {
       ground.rotation.x = -Math.PI / 2;
       ground.castShadow = false;
     }
+  }
+  photographic(enabled: boolean, onProgress?: (loaded: number, total: number) => void): Promise<void> {
+    return this.surfaces.photographic(enabled, onProgress);
   }
   region(position: THREE.Vector3): string {
     return position.z < -32 && Math.abs(position.x) < 30
@@ -597,6 +610,7 @@ export class World {
     return obstacleDistance(origin, direction, distance);
   }
   dispose(): void {
+    this.surfaces.dispose();
     for (const texture of this.textures) texture.dispose();
     for (const material of this.depthMaterials) material.dispose();
   }
