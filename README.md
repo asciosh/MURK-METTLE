@@ -56,6 +56,10 @@ Wrangler is included in the package lock; `npm ci` installs it reproducibly. Git
 - `tests/`: Node regression and architecture tests
 - `docs/`: migration guide, audit, archived changelogs
 
+## Windows desktop edition
+
+The separate [Tauri 2 Windows host](desktop/README.md) preserves the hosted browser game and existing Cloudflare accounts. See [build, security and compatibility notes](docs/WINDOWS-DESKTOP.md). Browser/Android build and deployment commands above are unchanged.
+
 ## Current limitations
 
 - Co-op kills, salvage, crafting and creature ownership have server validation. **Solo progression is still computed by the browser**, then revision-saved to a Cloudflare account.

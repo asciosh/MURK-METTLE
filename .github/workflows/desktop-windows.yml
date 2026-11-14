@@ -1,0 +1,58 @@
+name: Windows desktop test build
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'tests/desktop-*.test.mjs'
+      - '.github/workflows/desktop-windows.yml'
+permissions:
+  contents: read
+concurrency:
+  group: desktop-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  nsis-test-build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Browser regression suite and production build
+        run: |
+          npm ci
+          npm test
+          npm run typecheck
+          npm run build
+      - name: Desktop dependencies and launcher
+        working-directory: desktop
+        run: |
+          npm ci
+          npm run launcher:build
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
+      - name: Rust formatting and release tests
+        working-directory: desktop/src-tauri
+        run: |
+          cargo fmt --all --check
+          cargo test --release --locked --lib --features custom-protocol
+      - name: Build unsigned NSIS installer
+        working-directory: desktop
+        run: npm run build -- -- --locked
+      - name: Install, launch and uninstall smoke test
+        shell: pwsh
+        run: ./desktop/tests/install-smoke.ps1
+      - name: Upload actual installer (not a published release)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: murk-mettle-windows-x64-unsigned
+          path: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 14

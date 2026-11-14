@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "launcher",
+  "description": "Only the bundled local launcher can open the fixed hosted game. No filesystem, shell, HTTP or remote permissions.",
+  "local": true,
+  "windows": ["launcher"],
+  "permissions": ["launch-field"]
+}
