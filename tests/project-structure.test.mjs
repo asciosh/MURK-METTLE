@@ -66,7 +66,7 @@ test('client and backend entrypoints, GLB manifest and required modules exist', 
 test('stylesheets preserve the original CSS order and remain balanced', async () => {
   const stylesheet = await read('src/styles.css');
   const ordered = [...stylesheet.matchAll(/@import '\.\/styles\/([^']+)'/g)].map(m => m[1]);
-  assert.deepEqual(ordered, ['foundation.css','components.css','screens.css','polish.css','touch.css']);
+  assert.deepEqual(ordered, ['foundation.css','components.css','screens.css','polish.css','touch.css','botanical.css']);
   for (const file of ordered) {
     const css = await read('src/styles/' + file);
     let count = 0;

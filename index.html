@@ -39,9 +39,9 @@
           <div class="field-menu-row"><button id="account-toggle" type="button">PLAYER ACCOUNT</button></div>
         </div>
       </section>
-      <section id="account-panel" class="account-panel" hidden aria-label="Player account">
-        <div class="account-heading"><strong>PLAYER ACCOUNT</strong><button id="account-close" type="button" aria-label="Close account panel">×</button></div>
-        <p class="account-caption">Private beta: username + 6–8 digit PIN. Use a unique PIN, never one from another service.</p>
+      <section id="account-panel" class="account-panel" hidden role="dialog" aria-modal="true" aria-label="Player account">
+        <div class="account-heading"><strong>YOUR FIELD ID</strong><button id="account-close" type="button" aria-label="Close account panel">×</button></div>
+        <p class="account-caption">Sign in or create an account to enter the Wildlands.</p><p class="account-caption">Private beta: username + 6–8 digit PIN. Use a unique PIN, never one from another service.</p>
         <label>Username <input id="account-username" maxlength="20" autocomplete="username" placeholder="your_username" /></label>
         <label>PIN <input id="account-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="6–8 digits" /></label>
         <div class="account-buttons"><button id="account-register" type="button">CREATE ACCOUNT</button><button id="account-login" type="button">LOGIN</button></div>
@@ -49,7 +49,7 @@
         <p id="account-message" role="status" aria-live="polite"></p>
         <p class="account-caption">Cloudflare is the only progression store. Save frequently; 6–8 digit PINs are private-beta security, not public account protection.</p>
       </section>
-      <div id="auth-gate" class="auth-gate" role="status">Sign in to your Cloudflare account to enter the Wildlands.</div>
+      <div id="auth-gate" class="auth-gate"><div class="auth-story"><p class="eyebrow">QUARANTINE SECTOR / 009</p><h1>MURK <span>&amp;</span><br>METTLE</h1><p>Find your wild.<br><strong>Fight the rot.</strong></p><small>Explore the Wildlands. Bond with its creatures.<br>Survive together.</small></div></div>
       <header class="topbar">
         <a class="wordmark" href="#" aria-label="Murk and Mettle home">
           <span class="wordmark-mark">M<span>/</span>M</span>
@@ -120,13 +120,14 @@
           <button id="ability-button" class="ability-button" type="button" disabled>LOCKED · FIND LANTERNKIN</button>
         </section>
         <section id="inventory-panel" class="inventory-panel" aria-label="Field backpack">
-          <div class="inventory-title"><strong>FIELD BACKPACK</strong><span>3 MATERIALS · MAX 20 EACH</span></div>
+          <div class="inventory-title"><strong>FIELD BACKPACK</strong><button id="inventory-close" type="button" aria-label="Close backpack">×</button><span>3 MATERIALS · MAX 20 EACH</span></div>
           <p>Recover materials from infected and craft upgrades for the next expedition.</p>
           <div id="inventory-grid" class="inventory-grid"></div>
           <div class="craft-heading">FIELD CRAFTING</div>
           <div id="crafting-list" class="crafting-list"></div>
           <p class="inventory-footnote">Press I to close or use the BACKPACK button.</p>
         </section>
+        <button id="journal-button" class="journal-toggle" type="button" aria-controls="touch-journal-sheet" aria-expanded="false">J · JOURNAL</button>
         <button id="inventory-button" class="inventory-toggle" type="button" aria-expanded="false">I · BACKPACK</button>
         <div id="loot-hint" class="loot-hint" role="status"></div>
         <section id="radio-panel" class="radio-panel" aria-live="polite" aria-label="Field radio">
@@ -155,7 +156,7 @@
           <div id="player-position" class="position-value">X 0.0 <span>·</span> Z 0.0</div>
         </div>
 
-        <div class="hud-bottom-right">
+        <details class="controls-reference"><summary>KEYBOARD / CONTROLS</summary><div class="hud-bottom-right">
           <div class="control-chip"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>MOVE</span></div>
           <div class="control-chip"><kbd>SHIFT</kbd><span>SPRINT / STAMINA</span></div>
           <div class="control-chip"><kbd>MOUSE</kbd><span>LOOK</span></div>
@@ -165,7 +166,7 @@
           <div class="control-chip"><kbd>ESC</kbd><span>RELEASE</span></div>
         </div>
 
-        <div class="corner-note">THE BLOOM IS SPREADING <span>///</span></div>
+        </details><div class="corner-note">THE BLOOM IS SPREADING <span>///</span></div>
       </main>
       <section id="title-screen" class="title-screen" role="dialog" aria-modal="true" aria-labelledby="title-heading">
         <div class="title-ambient" aria-hidden="true"><div class="title-orb"></div><div class="title-mountain mountain-one"></div><div class="title-mountain mountain-two"></div><div class="title-ground"></div></div>
@@ -173,7 +174,7 @@
           <p class="title-overline">QUARANTINE SECTOR 009 <span>◆</span> YOUR EXPEDITION BEGINS HERE</p>
           <h1 id="title-heading">MURK <span>&amp;</span><br> METTLE</h1>
           <p class="title-tagline">FIND YOUR WILD. <strong>FIGHT THE ROT.</strong></p>
-          <div class="title-rule"></div>
+          <div class="title-rule"></div><div class="title-chapters"><span>01 / EXPLORE</span><span>02 / BOND</span><span>03 / EXTRACT</span></div>
           <p class="title-description">An abandoned settlement. A forest reclaiming its dead. Explore the expanded Wildlands, survive the infected, and evolve the creatures that choose to trust you.</p>
           <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
           <p class="touch-title-hint">Thumb stick to move · Drag the view or FIRE to look · AIM and RUN toggle · Landscape gives more room.</p><p class="title-hint">WASD MOVE · RMB AIM · LMB FIRE · R RELOAD · 1/2 WEAPON · SPACE MELEE · E INTERACT · Q PULSE · H BANDAGE · C COMPANION</p>
