@@ -1,3 +1,5 @@
+import { renderProfile, type QualityId } from '../../../shared/render-profile.mjs';
+import { TouchControls } from './TouchControls';
 import { journalEntry } from '../../../shared/collection.mjs';
 import { progressStore } from './ProgressStore';
 import { Firearms } from './Firearms';
@@ -62,6 +64,11 @@ export class Game {
   private readonly scene = new THREE.Scene();
   private effects: SceneEffects | null = null;
   private cinematic = false;
+  private sky: ReturnType<typeof createAtmosphere> | null = null;
+  private readonly mobileDevice = matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0;
+  private quality: QualityId = 'balanced';
+  private lastFrameAt = 0;
+  private readonly touch: TouchControls;
   private environmentTarget: THREE.WebGLRenderTarget | null = null;
   private readonly sun = new THREE.DirectionalLight(0xffdfb5, 2.65);
   private readonly firearms: Firearms;
@@ -184,7 +191,7 @@ export class Game {
   constructor(private readonly viewport: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-    this.renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+    this.renderer.setSize(viewport.clientWidth, viewport.clientHeight, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
@@ -214,7 +221,22 @@ export class Game {
     document.querySelector('#creature-roster')?.addEventListener('click', this.handleRosterClick);
     document.querySelector('#graphics-quality')?.addEventListener('change', this.handleGraphicsQuality);
     document.querySelector('#photo-materials')?.addEventListener('change', this.handlePhotoMaterials);
-    this.updatePhotoMaterials(true);
+    let saved: { quality?: QualityId; photo?: boolean } = {};
+    try {
+      saved = JSON.parse(localStorage.getItem('murk-mettle-graphics') || '{}') || {};
+    } catch {
+      /* Defaults work without browser storage. */
+    }
+    const initialQuality = ['mobile', 'low', 'balanced', 'cinematic'].includes(saved.quality || '')
+      ? saved.quality!
+      : this.mobileDevice
+        ? 'mobile'
+        : 'balanced';
+    this.setQuality(initialQuality);
+    const photo = typeof saved.photo === 'boolean' ? saved.photo : !this.mobileDevice;
+    const photoToggle = document.querySelector<HTMLInputElement>('#photo-materials');
+    if (photoToggle) photoToggle.checked = photo;
+    this.updatePhotoMaterials(photo);
     this.syncCollectionVisuals();
     void this.loadOptionalModels();
     if (this.progression.state.lanternkinBonded) {
@@ -239,6 +261,7 @@ export class Game {
       document.body.classList.toggle('is-pointer-locked', locked);
     });
 
+    this.touch = new TouchControls(this.viewport, this.renderer.domElement, this.input);
     this.positionElement = document.querySelector<HTMLElement>('#player-position');
     this.playerLevelText = document.querySelector<HTMLElement>('#player-level');
     this.playerXpFill = document.querySelector<HTMLElement>('#player-xp-fill');
@@ -278,7 +301,12 @@ export class Game {
     this.updateHud(1);
     this.updateProgressHud();
     this.updateMissionHud();
-    this.showToast('FIELD READY  //  RMB aim · LMB fire · R reload · E bond / resupply.', 'info');
+    this.showToast(
+      this.touch.enabled
+        ? 'TOUCH READY  //  Left thumb move · drag the view or FIRE to look · USE to interact.'
+        : 'FIELD READY  //  RMB aim · LMB fire · R reload · E bond / resupply.',
+      'info',
+    );
   }
 
   private async loadOptionalModels(): Promise<void> {
@@ -291,6 +319,8 @@ export class Game {
 
   private createLighting(): void {
     const sky = createAtmosphere();
+    this.sky = sky;
+    sky.material.uniforms.cloudLayers.value = this.mobileDevice ? 3 : 5;
     this.scene.add(sky);
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     const environment = new THREE.Scene();
@@ -325,6 +355,7 @@ export class Game {
 
   enterField(): void {
     this.fieldEntered = true;
+    this.touch.setActive(true);
   }
 
   requestMouseCapture(): void {
@@ -333,6 +364,9 @@ export class Game {
 
   private readonly tick = (): void => {
     if (!this.running) return;
+    const frameNow = performance.now();
+    if (this.quality === 'mobile' && frameNow - this.lastFrameAt < 32) return;
+    this.lastFrameAt = frameNow;
     if (!this.fieldEntered) {
       this.clock.getDelta(); // Do not accumulate a large first gameplay frame.
       this.renderScene();
@@ -383,15 +417,20 @@ export class Game {
       ? THREE.MathUtils.clamp(1 - (gunState.reloadAt - Date.now()) / WEAPONS[this.firearms.selected].reload, 0, 1)
       : 0;
     this.player.aimYaw = this.cameraYaw;
+    this.player.bandaging = this.vitals.healEndsAt > Date.now();
     this.firearms.aiming = this.aiming;
     this.player.update(movement, deltaSeconds, this.vitals.sprinting, this.world);
+    if (this.input.consumeSwapPressed())
+      this.firearms.switchWeapon(this.firearms.selected === 'pistol' ? 'rifle' : 'pistol');
     const weapon = this.input.consumeWeaponPressed();
     if (weapon) this.firearms.switchWeapon(weapon === 1 ? 'pistol' : 'rifle');
     if (this.input.consumeCyclePressed()) this.cycleCreature();
     const pressed = this.input.consumeFirePressed();
     if (pressed || (WEAPONS[this.firearms.selected].automatic && this.input.isFiring())) this.handleShooting();
     this.firearms.update(deltaSeconds);
-    this.world.update(deltaSeconds);
+    this.world.update(deltaSeconds, this.player.getPosition());
+    if (this.sky)
+      this.sky.material.uniforms.cloudTime.value = (this.sky.material.uniforms.cloudTime.value + deltaSeconds) % 3600;
     this.updateWildCreatures(deltaSeconds);
     this.syncCollectionVisuals();
     if (this.multiplayer.connected) {
@@ -526,6 +565,8 @@ export class Game {
       this.defeatOverlay?.classList.remove('visible');
       this.cameraYaw = 0;
       this.showToast('SURVIVOR RECOVERED  //  Back at field camp.', 'success');
+    } else if (event.type === 'action') {
+      if (event.by !== this.multiplayer.id) this.coopVisuals.triggerAction(event.by, event.action);
     } else if (event.type === 'arsenal') {
       this.firearms.arsenal = event.arsenal;
     } else if (event.type === 'shot') {
@@ -634,6 +675,7 @@ export class Game {
   private photoRequest = 0;
   private readonly handlePhotoMaterials = (event: Event): void => {
     this.updatePhotoMaterials((event.target as HTMLInputElement).checked);
+    this.saveGraphics();
   };
   private updatePhotoMaterials(enabled: boolean): void {
     const request = ++this.photoRequest;
@@ -650,14 +692,43 @@ export class Game {
       });
   }
   private readonly handleGraphicsQuality = (event: Event): void => {
-    const quality = (event.target as HTMLSelectElement).value;
-    const low = quality === 'low';
+    this.setQuality((event.target as HTMLSelectElement).value as QualityId);
+    this.saveGraphics();
+  };
+  private setQuality(quality: QualityId): void {
+    this.quality = quality;
+    const profile = renderProfile(quality);
+    const selection = document.querySelector<HTMLSelectElement>('#graphics-quality');
+    if (selection) selection.value = quality;
     this.cinematic = quality === 'cinematic';
     if (this.cinematic && !this.effects) this.effects = new SceneEffects(this.renderer, this.scene, this.camera);
-    this.renderer.shadowMap.enabled = !low;
-    this.renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
+    if (!this.cinematic && this.effects) {
+      this.effects.dispose();
+      this.effects = null;
+    }
+    this.renderer.shadowMap.enabled = profile.shadows;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, profile.pixelRatio));
+    this.world.setQuality(profile);
+    this.scene.traverse((node) => {
+      if (node instanceof THREE.PointLight) node.visible = profile.pointLights;
+    });
+    this.coopVisuals.lightsEnabled = profile.pointLights;
+    if (this.sky) this.sky.material.uniforms.cloudLayers.value = profile.cloudLayers;
     this.resize();
-  };
+  }
+  private saveGraphics(): void {
+    try {
+      localStorage.setItem(
+        'murk-mettle-graphics',
+        JSON.stringify({
+          quality: this.quality,
+          photo: document.querySelector<HTMLInputElement>('#photo-materials')?.checked === true,
+        }),
+      );
+    } catch {
+      /* Preferences are optional. */
+    }
+  }
   private get currentCollection(): CollectionState {
     return this.multiplayer.connected ? (this.coopCollection ?? emptyCollection()) : this.collection.state;
   }
@@ -791,6 +862,8 @@ export class Game {
         ? `TRACKING ${def.name.toUpperCase()} · ${Math.round(distance)}m ${direction} · ${distance < 2.7 ? 'E TO BOND' : 'Follow the gold map ring'}`
         : '';
     }
+    const phoneNavigation = document.querySelector('#touch-navigation');
+    if (phoneNavigation) phoneNavigation.textContent = tracker?.textContent || '';
     const hint = document.querySelector('#exploration-hint');
     if (hint)
       hint.textContent =
@@ -1218,6 +1291,15 @@ export class Game {
         ? `AREA CLEAR · NEXT GROUP IN ${Math.max(0, Math.ceil((this.infected.nextWaveAt - Date.now()) / 1000))}s`
         : `GROUP ${this.infected.wave || 1} · ${this.infected.alive.length} INFECTED ACTIVE`;
 
+    const touchHeal = document.querySelector<HTMLButtonElement>('[data-touch="heal"]');
+    if (touchHeal) {
+      touchHeal.disabled = health <= 0 || health >= 100 || !this.vitals.bandages || remaining > 0;
+      touchHeal.textContent = remaining ? 'HEALING' : `HEAL ${this.vitals.bandages}`;
+    }
+    const touchReload = document.querySelector('[data-touch="reload"]');
+    if (touchReload) touchReload.textContent = health <= 0 ? 'RESTART' : 'RELOAD';
+    const phoneEncounter = document.querySelector('#touch-encounter');
+    if (phoneEncounter) phoneEncounter.textContent = status?.textContent || '';
     this.updateCompanionHud();
     const nearestDrop = this.multiplayer.connected ? undefined : this.drops.find((drop) => drop.canPickUp(position));
     if (this.missionHint) {
@@ -1353,6 +1435,7 @@ export class Game {
     if (!this.running) return;
     this.running = false;
     this.renderer.setAnimationLoop(null);
+    this.touch.dispose();
     this.input.dispose();
     this.abilityButton?.removeEventListener('click', this.handleAbilityClick);
     document.querySelector('#heal-button')?.removeEventListener('click', this.handleHealClick);

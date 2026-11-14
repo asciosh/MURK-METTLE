@@ -32,6 +32,7 @@ export type MissionState = {
   phase: string;
 };
 export type RoomEvent =
+  | { type: 'action'; by: string; action: 'pulse' | 'melee' }
   | { type: 'collection-state'; collection: CollectionState; bonded?: boolean }
   | { type: 'arsenal'; arsenal: Arsenal }
   | {

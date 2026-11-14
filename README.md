@@ -1,6 +1,8 @@
-# Murk & Mettle · v0.25
+# Murk & Mettle · v0.26
 
 A third-person browser zombie-survival and creature-collection RPG. Built with Three.js, TypeScript, Vite and Cloudflare Durable Objects.
+
+v0.26 adds Android touch controls, a compact phone HUD, a Mobile graphics preset, more articulated movement/attack/healing animations, creature wing/leg motion, falling leaves, curved ferns and moving water/clouds. Mouse and keyboard remain the PC default. See [v0.26 notes](docs/changelog/CHANGELOG-v0.26.md) and [mobile/PC testing](docs/V0.26-TESTING.md).
 
 v0.25 makes a larger realism pass: layered PBR terrain, optional photographed CC0 materials, fuller tree crowns, weathered settlement detail, clouded daylight and more human infected silhouettes. See [v0.25 notes](docs/changelog/CHANGELOG-v0.25.md), [graphics checks](docs/V0.25-TESTING.md) and [asset credits](docs/V0.25-ASSETS.md).
 

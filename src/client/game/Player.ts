@@ -1,3 +1,4 @@
+import { solveLeg, footCycle } from '../../../shared/actor-motion.mjs';
 import { acquireActorSurfaces, releaseActorSurfaces } from './SurfaceMaterials';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -20,6 +21,15 @@ export class Player {
   private readonly gun: WeaponPresentation;
   private recoilTime = 0;
   private raisedTime = 0;
+  bandaging = false;
+  private readonly headRig = new THREE.Group();
+  private readonly bandageWrap = new THREE.Mesh(
+    new THREE.TorusGeometry(0.064, 0.011, 6, 20),
+    new THREE.MeshStandardMaterial({ color: 0xcac9b4, roughness: 1 }),
+  );
+  private movementAmount = 0;
+  private motionForward = 1;
+  private motionSide = 0;
   weapon: WeaponId = 'pistol';
   aimPitch = 0;
   reloadProgress = 0;
@@ -43,6 +53,7 @@ export class Player {
   private attackTime = 0;
   private health = 100;
   private fallenBlend = 0;
+  private remoteDeathTime = 0;
   private hitReaction = 0;
   aiming = false;
   aimYaw = 0;
@@ -185,6 +196,11 @@ export class Player {
       this.fallbackModel.add(leg);
     }
     this.addExpeditionEquipment();
+    for (const part of [...this.fallbackModel.children])
+      if (part.position.y >= 1.65 && Math.abs(part.position.z) < 0.25) this.headRig.add(part);
+    this.headRig.name = 'head-look';
+    this.fallbackModel.add(this.headRig, this.bandageWrap);
+    this.bandageWrap.visible = false;
   }
 
   /** Original meshes, built at runtime with no external model/IP dependency. */
@@ -254,7 +270,11 @@ export class Player {
     this.isMoving = direction.lengthSq() > 0.0001 && this.health > 0;
 
     if (this.isMoving) {
-      direction.normalize();
+      this.movementAmount = Math.min(1, direction.length());
+      const forward = new THREE.Vector3(-Math.sin(this.root.rotation.y), 0, -Math.cos(this.root.rotation.y));
+      const right = new THREE.Vector3(Math.cos(this.root.rotation.y), 0, -Math.sin(this.root.rotation.y));
+      this.motionForward = direction.clone().normalize().dot(forward);
+      this.motionSide = direction.clone().normalize().dot(right);
       const speed = sprinting ? 8.0 : 4.8;
       this.root.position.addScaledVector(direction, speed * deltaSeconds);
       world.constrainPlayerPosition(this.root.position);
@@ -265,6 +285,7 @@ export class Player {
       this.root.rotation.y += angleDifference * Math.min(1, deltaSeconds * 13);
     }
 
+    if (!this.isMoving) this.movementAmount = 0;
     if (this.weaponRaised) this.root.rotation.y = this.aimYaw;
     this.animate(deltaSeconds, this.isMoving, sprinting);
   }
@@ -275,7 +296,12 @@ export class Player {
     this.hitReaction = THREE.MathUtils.damp(this.hitReaction, 0, 12, deltaSeconds);
     this.recoilTime = Math.max(0, this.recoilTime - deltaSeconds);
     this.raisedTime = Math.max(0, this.raisedTime - deltaSeconds);
-    this.movementBlend = THREE.MathUtils.damp(this.movementBlend, this.isMoving ? 1 : 0, 10, deltaSeconds);
+    this.movementBlend = THREE.MathUtils.damp(
+      this.movementBlend,
+      this.isMoving ? this.movementAmount : 0,
+      10,
+      deltaSeconds,
+    );
     this.sprintBlend = THREE.MathUtils.damp(this.sprintBlend, this.isMoving && sprinting ? 1 : 0, 9, deltaSeconds);
     this.idleClock += deltaSeconds;
     this.animator.setState(
@@ -290,28 +316,36 @@ export class Player {
             : 'idle',
     );
     this.animator.update(deltaSeconds);
-    this.walkClock += deltaSeconds * (sprinting ? 13 : 9);
+    this.walkClock += deltaSeconds * (11 + this.sprintBlend * 5) * (moving ? Math.max(0.45, this.movementAmount) : 0);
     this.attackTime = Math.max(0, this.attackTime - deltaSeconds);
     const bob =
-      this.movementBlend * Math.abs(Math.sin(this.walkClock)) * (0.045 + this.sprintBlend * 0.045) +
+      this.movementBlend * Math.abs(Math.sin(this.walkClock)) * (0.018 + this.sprintBlend * 0.016) +
       Math.sin(this.idleClock * 1.9) * 0.009;
     this.visual.position.y = bob + this.fallenBlend * 0.14;
     this.visual.rotation.z = -this.fallenBlend * 1.47;
     this.visual.rotation.x = this.fallenBlend * 0.12 - this.hitReaction * 0.08;
-    const armSwing = this.movementBlend * Math.sin(this.walkClock) * (0.28 + this.sprintBlend * 0.2);
+
     const attackProgress = this.attackTime > 0 ? 1 - this.attackTime / 0.28 : 0;
     const attackSwing = attackProgress > 0 ? Math.sin(attackProgress * Math.PI) * 1.85 : 0;
     this.fallbackModel.visible = !this.animator.installed;
-    this.leftLeg.rotation.x = -armSwing * 1.25;
-    this.leftLeg.rotation.z = -0.025 * this.movementBlend;
-    this.rightLeg.rotation.x = armSwing * 1.25;
-    this.rightLeg.rotation.z = 0.025 * this.movementBlend;
-    this.leftKnee.rotation.x = -Math.max(0, Math.sin(this.walkClock + 0.6)) * 0.75 * this.movementBlend;
-    this.rightKnee.rotation.x = -Math.max(0, -Math.sin(this.walkClock + 0.6)) * 0.75 * this.movementBlend;
-    this.leftFoot.rotation.x = -(this.leftLeg.rotation.x + this.leftKnee.rotation.x) * 0.65;
-    this.rightFoot.rotation.x = -(this.rightLeg.rotation.x + this.rightKnee.rotation.x) * 0.65;
-    this.fallbackModel.rotation.z = this.movementBlend * Math.sin(this.walkClock) * 0.02;
-    this.fallbackModel.rotation.x = this.sprintBlend * -0.075;
+    const weight = this.movementBlend;
+    for (const [i, leg] of [this.leftLeg, this.rightLeg].entries()) {
+      const knee = i === 0 ? this.leftKnee : this.rightKnee,
+        foot = i === 0 ? this.leftFoot : this.rightFoot;
+      const cycle = footCycle(this.walkClock + i * Math.PI, this.sprintBlend);
+      leg.position.y = 0.82 - weight * (0.065 + this.sprintBlend * 0.035);
+      const desiredY = 0.15 - leg.position.y - bob + cycle.lift * weight;
+      const pose = solveLeg(desiredY, cycle.z * weight * (Math.abs(this.motionForward) > 0.2 ? this.motionForward : 1));
+      leg.rotation.x = pose.hip * weight;
+      knee.rotation.x = pose.knee * weight;
+      foot.rotation.x = pose.foot * weight;
+      leg.rotation.z = this.motionSide * weight * Math.sin(this.walkClock + i * Math.PI) * 0.15;
+    }
+    this.fallbackModel.rotation.z = weight * Math.sin(this.walkClock) * 0.014 - this.motionSide * weight * 0.055;
+    this.fallbackModel.rotation.x = this.sprintBlend * -0.09;
+    this.headRig.rotation.y = Math.sin(this.idleClock * 0.65) * 0.035 * (1 - weight);
+    this.headRig.rotation.x = this.weaponRaised ? -this.aimPitch * 0.12 : Math.sin(this.idleClock * 0.9) * 0.015;
+    this.bandageWrap.visible = this.bandaging && this.health > 0;
     const raised = this.weaponRaised && !this.reloading;
     const reloadWave = this.reloading ? Math.sin(this.reloadProgress * Math.PI) : 0;
     const rifle = this.weapon === 'rifle';
@@ -321,6 +355,8 @@ export class Player {
       rifle ? -0.14 : raised ? -0.37 : -0.21,
     );
     targetPosition.y -= reloadWave * 0.18;
+    targetPosition.x += Math.sin(this.walkClock) * weight * (raised ? 0.004 : 0.018);
+    if (this.bandaging) targetPosition.y = 1.0;
     targetPosition.y += bob * 0.5;
     this.weaponSocket.position.lerp(targetPosition, 1 - Math.exp(-18 * deltaSeconds));
     const recoil = this.recoilTime / 0.12;
@@ -343,13 +379,26 @@ export class Player {
       15,
       deltaSeconds,
     );
-    this.weaponSocket.visible = this.health > 0;
+    this.weaponSocket.visible = this.health > 0 && !this.bandaging;
     this.gun.update(deltaSeconds, this.weapon, this.reloading ? this.reloadProgress : 0);
     this.root.updateWorldMatrix(true, true);
     const handTarget = (x: number, y: number, z: number) =>
       this.fallbackModel.worldToLocal(this.weaponSocket.localToWorld(new THREE.Vector3(x, y, z)));
     const rightHand = handTarget(0, -0.1, 0.035);
     const leftHand = this.weapon === 'rifle' ? handTarget(-0.045, -0.04, -0.28) : handTarget(-0.09, -0.1, 0.01);
+    if (!raised && !this.reloading && !this.bandaging) {
+      leftHand.set(
+        -0.25,
+        1.02 + Math.sin(this.walkClock) * weight * 0.1,
+        0.04 - Math.cos(this.walkClock) * weight * 0.12,
+      );
+    }
+    if (this.bandaging) {
+      leftHand.set(-0.06, 1.34, -0.25);
+      rightHand.set(-0.02 + Math.sin(this.idleClock * 15) * 0.025, 1.2, -0.29);
+      this.bandageWrap.position.copy(leftHand);
+      this.bandageWrap.rotation.set(Math.PI / 2, this.idleClock * 5, 0);
+    }
     if (this.reloading) {
       leftHand.y -= reloadWave * 0.22;
       leftHand.z += reloadWave * 0.1;
@@ -379,14 +428,24 @@ export class Player {
   }
 
   updateRemote(
-    state: { x: number; z: number; yaw: number; hp: number; reloadProgress?: number } & Partial<ActorPose>,
+    state: {
+      x: number;
+      z: number;
+      yaw: number;
+      hp: number;
+      reloadProgress?: number;
+      survival?: { healEndsAt: number };
+    } & Partial<ActorPose>,
     dt: number,
   ): void {
     const moving = Math.hypot(state.x - this.root.position.x, state.z - this.root.position.z) > 0.0005;
     this.root.position.set(state.x, 0, state.z);
     this.root.rotation.y = state.yaw;
-    this.root.visible = state.hp > 0;
+    this.remoteDeathTime = state.hp > 0 ? 0 : this.remoteDeathTime + dt;
+    this.root.visible = state.hp > 0 || this.remoteDeathTime < 0.9;
     this.health = state.hp;
+    this.bandaging = (state.survival?.healEndsAt || 0) > Date.now();
+    this.movementAmount = moving ? 1 : 0;
     this.weapon = state.weapon || 'pistol';
     this.aiming = state.aiming === true;
     this.aimPitch = state.pitch || 0;
@@ -438,6 +497,7 @@ export class Player {
 
   reset(): void {
     this.health = 100;
+    this.bandaging = false;
     this.root.position.set(0, 0, 0);
     this.root.rotation.set(0, 0, 0);
     this.visual.position.set(0, 0, 0);
