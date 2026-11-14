@@ -820,3 +820,5 @@ button:disabled {
 #combat-volume { width:150px;min-height:24px;accent-color:var(--glow);padding:0; }
 .touch-mode .hit-feedback { font-size:9px; }.touch-mode .weapon-panel #weapon-state { font-size:8px; }
 @media(prefers-reduced-motion:reduce) { body.hit-confirmed .reticle { transform:translate(-50%,-50%);filter:none; } .damage-flash.active { box-shadow:none;background:#a82f231a; } }
+
+.game-load-status { max-width:440px;color:var(--text-secondary);font:11px/1.7 var(--ui-mono); } .title-enter:disabled { opacity:.55;cursor:wait;transform:none; }

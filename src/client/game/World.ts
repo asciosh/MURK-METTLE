@@ -1,3 +1,4 @@
+import { SpatialInstances, batchStaticWorld } from './WorldBatches';
 import { addHabitatArt } from './HabitatArt';
 import { forestZone, foliageScale, WORLD_DECOR_BUDGET } from './world-composition.mjs';
 import { OutdoorMotion, fernGeometry, waterRipples } from './OutdoorMotion';
@@ -20,6 +21,7 @@ import {
 /** Deterministic 180m sector. Collision geometry is shared with the room server. */
 export class World {
   private readonly outdoor: OutdoorMotion;
+  private readonly spatial: SpatialInstances[] = [];
   private waterBump: THREE.Texture | null = null;
   private readonly detailMeshes: { detail: InstanceDetail; kind: 'foliage' | 'grass' | 'undergrowth' }[] = [];
   private readonly surfaces = new SurfaceMaterials();
@@ -41,6 +43,12 @@ export class World {
     this.applyWind(habitatFronds);
     this.detailMeshes.push({ detail: new InstanceDetail(habitatFronds, 16), kind: 'undergrowth' });
     this.outdoor = new OutdoorMotion(this.scene);
+    batchStaticWorld(this.scene);
+    const sources: THREE.InstancedMesh[] = [];
+    this.scene.traverse((node) => {
+      if (node instanceof THREE.InstancedMesh && node.count >= 400) sources.push(node);
+    });
+    for (const source of sources) this.spatial.push(new SpatialInstances(source));
   }
   private texture(
     kind: 'soil' | 'bark' | 'concrete' | 'brick' | 'leaf' | 'pine' | 'grass' | 'road',
@@ -112,7 +120,14 @@ export class World {
         ctx.fill();
       }
     } else if (kind === 'leaf') {
-      const branch = (x: number, y: number, angle: number, length: number, width: number, depth: number): void => {
+      const branch = (
+        x: number,
+        y: number,
+        angle: number,
+        length: number,
+        width: number,
+        depth: number,
+      ): void => {
         const ex = x + Math.sin(angle) * length,
           ey = y - Math.cos(angle) * length;
         ctx.strokeStyle = '#514f36';
@@ -282,7 +297,8 @@ export class World {
         z = points.getZ(i),
         r = Math.max(Math.abs(x), Math.abs(z));
       const ramp = THREE.MathUtils.smoothstep(r, 94, 142);
-      const ridge = 9 + Math.abs(Math.sin(x * 0.024 + z * 0.017)) * 18 + Math.sin(x * 0.057) * Math.cos(z * 0.046) * 7;
+      const ridge =
+        9 + Math.abs(Math.sin(x * 0.024 + z * 0.017)) * 18 + Math.sin(x * 0.057) * Math.cos(z * 0.046) * 7;
       const height = ramp * ridge;
       points.setY(i, height - 0.12);
       tint.setHSL(0.22, 0.13, 0.29 + height * 0.002);
@@ -293,7 +309,12 @@ export class World {
     const mountain = this.mesh(mountains, this.surfaces.material('forest', 0xa3ac91, 65), 0, -0.12, 0);
     mountain.castShadow = false;
     // The settlement's worn asphalt is distinct from the forest's dirt path.
-    const paint = new THREE.MeshStandardMaterial({ color: 0xaca47a, roughness: 1, transparent: true, opacity: 0.22 });
+    const paint = new THREE.MeshStandardMaterial({
+      color: 0xaca47a,
+      roughness: 1,
+      transparent: true,
+      opacity: 0.22,
+    });
     for (let z = -32; z > -80; z -= 6) {
       const dash = this.mesh(new THREE.PlaneGeometry(0.1, 1.7), paint, 0, 0.008, z);
       dash.rotation.x = -Math.PI / 2;
@@ -355,7 +376,11 @@ export class World {
     );
     const pineMaterial = (foliage.material as THREE.MeshStandardMaterial).clone();
     pineMaterial.map = this.texture('pine');
-    const pineFoliage = new THREE.InstancedMesh(foliage.geometry.clone(), pineMaterial, pineTrees.length * 10);
+    const pineFoliage = new THREE.InstancedMesh(
+      foliage.geometry.clone(),
+      pineMaterial,
+      pineTrees.length * 10,
+    );
     let broadIndex = 0,
       pineIndex = 0;
     const stormHome = CREATURES.stormrook;
@@ -486,8 +511,10 @@ export class World {
   }
   setQuality(profile: RenderProfile): void {
     for (const { detail, kind } of this.detailMeshes) detail.setFraction(profile[kind]);
+    for (const spatial of this.spatial) spatial.refresh();
     this.scene.traverse((o) => {
-      if (o.name === 'falling-leaves' && o instanceof THREE.Points) o.geometry.setDrawRange(0, profile.particles);
+      if (o.name === 'falling-leaves' && o instanceof THREE.Points)
+        o.geometry.setDrawRange(0, profile.particles);
     });
   }
   update(dt: number, focus?: THREE.Vector3): void {
@@ -707,7 +734,8 @@ export class World {
     this.scene.add(pads);
     this.detailMeshes.push({ detail: new InstanceDetail(pads), kind: 'undergrowth' });
     const planks = this.surfaces.material('bark', 0xb4aa92, 2);
-    for (let i = 0; i < 22; i++) this.mesh(new THREE.BoxGeometry(2.5, 0.016, 0.42), planks, -48, 0.013, -15 - i * 0.48);
+    for (let i = 0; i < 22; i++)
+      this.mesh(new THREE.BoxGeometry(2.5, 0.016, 0.42), planks, -48, 0.013, -15 - i * 0.48);
   }
   private createSupplies(): void {
     const olive = new THREE.MeshStandardMaterial({ color: 0x505e48, metalness: 0.35, roughness: 0.75 });
@@ -716,7 +744,8 @@ export class World {
       const group = new THREE.Group();
       group.position.set(p.x, 0, p.z);
       this.mesh(new THREE.BoxGeometry(1.2, 0.7, 0.7), olive, 0, 0.35, 0, group);
-      for (const x of [-0.4, 0.4]) this.mesh(new THREE.BoxGeometry(0.08, 0.72, 0.74), trim, x, 0.36, 0, group);
+      for (const x of [-0.4, 0.4])
+        this.mesh(new THREE.BoxGeometry(0.08, 0.72, 0.74), trim, x, 0.36, 0, group);
       this.scene.add(group);
       this.crates.set(p.id, group);
     }
@@ -726,7 +755,13 @@ export class World {
     for (const x of [-2.1, 2.1]) this.mesh(new THREE.BoxGeometry(0.55, 3.8, 0.65), mat, x, 1.9, -23.5);
     this.mesh(new THREE.BoxGeometry(5, 0.5, 0.8), mat, 0, 3.8, -23.5);
     const camp = new THREE.MeshStandardMaterial({ color: 0x777462, roughness: 1 });
-    const tent = this.mesh(new THREE.CylinderGeometry(0, 2.7, 2.7, 4, 1, false, Math.PI / 4), camp, -10, 1.35, 6);
+    const tent = this.mesh(
+      new THREE.CylinderGeometry(0, 2.7, 2.7, 4, 1, false, Math.PI / 4),
+      camp,
+      -10,
+      1.35,
+      6,
+    );
     tent.scale.z = 1.5;
     this.sign('FIELD CAMP', -6, 2.4, 5, mat);
     for (const def of Object.values(CREATURES)) {
@@ -766,6 +801,7 @@ export class World {
     return obstacleDistance(origin, direction, distance);
   }
   dispose(): void {
+    for (const spatial of this.spatial) spatial.dispose();
     this.outdoor.dispose();
     this.surfaces.dispose();
     for (const texture of this.textures) texture.dispose();

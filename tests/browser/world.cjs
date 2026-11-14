@@ -43,7 +43,7 @@ fs.mkdirSync(output, { recursive: true });
       const points = ground.geometry.getAttribute('position');
       for (let i = 0; i < points.count; i++)
         if (Math.abs(points.getY(i) + ground.position.y + 0.025) > 0.00001) throw Error('Playable terrain displaced');
-      const crowns = ['broadleaf-and-willow-crowns', 'southern-pine-crowns'].map((n) => scene.getObjectByName(n));
+      const crowns = world.spatial.map(s => s.source).filter(n => ['broadleaf-and-willow-crowns', 'southern-pine-crowns'].includes(n.name));
       const before = crowns.map((m) => new Float32Array(m.instanceMatrix.array));
       const full = crowns.reduce((a, m) => a + m.count, 0);
       if (full !== TREES.length * 10) throw Error('Tree crowns do not match collision tree list');

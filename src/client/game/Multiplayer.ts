@@ -1,3 +1,4 @@
+import { SnapshotArrivals } from '../debug/performance-metrics.mjs';
 import type { Arsenal, SpeciesId } from '../../../shared/expansion.mjs';
 import type { CollectionState } from './Collection';
 import type { ActorPose } from '../../../shared/actor-pose.mjs';
@@ -72,6 +73,7 @@ function yawBlend(a: number, b: number, t: number): number {
   return a + delta * t;
 }
 export class Multiplayer {
+  readonly arrivalMetrics = new SnapshotArrivals();
   private ws: WebSocket | null = null;
   private frames: Frame[] = [];
   id = '';
@@ -97,6 +99,7 @@ export class Multiplayer {
           this.send('sync-equipment');
         }
         if (data.type === 'snapshot') {
+          this.arrivalMetrics.observe(performance.now());
           this.frames.push({ at: performance.now(), players: data.players, horde: data.horde });
           this.self = data.players.find((p) => p.id === this.id) || null;
           if (this.frames.length > 5) this.frames.shift();
@@ -166,6 +169,7 @@ export class Multiplayer {
     if (this.connected && this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type, ...body }));
   }
   private resetConnection(): void {
+    this.arrivalMetrics.reset();
     this.connected = false;
     this.id = '';
     this.code = '';

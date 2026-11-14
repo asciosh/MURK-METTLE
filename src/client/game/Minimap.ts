@@ -4,7 +4,9 @@ import { EXTRACTION_X, EXTRACTION_Z } from './Expedition';
 import { WORLD_BOUNDARY, BUILDINGS, SUPPLIES, CREATURES } from '../../../shared/expansion.mjs';
 
 export class Minimap {
-  private readonly context = document.querySelector<HTMLCanvasElement>('#field-minimap')?.getContext('2d') ?? null;
+  private nextDraw = 0;
+  private readonly context =
+    document.querySelector<HTMLCanvasElement>('#field-minimap')?.getContext('2d') ?? null;
   update(
     player: THREE.Vector3,
     zombies: readonly { x: number; z: number }[],
@@ -13,6 +15,10 @@ export class Minimap {
   ): void {
     const ctx = this.context;
     if (!ctx) return;
+    const now = performance.now();
+    if (now < this.nextDraw) return;
+    this.nextDraw = now + 100;
+    if (!ctx.canvas.getClientRects().length) return;
     const w = 220,
       scale = 200 / (WORLD_BOUNDARY * 2),
       point = (x: number, z: number): [number, number] => [110 + x * scale, 110 + z * scale];

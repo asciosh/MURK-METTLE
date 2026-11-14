@@ -1,3 +1,4 @@
+import { setText, setWidth } from '../ui/ChangedValue';
 import { renderProfile, type QualityId } from '../../../shared/render-profile.mjs';
 import { TouchControls } from './TouchControls';
 import { journalEntry } from '../../../shared/collection.mjs';
@@ -6,7 +7,8 @@ import { Firearms } from './Firearms';
 import { Collection, emptyCollection, type CollectionState } from './Collection';
 import { createAtmosphere } from './Atmosphere';
 import { CombatFeedback } from './CombatFeedback';
-import { SceneEffects } from './SceneEffects';
+import type { PerformancePanel } from '../debug/PerformancePanel';
+import type { SceneEffects } from './SceneEffects';
 import {
   CREATURES,
   SPECIES_IDS,
@@ -66,6 +68,10 @@ export class Game {
   private readonly feedback = new CombatFeedback(this.scene);
   private renderDelta = 0;
   private effects: SceneEffects | null = null;
+  private effectsGeneration = 0;
+  private disposed = false;
+  private performancePanel: PerformancePanel | null = null;
+  private readonly wildVisualTime = new Map<SpeciesId, number>();
   private cinematic = false;
   private sky: ReturnType<typeof createAtmosphere> | null = null;
   private readonly mobileDevice = matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0;
@@ -89,6 +95,7 @@ export class Game {
   private assetManifest: ModelManifest = {};
   private readonly clock = new THREE.Clock();
   private fieldEntered = false;
+  private needsPreviewFrame = true;
   private readonly world: World;
   private readonly minimap = new Minimap();
   private readonly player: Player;
@@ -192,6 +199,11 @@ export class Game {
 
   constructor(private readonly viewport: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this.renderer.info.autoReset = false;
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has('perf'))
+      void import('../debug/PerformancePanel').then(({ PerformancePanel }) => {
+        if (!this.disposed) this.performancePanel = new PerformancePanel();
+      });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.renderer.setSize(viewport.clientWidth, viewport.clientHeight, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -313,6 +325,7 @@ export class Game {
 
   private async loadOptionalModels(): Promise<void> {
     this.assetManifest = await readModelManifest();
+    if (this.disposed) return;
     const models = this.assetManifest;
     if (models.survivor?.url) {
       void this.player.installModel(models.survivor);
@@ -374,7 +387,10 @@ export class Game {
     this.lastFrameAt = frameNow;
     if (!this.fieldEntered) {
       this.clock.getDelta(); // Do not accumulate a large first gameplay frame.
-      this.renderScene();
+      if (this.needsPreviewFrame) {
+        this.renderScene();
+        this.needsPreviewFrame = false;
+      }
       return;
     }
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
@@ -458,7 +474,7 @@ export class Game {
       this.multiplayer.updateVisuals();
       this.coopVisuals.updatePlayers(this.multiplayer.peers, deltaSeconds);
       if (this.roomStatus && this.multiplayer.code)
-        this.roomStatus.textContent = `Room ${this.multiplayer.code} · ${this.multiplayer.peers.size + 1}/4 players`;
+        setText(this.roomStatus, `Room ${this.multiplayer.code} · ${this.multiplayer.peers.size + 1}/4 players`);
       if (this.multiplayer.self?.survival && this.multiplayer.self.survival !== this.lastServerVitals) {
         this.lastServerVitals = this.multiplayer.self.survival;
         this.vitals = { ...this.lastServerVitals };
@@ -536,7 +552,7 @@ export class Game {
     this.updateCraftingHud();
     void this.coopProgress.refresh();
     this.updateMissionHud();
-    if (this.roomStatus) this.roomStatus.textContent = `Connecting to ${code}…`;
+    if (this.roomStatus) setText(this.roomStatus, `Connecting to ${code}…`);
   };
   private readonly handleLeaveRoom = (): void => {
     this.multiplayer.disconnect();
@@ -556,7 +572,7 @@ export class Game {
     else this.companion.retreat();
     this.updateCraftingHud();
     this.clearRemotePlayers();
-    if (this.roomStatus) this.roomStatus.textContent = 'Solo · Cloud account';
+    if (this.roomStatus) setText(this.roomStatus, 'Solo · Cloud account');
     this.updateMissionHud();
     this.updateProgressHud();
   };
@@ -632,7 +648,7 @@ export class Game {
       this.infected.clear();
       this.soloTarget.hurtUntil = 0;
       this.defeatOverlay?.classList.remove('visible');
-      if (this.roomStatus) this.roomStatus.textContent = `Room ${event.code} · connected`;
+      if (this.roomStatus) setText(this.roomStatus, `Room ${event.code} · connected`);
       this.showToast(`ROOM JOINED  //  ${event.code}`, 'success');
       this.updateMissionHud();
       this.updateCraftingHud();
@@ -648,7 +664,7 @@ export class Game {
       this.showToast(`PARTY REWARD  //  +${event.xp} trusted XP`, 'success');
       void this.coopProgress.refresh().then(() => this.updateProgressHud());
     } else if (event.type === 'error') {
-      if (this.roomStatus) this.roomStatus.textContent = event.message;
+      if (this.roomStatus) setText(this.roomStatus, event.message);
       this.showToast(event.message, 'warning');
       if (!this.multiplayer.connected) {
         this.clearRemotePlayers();
@@ -703,15 +719,15 @@ export class Game {
   private updatePhotoMaterials(enabled: boolean): void {
     const request = ++this.photoRequest;
     const status = document.querySelector('#photo-materials-status');
-    if (status) status.textContent = enabled ? 'Loading photo surfaces…' : 'Offline surfaces';
+    if (status) setText(status, enabled ? 'Loading photo surfaces…' : 'Offline surfaces');
     void this.world
       .photographic(enabled, (loaded, total) => {
-        if (status) status.textContent = `Photo surfaces ${loaded}/${total}`;
+        if (status) setText(status, `Photo surfaces ${loaded}/${total}`);
       })
       .then(() => {
         if (request !== this.photoRequest) return;
         if (enabled && status && status.textContent !== 'Photo surfaces 4/4')
-          status.textContent = 'Photo surfaces partly unavailable · offline fallback active';
+          setText(status, 'Photo surfaces partly unavailable · offline fallback active');
       });
   }
   private readonly handleGraphicsQuality = (event: Event): void => {
@@ -724,8 +740,19 @@ export class Game {
     const selection = document.querySelector<HTMLSelectElement>('#graphics-quality');
     if (selection) selection.value = quality;
     this.cinematic = quality === 'cinematic';
-    if (this.cinematic && !this.effects)
-      this.effects = new SceneEffects(this.renderer, this.scene, this.feedback.camera);
+    const generation = ++this.effectsGeneration;
+    if (this.cinematic && !this.effects) {
+      void import('./SceneEffects')
+        .then(({ SceneEffects }) => {
+          if (this.disposed || generation !== this.effectsGeneration || !this.cinematic) return;
+          this.effects = new SceneEffects(this.renderer, this.scene, this.feedback.camera);
+          this.resize();
+        })
+        .catch(() => {
+          if (generation === this.effectsGeneration)
+            this.showToast('Cinematic effects unavailable. Standard rendering remains active.', 'warning');
+        });
+    }
     if (!this.cinematic && this.effects) {
       this.effects.dispose();
       this.effects = null;
@@ -766,7 +793,7 @@ export class Game {
   private showEvolution(name: string): void {
     this.evolutionTime = 5;
     const label = document.querySelector('#evolution-announcement');
-    if (label) label.textContent = `EVOLUTION / ${name.toUpperCase()}`;
+    if (label) setText(label, `EVOLUTION / ${name.toUpperCase()}`);
     this.companion.triggerPulse();
   }
   private readonly handleRosterClick = (event: Event): void => {
@@ -824,25 +851,34 @@ export class Game {
         const entry = c.creatures[id],
           journal = journalEntry(id, entry.xp);
         const title = document.createElement('strong');
-        title.textContent = entry.owned
-          ? `${journal.power.name} · ${journal.stage + 1}/3${id === c.active ? ' · ACTIVE' : ''}`
-          : `${CREATURES[id].name} · ${this.trackedCreature === id ? 'TRACKING' : 'TRACK'}`;
+        setText(
+          title,
+          entry.owned
+            ? `${journal.power.name} · ${journal.stage + 1}/3${id === c.active ? ' · ACTIVE' : ''}`
+            : `${CREATURES[id].name} · ${this.trackedCreature === id ? 'TRACKING' : 'TRACK'}`,
+        );
         const habitat = document.createElement('small');
-        habitat.textContent = CREATURES[id].habitat;
+        setText(habitat, CREATURES[id].habitat);
         const chain = document.createElement('small');
-        chain.textContent = journal.forms.map((f) => `${f.name} (${f.threshold} XP)`).join(' → ');
+        setText(chain, journal.forms.map((f) => `${f.name} (${f.threshold} XP)`).join(' → '));
         const stats = document.createElement('small');
-        stats.textContent = `Q PULSE · ${journal.power.damage} damage · ${journal.power.range}m · ${journal.power.cooldown}s cooldown`;
+        setText(
+          stats,
+          `Q PULSE · ${journal.power.damage} damage · ${journal.power.range}m · ${journal.power.cooldown}s cooldown`,
+        );
         const progress = document.createElement('progress');
         progress.max = 1;
         progress.value = entry.owned ? journal.fraction : 0;
         progress.setAttribute('aria-label', `${CREATURES[id].name} evolution progress`);
         const hint = document.createElement('small');
-        hint.textContent = entry.owned
-          ? journal.next === null
-            ? 'Final form reached'
-            : `${journal.remaining} XP to next form · ${entry.xp} total XP`
-          : 'Track, approach and press E to bond';
+        setText(
+          hint,
+          entry.owned
+            ? journal.next === null
+              ? 'Final form reached'
+              : `${journal.remaining} XP to next form · ${entry.xp} total XP`
+            : 'Track, approach and press E to bond',
+        );
         button.append(title, habitat, chain, stats, progress, hint);
         button.title = entry.owned
           ? 'Select companion'
@@ -854,20 +890,31 @@ export class Game {
       }
     }
     const name = document.querySelector('#creature-name');
-    if (name) name.textContent = this.activePower.name.toUpperCase();
+    if (name) setText(name, this.activePower.name.toUpperCase());
     const evolution = document.querySelector('#evolution-status');
     if (evolution)
-      evolution.textContent = entry.owned
-        ? this.activePower.stage === 2
-          ? 'FINAL EVOLUTION'
-          : `EVOLUTION ${this.activePower.stage + 1}/3 · ${entry.xp} / ${this.activePower.stage === 0 ? 120 : 400} XP`
-        : 'Explore, approach a creature and press E to bond.';
+      setText(
+        evolution,
+        entry.owned
+          ? this.activePower.stage === 2
+            ? 'FINAL EVOLUTION'
+            : `EVOLUTION ${this.activePower.stage + 1}/3 · ${entry.xp} / ${this.activePower.stage === 0 ? 120 : 400} XP`
+          : 'Explore, approach a creature and press E to bond.',
+      );
   }
   private updateWildCreatures(dt: number): void {
     const pos = this.player.getPosition();
-    for (const wild of this.wildCreatures.values()) if (wild.root.visible) wild.update(dt, pos, 0, this.world);
+    for (const [id, wild] of this.wildCreatures)
+      if (wild.root.visible) {
+        const elapsed = (this.wildVisualTime.get(id) || 0) + dt;
+        const distant = this.quality !== 'cinematic' && wild.root.position.distanceToSquared(pos) > 2500;
+        if (!distant || elapsed >= 0.1) {
+          wild.update(elapsed, pos, 0, this.world);
+          this.wildVisualTime.set(id, 0);
+        } else this.wildVisualTime.set(id, elapsed);
+      }
     const region = document.querySelector('#region-name');
-    if (region) region.textContent = this.world.region(pos);
+    if (region) setText(region, this.world.region(pos));
     const nearby = SPECIES_IDS.find(
       (id) =>
         !this.currentCollection.creatures[id].owned &&
@@ -884,22 +931,27 @@ export class Game {
             def.x > pos.x + 2 ? 'E' : def.x < pos.x - 2 ? 'W' : '',
           ].join('')
         : '';
-      tracker.textContent = def
-        ? `TRACKING ${def.name.toUpperCase()} · ${Math.round(distance)}m ${direction} · ${distance < 2.7 ? 'E TO BOND' : 'Follow the gold map ring'}`
-        : '';
+      setText(
+        tracker,
+        def
+          ? `TRACKING ${def.name.toUpperCase()} · ${Math.round(distance)}m ${direction} · ${distance < 2.7 ? 'E TO BOND' : 'Follow the gold map ring'}`
+          : '',
+      );
     }
     const phoneNavigation = document.querySelector('#touch-navigation');
-    if (phoneNavigation) phoneNavigation.textContent = tracker?.textContent || '';
+    if (phoneNavigation) setText(phoneNavigation, tracker?.textContent || '');
     const hint = document.querySelector('#exploration-hint');
     if (hint)
-      hint.textContent =
+      setText(
+        hint,
         this.player.getHealth() <= 0
           ? ''
           : nearby
             ? `E · BOND WITH ${CREATURES[nearby].name.toUpperCase()}`
             : this.firearms.nearSupply(pos)
               ? 'E · RESUPPLY AMMO + BANDAGES (45s RESTOCK)'
-              : '';
+              : '',
+      );
   }
   private readonly handleHealClick = (): void => {
     if (!this.fieldEntered || this.player.getHealth() <= 0) return;
@@ -956,7 +1008,7 @@ export class Game {
 
   private say(key: keyof Game['radioLines']): void {
     // Rook is an original radio operator, not a character or voice from another game.
-    if (this.radioLine) this.radioLine.textContent = this.radioLines[key];
+    if (this.radioLine) setText(this.radioLine, this.radioLines[key]);
     this.radioTimer = 4.8;
     this.radioPanel?.classList.add('visible');
   }
@@ -1142,28 +1194,35 @@ export class Game {
   private updateCompanionHud(): void {
     this.creaturePanel?.classList.toggle('bonded', this.companion.isBound());
     this.creaturePanel?.classList.toggle('retreated', this.recoveringBond);
-    if (this.bondStrainFill) this.bondStrainFill.style.width = `${this.bondStrain}%`;
+    if (this.bondStrainFill) setWidth(this.bondStrainFill, `${this.bondStrain}%`);
     if (this.bondStrainLabel)
-      this.bondStrainLabel.textContent = this.recoveringBond
-        ? 'SIGNAL LOST · RECOVER COMPANION'
-        : `${Math.round(this.bondStrain)}% STRAIN`;
+      setText(
+        this.bondStrainLabel,
+        this.recoveringBond ? 'SIGNAL LOST · RECOVER COMPANION' : `${Math.round(this.bondStrain)}% STRAIN`,
+      );
     if (this.bondHint) {
       const near = this.companion.canBond(this.player.getPosition());
       this.bondHint.classList.toggle('visible', near && this.player.getHealth() > 0);
-      this.bondHint.textContent = this.recoveringBond
-        ? `PRESS E TO RECOVER ${this.activePower.name.toUpperCase()}`
-        : `PRESS E TO BOND WITH ${this.activePower.name.toUpperCase()}`;
+      setText(
+        this.bondHint,
+        this.recoveringBond
+          ? `PRESS E TO RECOVER ${this.activePower.name.toUpperCase()}`
+          : `PRESS E TO BOND WITH ${this.activePower.name.toUpperCase()}`,
+      );
     }
     if (this.abilityButton) {
       this.abilityButton.disabled =
         !this.companion.isBound() || this.abilityCooldown > 0 || this.player.getHealth() <= 0;
-      this.abilityButton.textContent = !this.companion.isBound()
-        ? this.recoveringBond
-          ? 'BOND LOST · RECOVER COMPANION'
-          : 'LOCKED · BOND WITH A CREATURE'
-        : this.abilityCooldown > 0
-          ? `PULSE RECHARGING · ${Math.ceil(this.abilityCooldown)}s`
-          : `Q · ${this.activePower.name.toUpperCase()} PULSE`;
+      setText(
+        this.abilityButton,
+        !this.companion.isBound()
+          ? this.recoveringBond
+            ? 'BOND LOST · RECOVER COMPANION'
+            : 'LOCKED · BOND WITH A CREATURE'
+          : this.abilityCooldown > 0
+            ? `PULSE RECHARGING · ${Math.ceil(this.abilityCooldown)}s`
+            : `Q · ${this.activePower.name.toUpperCase()} PULSE`,
+      );
     }
   }
 
@@ -1234,7 +1293,7 @@ export class Game {
 
   private showToast(message: string, type: 'info' | 'success' | 'warning' | 'danger'): void {
     if (!this.combatToast) return;
-    this.combatToast.textContent = message;
+    setText(this.combatToast, message);
     this.combatToast.dataset.type = type;
     this.combatToast.classList.add('visible');
     this.toastTimer = 2.6;
@@ -1283,12 +1342,13 @@ export class Game {
 
     const position = this.player.getPosition();
     if (this.positionElement) {
-      this.positionElement.innerHTML = `X ${position.x.toFixed(1)} <span>·</span> Z ${position.z.toFixed(1)}`;
+      const label = `X ${position.x.toFixed(1)} <span>·</span> Z ${position.z.toFixed(1)}`;
+      if (this.positionElement.innerHTML !== label) this.positionElement.innerHTML = label;
     }
 
     const health = this.player.getHealth();
-    if (this.playerHealthFill) this.playerHealthFill.style.width = `${health}%`;
-    if (this.playerHealthText) this.playerHealthText.textContent = `${health} / 100`;
+    if (this.playerHealthFill) setWidth(this.playerHealthFill, `${health}%`);
+    if (this.playerHealthText) setText(this.playerHealthText, `${health} / 100`);
     this.playerHealthFill?.classList.toggle('low', health <= 35);
     document.body.classList.toggle('stamina-exhausted', this.vitals.exhausted);
     document.body.classList.toggle('is-bandaging', this.vitals.healEndsAt > Date.now());
@@ -1297,41 +1357,48 @@ export class Game {
     const enemyNearby = focus && Math.hypot(focus.x - position.x, focus.z - position.z) <= 35;
     this.enemyPanel?.classList.toggle('visible', !!enemyNearby);
     if (focus) {
-      if (this.enemyHealthFill) this.enemyHealthFill.style.width = `${(focus.hp / focus.max) * 100}%`;
-      if (this.enemyHealthText) this.enemyHealthText.textContent = `${focus.hp} / ${focus.max}`;
+      if (this.enemyHealthFill) setWidth(this.enemyHealthFill, `${(focus.hp / focus.max) * 100}%`);
+      if (this.enemyHealthText) setText(this.enemyHealthText, `${focus.hp} / ${focus.max}`);
       if (this.enemyStateText)
-        this.enemyStateText.textContent = `${infectedName(focus.strain).toUpperCase()}${focus.state === 'windup' ? ' · STRIKING' : ''}`;
+        setText(
+          this.enemyStateText,
+          `${infectedName(focus.strain).toUpperCase()}${focus.state === 'windup' ? ' · STRIKING' : ''}`,
+        );
     }
     const stamina = document.querySelector<HTMLElement>('#stamina-fill'),
       staminaLabel = document.querySelector('#stamina-text');
-    if (stamina) stamina.style.width = `${this.vitals.stamina}%`;
+    if (stamina) setWidth(stamina, `${this.vitals.stamina}%`);
     if (staminaLabel)
-      staminaLabel.textContent = this.vitals.exhausted ? 'EXHAUSTED' : `${Math.round(this.vitals.stamina)} / 100`;
+      setText(staminaLabel, this.vitals.exhausted ? 'EXHAUSTED' : `${Math.round(this.vitals.stamina)} / 100`);
     const heal = document.querySelector<HTMLButtonElement>('#heal-button'),
       progress = document.querySelector<HTMLElement>('#heal-fill');
     const remaining = Math.max(0, this.vitals.healEndsAt - Date.now());
     if (heal) {
-      heal.textContent = remaining
-        ? `BANDAGING · ${(remaining / 1000).toFixed(1)}s`
-        : `H · BANDAGE (${this.vitals.bandages})`;
+      setText(
+        heal,
+        remaining ? `BANDAGING · ${(remaining / 1000).toFixed(1)}s` : `H · BANDAGE (${this.vitals.bandages})`,
+      );
       heal.disabled = health <= 0 || health >= 100 || !this.vitals.bandages || remaining > 0;
     }
-    if (progress) progress.style.width = remaining ? `${100 * (1 - remaining / SURVIVAL.healDuration)}%` : '0%';
+    if (progress) setWidth(progress, remaining ? `${100 * (1 - remaining / SURVIVAL.healDuration)}%` : '0%');
     const status = document.querySelector('#horde-status');
     if (status)
-      status.textContent = this.infected.nextWaveAt
-        ? `AREA CLEAR · NEXT GROUP IN ${Math.max(0, Math.ceil((this.infected.nextWaveAt - Date.now()) / 1000))}s`
-        : `GROUP ${this.infected.wave || 1} · ${this.infected.alive.length} INFECTED ACTIVE`;
+      setText(
+        status,
+        this.infected.nextWaveAt
+          ? `AREA CLEAR · NEXT GROUP IN ${Math.max(0, Math.ceil((this.infected.nextWaveAt - Date.now()) / 1000))}s`
+          : `GROUP ${this.infected.wave || 1} · ${this.infected.alive.length} INFECTED ACTIVE`,
+      );
 
     const touchHeal = document.querySelector<HTMLButtonElement>('[data-touch="heal"]');
     if (touchHeal) {
       touchHeal.disabled = health <= 0 || health >= 100 || !this.vitals.bandages || remaining > 0;
-      touchHeal.textContent = remaining ? 'HEALING' : `HEAL ${this.vitals.bandages}`;
+      setText(touchHeal, remaining ? 'HEALING' : `HEAL ${this.vitals.bandages}`);
     }
     const touchReload = document.querySelector('[data-touch="reload"]');
-    if (touchReload) touchReload.textContent = health <= 0 ? 'RESTART' : this.player.reloading ? 'LOADING' : 'RELOAD';
+    if (touchReload) setText(touchReload, health <= 0 ? 'RESTART' : this.player.reloading ? 'LOADING' : 'RELOAD');
     const phoneEncounter = document.querySelector('#touch-encounter');
-    if (phoneEncounter) phoneEncounter.textContent = status?.textContent || '';
+    if (phoneEncounter) setText(phoneEncounter, status?.textContent || '');
     this.updateCompanionHud();
     const nearestDrop = this.multiplayer.connected ? undefined : this.drops.find((drop) => drop.canPickUp(position));
     if (this.missionHint) {
@@ -1339,18 +1406,21 @@ export class Game {
         (this.multiplayer.connected ? !!this.roomMission?.ready : this.expedition.ready) &&
         this.isNearExtraction(position) &&
         health > 0;
-      this.missionHint.textContent = extractionPossible ? 'PRESS E · EXTRACT · +150 XP' : '';
+      setText(this.missionHint, extractionPossible ? 'PRESS E · EXTRACT · +150 XP' : '');
       this.missionHint.classList.toggle('visible', extractionPossible);
     }
     if (this.lootHint) {
       const sample = this.multiplayer.connected
         ? this.roomMission?.pickups.find((p) => Math.hypot(position.x - p.x, position.z - p.z) < 2.7)
         : undefined;
-      this.lootHint.textContent = sample
-        ? 'PRESS E · COLLECT TEAM SAMPLE'
-        : nearestDrop
-          ? `PRESS E · COLLECT ${ITEM_DEFINITIONS[nearestDrop.id].name.toUpperCase()}`
-          : '';
+      setText(
+        this.lootHint,
+        sample
+          ? 'PRESS E · COLLECT TEAM SAMPLE'
+          : nearestDrop
+            ? `PRESS E · COLLECT ${ITEM_DEFINITIONS[nearestDrop.id].name.toUpperCase()}`
+            : '',
+      );
       this.lootHint.classList.toggle(
         'visible',
         Boolean(
@@ -1376,23 +1446,24 @@ export class Game {
     const playerXp = xpInLevel(playerXpTotal);
     const companionXp = xpInLevel(creatureXpTotal);
     if (this.playerLevelText)
-      this.playerLevelText.textContent = `LV ${levelFromXp(playerXpTotal)}${verified ? ' · CLOUD' : ' · SOLO'}`;
-    if (this.playerXpFill) this.playerXpFill.style.width = `${playerXp.ratio * 100}%`;
+      setText(this.playerLevelText, `LV ${levelFromXp(playerXpTotal)}${verified ? ' · CLOUD' : ' · SOLO'}`);
+    if (this.playerXpFill) setWidth(this.playerXpFill, `${playerXp.ratio * 100}%`);
     if (this.playerXpText)
-      this.playerXpText.textContent = playerXp.required ? `${playerXp.current} / ${playerXp.required} XP` : 'MAX LEVEL';
+      setText(this.playerXpText, playerXp.required ? `${playerXp.current} / ${playerXp.required} XP` : 'MAX LEVEL');
     if (this.creatureLevelText)
-      this.creatureLevelText.textContent = active.owned ? `LV ${levelFromXp(creatureXpTotal)}` : 'UNBONDED';
-    if (this.creatureXpFill) this.creatureXpFill.style.width = `${active.owned ? companionXp.ratio * 100 : 0}%`;
+      setText(this.creatureLevelText, active.owned ? `LV ${levelFromXp(creatureXpTotal)}` : 'UNBONDED');
+    if (this.creatureXpFill) setWidth(this.creatureXpFill, `${active.owned ? companionXp.ratio * 100 : 0}%`);
     if (this.creatureXpText)
-      this.creatureXpText.textContent = !active.owned
-        ? 'BOND TO EARN XP'
-        : companionXp.required
-          ? `${companionXp.current} / ${companionXp.required} XP`
-          : 'MAX LEVEL';
+      setText(
+        this.creatureXpText,
+        !active.owned
+          ? 'BOND TO EARN XP'
+          : companionXp.required
+            ? `${companionXp.current} / ${companionXp.required} XP`
+            : 'MAX LEVEL',
+      );
     if (this.killText)
-      this.killText.textContent = verified
-        ? `${verified.stats.kills} VERIFIED KILLS`
-        : `${state.totalKills} SOLO KILLS`;
+      setText(this.killText, verified ? `${verified.stats.kills} VERIFIED KILLS` : `${state.totalKills} SOLO KILLS`);
   }
 
   private isNearExtraction(position: THREE.Vector3): boolean {
@@ -1425,7 +1496,7 @@ export class Game {
 
   private sayMissionComplete(): void {
     if (this.radioLine)
-      this.radioLine.textContent = 'Rook: Samples secured, extraction confirmed. That is one more trip home.';
+      setText(this.radioLine, 'Rook: Samples secured, extraction confirmed. That is one more trip home.');
     this.radioTimer = 5;
     this.radioPanel?.classList.add('visible');
   }
@@ -1433,23 +1504,36 @@ export class Game {
   private updateMissionHud(): void {
     const coOp = this.multiplayer.connected;
     if (this.missionStatus)
-      this.missionStatus.textContent = coOp
-        ? this.roomMission?.ready
-          ? 'TEAM OBJECTIVES COMPLETE · EXTRACT'
-          : 'CO-OP EXPEDITION · ACTIVE'
-        : this.expedition.ready
-          ? 'OBJECTIVES COMPLETE · REACH BEACON'
-          : 'SOLO EXPEDITION · ACTIVE';
+      setText(
+        this.missionStatus,
+        coOp
+          ? this.roomMission?.ready
+            ? 'TEAM OBJECTIVES COMPLETE · EXTRACT'
+            : 'CO-OP EXPEDITION · ACTIVE'
+          : this.expedition.ready
+            ? 'OBJECTIVES COMPLETE · REACH BEACON'
+            : 'SOLO EXPEDITION · ACTIVE',
+      );
     if (this.missionKills)
-      this.missionKills.textContent = `${coOp ? (this.roomMission?.kills ?? 0) : this.expedition.kills}/${KILLS_REQUIRED} infected eliminated`;
+      setText(
+        this.missionKills,
+        `${coOp ? (this.roomMission?.kills ?? 0) : this.expedition.kills}/${KILLS_REQUIRED} infected eliminated`,
+      );
     if (this.missionSalvage)
-      this.missionSalvage.textContent = `${coOp ? (this.roomMission?.salvage ?? 0) : this.expedition.salvage}/${SALVAGE_REQUIRED} salvage collected`;
+      setText(
+        this.missionSalvage,
+        `${coOp ? (this.roomMission?.salvage ?? 0) : this.expedition.salvage}/${SALVAGE_REQUIRED} salvage collected`,
+      );
     if (this.missionTotal)
-      this.missionTotal.textContent = `${coOp ? (this.roomMission?.completed ?? 0) : this.expedition.completed} successful extractions`;
+      setText(
+        this.missionTotal,
+        `${coOp ? (this.roomMission?.completed ?? 0) : this.expedition.completed} successful extractions`,
+      );
     this.extractionBeacon.visible = !coOp || !!this.roomMission?.ready;
   }
 
   private renderScene(): void {
+    this.renderer.info.reset();
     // Only the presentation camera receives spring lag/recoil. Gameplay rays use this.camera.
     this.feedback.prepareCamera(this.camera, this.renderDelta);
     const anchor = this.player
@@ -1476,9 +1560,16 @@ export class Game {
     }
     if (this.cinematic && this.effects) this.effects.render();
     else this.renderer.render(this.scene, this.feedback.camera);
+    this.performancePanel?.record(
+      performance.now(),
+      this.renderer.info,
+      this.quality,
+      this.multiplayer.arrivalMetrics.summary(performance.now()),
+    );
   }
 
   private resize(): void {
+    this.needsPreviewFrame = true;
     const width = Math.max(1, this.viewport.clientWidth);
     const height = Math.max(1, this.viewport.clientHeight);
     this.camera.aspect = width / height;
@@ -1488,9 +1579,13 @@ export class Game {
   }
 
   dispose(): void {
-    if (!this.running) return;
+    if (this.disposed) return;
     this.running = false;
+    this.disposed = true;
+    this.effectsGeneration++;
+    this.performancePanel?.dispose();
     this.renderer.setAnimationLoop(null);
+    this.clock.stop();
     this.touch.dispose();
     this.input.dispose();
     this.abilityButton?.removeEventListener('click', this.handleAbilityClick);
@@ -1498,21 +1593,6 @@ export class Game {
     document.querySelector('#room-join')?.removeEventListener('click', this.handleJoinRoom);
     document.querySelector('#room-leave')?.removeEventListener('click', this.handleLeaveRoom);
     this.multiplayer.disconnect();
-    this.wasCoop = false;
-    this.feedback.reset();
-    this.player.reset();
-    this.firearms.reset();
-    this.vitals = newVitals();
-    this.lastServerVitals = null;
-    this.infected.resetSolo({ ...this.soloTarget, x: 0, z: 0, hp: 100, hurtUntil: 0 });
-    this.defeatOverlay?.classList.remove('visible');
-    this.coopCollection = null;
-    this.collectionSignature = '';
-    this.syncCollectionVisuals();
-    if (this.currentCollection.creatures[this.currentCollection.active].owned && !this.recoveringBond)
-      this.companion.bond();
-    else this.companion.retreat();
-    this.updateCraftingHud();
     this.clearRemotePlayers();
     this.inventoryUI.dispose();
     for (const drop of this.drops) drop.dispose(this.scene);
@@ -1521,17 +1601,24 @@ export class Game {
     this.resizeObserver?.disconnect();
     this.player.dispose();
     this.infected.dispose();
+    for (const wild of this.wildCreatures.values()) wild.dispose();
+    this.wildCreatures.clear();
+    const geometry = new Set<THREE.BufferGeometry>(),
+      materials = new Set<THREE.Material>();
     this.scene.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
-      object.geometry.dispose();
-      const materials = Array.isArray(object.material) ? object.material : [object.material];
-      for (const material of materials) material.dispose();
+      if (object instanceof THREE.InstancedMesh) object.dispose();
+      geometry.add(object.geometry);
+      for (const material of Array.isArray(object.material) ? object.material : [object.material])
+        materials.add(material);
     });
+    geometry.forEach((g) => g.dispose());
+    materials.forEach((m) => m.dispose());
+    this.sun.dispose();
     this.feedback.dispose();
     this.firearms.dispose();
     this.world.dispose();
     this.environmentTarget?.dispose();
-    for (const wild of this.wildCreatures.values()) wild.dispose();
     document.querySelector('#creature-roster')?.removeEventListener('click', this.handleRosterClick);
     document.querySelector('#graphics-quality')?.removeEventListener('change', this.handleGraphicsQuality);
     document.querySelector('#photo-materials')?.removeEventListener('change', this.handlePhotoMaterials);
