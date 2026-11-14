@@ -1,3 +1,4 @@
+import { TRAIL_SPURS } from './world-composition.mjs';
 import * as THREE from 'three';
 import { EXTRACTION_X, EXTRACTION_Z } from './Expedition';
 import { WORLD_BOUNDARY, BUILDINGS, SUPPLIES, CREATURES } from '../../../shared/expansion.mjs';
@@ -22,6 +23,15 @@ export class Minimap {
     ctx.fillStyle = '#555649';
     ctx.fillRect(...point(-4.5, -90), 9 * scale, 180 * scale);
     ctx.fillRect(...point(-55, -2.7), 120 * scale, 5.4 * scale);
+    ctx.strokeStyle = '#77765d';
+    ctx.lineWidth = 2;
+    for (const s of TRAIL_SPURS) {
+      ctx.beginPath();
+      ctx.moveTo(...point(s.x1, s.z1));
+      ctx.lineTo(...point(s.x2, s.z2));
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1;
     ctx.fillStyle = '#355251';
     ctx.beginPath();
     ctx.ellipse(...point(-48, -31), 12 * scale, 12 * scale, 0, 0, Math.PI * 2);

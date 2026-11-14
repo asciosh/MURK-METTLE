@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+  <head>
+    <link rel="icon" href="data:," />
+  </head>
+  <body style="margin: 0">
+    <script type="module">
+      import * as THREE from '/node_modules/three/build/three.module.js';
+      import { World } from '/src/client/game/World.ts';
+      import { createAtmosphere } from '/src/client/game/Atmosphere.ts';
+      import { renderProfile } from '/shared/render-profile.mjs';
+      const scene = new THREE.Scene(),
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(1);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+      document.body.append(renderer.domElement);
+      const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 350);
+      scene.background = new THREE.Color(0xaab7af);
+      scene.fog = new THREE.FogExp2(0xaab7af, 0.0055);
+      scene.add(createAtmosphere());
+      scene.add(new THREE.HemisphereLight(0xc0d4df, 0x5e5e46, 1.85));
+      const sun = new THREE.DirectionalLight(0xffdbad, 3.0);
+      sun.position.set(-25, 35, 18);
+      scene.add(sun);
+      const world = new World(scene);
+      const views = {
+        camp: [
+          [0, 2.7, 10],
+          [0, 2, -23.5],
+        ],
+        haven: [
+          [0, 3, -28],
+          [0, 4, -65],
+        ],
+        wetland: [
+          [-49.5, 2.8, -10],
+          [-48, 0.7, -31],
+        ],
+        relay: [
+          [50, 3, 11],
+          [49, 8, 27],
+        ],
+        pines: [
+          [48, 3, 59],
+          [48, 5, 38],
+        ],
+        lanternkin: [
+          [4.2, 2.6, 2.2],
+          [4.2, 0.5, -3.8],
+        ],
+        emberling: [
+          [8, 2.6, -48],
+          [8, 0.4, -54],
+        ],
+        mossback: [
+          [48, 2.6, 44],
+          [48, 0.4, 38],
+        ],
+        stormrook: [
+          [54, 2.6, -40],
+          [54, 1, -46],
+        ],
+        reedwisp: [
+          [-48, 2.6, -22],
+          [-48, 0.4, -28],
+        ],
+      };
+      function capture(name, quality = 'balanced') {
+        world.setQuality(renderProfile(quality));
+        camera.position.set(...views[name][0]);
+        camera.lookAt(...views[name][1]);
+        world.update(0.016, camera.position);
+        renderer.render(scene, camera);
+        return {
+          ...renderer.info.render,
+          geometries: renderer.info.memory.geometries,
+          textures: renderer.info.memory.textures,
+        };
+      }
+      window.worldView = { scene, world, camera, renderer, THREE, capture };
+      capture('camp');
+      window.ready = true;
+    </script>
+  </body>
+</html>
