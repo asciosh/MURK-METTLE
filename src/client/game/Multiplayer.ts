@@ -1,8 +1,10 @@
 import type { Arsenal, SpeciesId } from '../../../shared/expansion.mjs';
 import type { CollectionState } from './Collection';
 import type { ActorPose } from '../../../shared/actor-pose.mjs';
+import type { Vitals, HordePacket } from '../../../shared/survival.mjs';
 export interface RemotePlayer extends Partial<ActorPose> {
   reloadProgress?: number;
+  survival?: Vitals;
   id: string;
   x: number;
   z: number;
@@ -44,8 +46,11 @@ export type RoomEvent =
   | MissionState
   | { type: 'mission-extracted'; by: string; completed: number }
   | { type: 'mission-reward'; xp: number; completed: number; totals: { xp: number; kills: number; creatureXp: number } }
-  | { type: 'welcome'; id: string; code: string }
-  | { type: 'snapshot'; players: RemotePlayer[]; zombie: RemoteZombie }
+  | { type: 'welcome'; id: string; code: string; survival?: Vitals }
+  | { type: 'survival'; survival: Vitals }
+  | { type: 'correction'; x: number; z: number }
+  | { type: 'respawn'; hp: number; x: number; z: number; survival: Vitals }
+  | { type: 'snapshot'; players: RemotePlayer[]; horde: HordePacket; zombie?: RemoteZombie | null }
   | { type: 'damage'; hp: number }
   | { type: 'kill'; by: string; pulse: boolean; x: number; z: number }
   | {
@@ -58,7 +63,7 @@ export type RoomEvent =
     }
   | { type: 'creature-state'; owned: boolean; xp: number }
   | { type: 'error'; message: string };
-type Frame = { at: number; players: RemotePlayer[]; zombie: RemoteZombie };
+type Frame = { at: number; players: RemotePlayer[]; horde: HordePacket };
 const INTERPOLATION_DELAY_MS = 120;
 const blend = (a: number, b: number, t: number): number => a + (b - a) * t;
 function yawBlend(a: number, b: number, t: number): number {
@@ -72,7 +77,8 @@ export class Multiplayer {
   code = '';
   connected = false;
   readonly peers = new Map<string, RemotePlayer>();
-  zombie: RemoteZombie | null = null;
+  horde: HordePacket | null = null;
+  self: RemotePlayer | null = null;
   onEvent: (event: RoomEvent) => void = () => {};
   connect(code: string): void {
     this.disconnect();
@@ -90,7 +96,8 @@ export class Multiplayer {
           this.send('sync-equipment');
         }
         if (data.type === 'snapshot') {
-          this.frames.push({ at: performance.now(), players: data.players, zombie: data.zombie });
+          this.frames.push({ at: performance.now(), players: data.players, horde: data.horde });
+          this.self = data.players.find((p) => p.id === this.id) || null;
           if (this.frames.length > 5) this.frames.shift();
         }
         this.onEvent(data);
@@ -145,10 +152,15 @@ export class Multiplayer {
         pitch: blend(previous.pitch ?? 0, next.pitch ?? 0, alpha),
       });
     }
-    if (a.zombie.generation !== b.zombie.generation) this.zombie = b.zombie;
-    else
-      this.zombie = { ...b.zombie, x: blend(a.zombie.x, b.zombie.x, alpha), z: blend(a.zombie.z, b.zombie.z, alpha) };
+    this.horde = {
+      ...b.horde,
+      enemies: b.horde.enemies.map((next) => {
+        const previous = a.horde.enemies.find((e) => e.id === next.id);
+        return previous ? { ...next, x: blend(previous.x, next.x, alpha), z: blend(previous.z, next.z, alpha) } : next;
+      }),
+    };
   }
+
   send(type: string, body: Record<string, unknown> = {}): void {
     if (this.connected && this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type, ...body }));
   }
@@ -157,7 +169,8 @@ export class Multiplayer {
     this.id = '';
     this.code = '';
     this.peers.clear();
-    this.zombie = null;
+    this.horde = null;
+    this.self = null;
     this.frames = [];
   }
   disconnect(): void {

@@ -21,22 +21,61 @@ interface StrainProfile {
 }
 
 const STRAINS: Record<InfectedStrain, StrainProfile> = {
-  runner: { name: 'Feral Runner', skin: 0x64745a, dark: 0x29372c, eyes: 0xff8b58, spores: 0x9fb96d, scale: [0.88, 1.02, 0.88], health: 80, speed: 3.05, damage: 10 },
-  barkhide: { name: 'Barkhide', skin: 0x756746, dark: 0x382b1e, eyes: 0xf2d96b, spores: 0x8f7542, scale: [1.25, 1.13, 1.20], health: 145, speed: 1.58, damage: 17 },
-  sporeling: { name: 'Sporeling', skin: 0x79956b, dark: 0x405a3e, eyes: 0xa6f3ce, spores: 0xadd879, scale: [0.79, 0.83, 0.83], health: 65, speed: 2.75, damage: 8 },
-  ashwalker: { name: 'Ashwalker', skin: 0x797d85, dark: 0x30333a, eyes: 0xfc6e62, spores: 0xaa746f, scale: [0.99, 1.20, 0.96], health: 110, speed: 2.08, damage: 13 },
+  runner: {
+    name: 'Feral Runner',
+    skin: 0x64745a,
+    dark: 0x29372c,
+    eyes: 0xff8b58,
+    spores: 0x9fb96d,
+    scale: [0.88, 1.02, 0.88],
+    health: 80,
+    speed: 3.05,
+    damage: 10,
+  },
+  barkhide: {
+    name: 'Barkhide',
+    skin: 0x756746,
+    dark: 0x382b1e,
+    eyes: 0xf2d96b,
+    spores: 0x8f7542,
+    scale: [1.25, 1.13, 1.2],
+    health: 145,
+    speed: 1.58,
+    damage: 17,
+  },
+  sporeling: {
+    name: 'Sporeling',
+    skin: 0x79956b,
+    dark: 0x405a3e,
+    eyes: 0xa6f3ce,
+    spores: 0xadd879,
+    scale: [0.79, 0.83, 0.83],
+    health: 65,
+    speed: 2.75,
+    damage: 8,
+  },
+  ashwalker: {
+    name: 'Ashwalker',
+    skin: 0x797d85,
+    dark: 0x30333a,
+    eyes: 0xfc6e62,
+    spores: 0xaa746f,
+    scale: [0.99, 1.2, 0.96],
+    health: 110,
+    speed: 2.08,
+    damage: 13,
+  },
 };
 const STRAIN_IDS = Object.keys(STRAINS) as InfectedStrain[];
 let previousStrain: InfectedStrain | null = null;
 
 function randomStrain(): InfectedStrain {
   // Avoid two identical consecutive encounters to make variation obvious in solo tests.
-  const candidates = STRAIN_IDS.filter(id => id !== previousStrain);
+  const candidates = STRAIN_IDS.filter((id) => id !== previousStrain);
   const selected = candidates[Math.floor(Math.random() * candidates.length)];
   previousStrain = selected;
   return selected;
 }
-
 
 /** Original procedural infected enemy for the first combat encounter. */
 export class Zombie {
@@ -67,8 +106,14 @@ export class Zombie {
   private attackCooldown = 0.6;
   private animationClock = 0;
   private hitFlashTime = 0;
+  private readonly warningRing: THREE.Mesh;
 
-  constructor(private readonly scene: THREE.Scene, position: THREE.Vector3, forcedStrain?: InfectedStrain, mutationSeed?: number) {
+  constructor(
+    private readonly scene: THREE.Scene,
+    position: THREE.Vector3,
+    forcedStrain?: InfectedStrain,
+    mutationSeed?: number,
+  ) {
     this.strain = forcedStrain && STRAINS[forcedStrain] ? forcedStrain : randomStrain();
     const profile = STRAINS[this.strain];
     this.displayName = profile.name;
@@ -86,6 +131,20 @@ export class Zombie {
     this.createModel();
     this.addMutationDetails(mutationSeed);
     decorateInfected(this.modelVisual, profile.spores);
+    this.warningRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.68, 0.76, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0xd68b64,
+        transparent: true,
+        opacity: 0.5,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    this.warningRing.rotation.x = -Math.PI / 2;
+    this.warningRing.position.y = 0.035;
+    this.warningRing.visible = false;
+    this.root.add(this.warningRing);
     this.scene.add(this.root);
   }
 
@@ -138,7 +197,8 @@ export class Zombie {
     this.modelVisual.add(this.leftArm, this.rightArm);
 
     const legGeometry = new THREE.CapsuleGeometry(0.145, 0.46, 4, 8);
-    this.leftLeg = new THREE.Group(); this.rightLeg = new THREE.Group();
+    this.leftLeg = new THREE.Group();
+    this.rightLeg = new THREE.Group();
     for (const [i, pivot] of [this.leftLeg, this.rightLeg].entries()) {
       pivot.position.set(i === 0 ? -0.19 : 0.19, 0.76, 0.025);
       const leg = new THREE.Mesh(legGeometry, this.darkMaterial);
@@ -150,7 +210,11 @@ export class Zombie {
 
     const spore = new THREE.Mesh(
       new THREE.SphereGeometry(0.16, 10, 8),
-      new THREE.MeshStandardMaterial({ color: STRAINS[this.strain].spores, emissive: 0x3c5520, emissiveIntensity: 0.7 }),
+      new THREE.MeshStandardMaterial({
+        color: STRAINS[this.strain].spores,
+        emissive: 0x3c5520,
+        emissiveIntensity: 0.7,
+      }),
     );
     spore.position.set(-0.26, 1.52, 0.25);
     spore.scale.set(1, 0.75, 1);
@@ -164,18 +228,22 @@ export class Zombie {
     if (variant === 0) {
       // Fungal crown: an asymmetrical silhouette, without copied creature artwork.
       for (let i = 0; i < 3; i++) {
-        const stalk = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.52 + i * 0.09, 6),
-          new THREE.MeshStandardMaterial({ color, roughness: 0.92 }));
-        stalk.position.set(-0.19 + i * 0.17, 2.20 + i * 0.07, 0.02);
+        const stalk = new THREE.Mesh(
+          new THREE.ConeGeometry(0.14, 0.52 + i * 0.09, 6),
+          new THREE.MeshStandardMaterial({ color, roughness: 0.92 }),
+        );
+        stalk.position.set(-0.19 + i * 0.17, 2.2 + i * 0.07, 0.02);
         stalk.rotation.z = (i - 1) * 0.35;
         this.root.add(stalk);
       }
     } else {
       // Spore armor: crystal-like fungal colonies over the shoulders.
       for (let i = 0; i < 4; i++) {
-        const colony = new THREE.Mesh(new THREE.OctahedronGeometry(0.19 + i * 0.035, 0),
-          new THREE.MeshStandardMaterial({ color, roughness: 0.5, emissive: color, emissiveIntensity: 0.16 }));
-        colony.position.set(i % 2 ? 0.35 : -0.35, 1.05 + i * 0.21, i % 2 ? 0.04 : 0.20);
+        const colony = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.19 + i * 0.035, 0),
+          new THREE.MeshStandardMaterial({ color, roughness: 0.5, emissive: color, emissiveIntensity: 0.16 }),
+        );
+        colony.position.set(i % 2 ? 0.35 : -0.35, 1.05 + i * 0.21, i % 2 ? 0.04 : 0.2);
         this.root.add(colony);
       }
     }
@@ -236,7 +304,8 @@ export class Zombie {
     } else {
       this.state = 'idle';
       this.animator.setState('idle');
-      this.leftLeg.rotation.x = 0; this.rightLeg.rotation.x = 0;
+      this.leftLeg.rotation.x = 0;
+      this.rightLeg.rotation.x = 0;
       this.leftArm.rotation.x = -0.3;
       this.rightArm.rotation.x = -0.3;
       this.root.position.y = Math.sin(this.animationClock * 1.6) * 0.018;
@@ -247,20 +316,28 @@ export class Zombie {
     return false;
   }
 
-  updateNetworkVisual(dt:number,direction:THREE.Vector3):void {
-    this.animationClock+=dt;this.animator.update(dt);this.modelVisual.visible=!this.animator.installed;
-    const moving=direction.lengthSq()>.00001;
-    this.animator.setState(this.isDead()?'death':moving?'run':'idle');
-    if(moving)this.faceDirection(direction);
-    const gait=moving?Math.sin(this.animationClock*8.5)*.5:0;
-    this.leftLeg.rotation.x=gait;this.rightLeg.rotation.x=-gait;this.leftArm.rotation.x=-.5+gait*.4;this.rightArm.rotation.x=-.5-gait*.4;
+  updateNetworkVisual(dt: number, direction: THREE.Vector3, encounterState = 'idle'): void {
+    this.hitFlashTime = Math.max(0, this.hitFlashTime - dt);
+    this.bodyMaterial.emissive.setHex(this.hitFlashTime > 0 ? 0x492018 : 0x000000);
+    this.bodyMaterial.emissiveIntensity = this.hitFlashTime > 0 ? 0.8 : 0;
+    this.animationClock += dt;
+    this.animator.update(dt);
+    this.modelVisual.visible = !this.animator.installed;
+    const moving = direction.lengthSq() > 0.00001;
+    this.animator.setState(this.isDead() ? 'death' : encounterState === 'windup' ? 'attack' : moving ? 'run' : 'idle');
+    this.warningRing.visible = encounterState === 'windup';
+    (this.warningRing.material as THREE.MeshBasicMaterial).opacity = 0.35 + Math.sin(this.animationClock * 16) * 0.15;
+    if (moving) this.faceDirection(direction);
+    const gait = moving ? Math.sin(this.animationClock * 8.5) * 0.5 : 0;
+    this.leftLeg.rotation.x = gait;
+    this.rightLeg.rotation.x = -gait;
+    this.leftArm.rotation.x = encounterState === 'windup' ? -1.25 : -0.5 + gait * 0.4;
+    this.rightArm.rotation.x = encounterState === 'windup' ? -1.25 : -0.5 - gait * 0.4;
   }
   private faceDirection(direction: THREE.Vector3): void {
     const targetYaw = Math.atan2(-direction.x, -direction.z);
-    const difference = THREE.MathUtils.euclideanModulo(
-      targetYaw - this.root.rotation.y + Math.PI,
-      Math.PI * 2,
-    ) - Math.PI;
+    const difference =
+      THREE.MathUtils.euclideanModulo(targetYaw - this.root.rotation.y + Math.PI, Math.PI * 2) - Math.PI;
     this.root.rotation.y += difference * 0.18;
   }
 
@@ -278,7 +355,9 @@ export class Zombie {
     return false;
   }
 
-  getMaxHealth(): number { return this.maxHealth; }
+  getMaxHealth(): number {
+    return this.maxHealth;
+  }
 
   getHealth(): number {
     return this.health;

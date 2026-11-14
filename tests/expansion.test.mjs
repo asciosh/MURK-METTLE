@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { newVitals, spawnHorde } from '../shared/survival.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
@@ -126,6 +127,7 @@ test('real room validates firearm direction, ammo, cooldown, range, cover and bo
     .replace("import { DurableObject } from 'cloudflare:workers';", shim)
     .replaceAll("'../../shared/expansion.mjs'", JSON.stringify(expansionURL))
     .replaceAll("'../../shared/coop-rules.mjs'", JSON.stringify(coopURL))
+    .replaceAll("'../../shared/survival.mjs'", JSON.stringify(new URL('../shared/survival.mjs', import.meta.url).href))
     .replaceAll(
       "'../../shared/actor-pose.mjs'",
       JSON.stringify(new URL('../shared/actor-pose.mjs', import.meta.url).href),
@@ -148,6 +150,9 @@ test('real room validates firearm direction, ammo, cooldown, range, cover and bo
     z: 0,
     yaw: 0,
     hp: 100,
+    survival: newVitals(),
+    movingUntil: 0,
+    hurtUntil: 0,
     attackAt: 0,
     pulseAt: 0,
     arsenal: newArsenal(),
@@ -156,25 +161,28 @@ test('real room validates firearm direction, ammo, cooldown, range, cover and bo
     creatureOwned: true,
   };
   room.players.set(socket, p);
-  room.zombie = { x: 0, z: -10, hp: 100, max: 100, generation: 0, encounterId: 'test-shooting-01' };
+  const enemy = spawnHorde([p], 1, 'test')[0];
+  Object.assign(enemy, { x: 0, z: -10, hp: 100, max: 100, id: 'test-shooting-01', encounterId: 'test-shooting-01' });
+  room.horde.enemies = [enemy];
+  room.horde.wave = 1;
   const msg = (body) => room.webSocketMessage(socket, JSON.stringify(body));
   await msg({ type: 'shoot', weapon: 'pistol', direction: { x: 0, y: 0, z: -4 } });
   assert.equal(p.arsenal.pistol.magazine, 12);
-  assert.equal(room.zombie.hp, 100);
+  assert.equal(room.horde.enemies[0].hp, 100);
   await msg({ type: 'shoot', weapon: 'pistol', direction: { x: 0, y: 0, z: -1 } });
-  assert.equal(room.zombie.hp, 66);
+  assert.equal(room.horde.enemies[0].hp, 66);
   assert.equal(p.arsenal.pistol.magazine, 11);
   await msg({ type: 'shoot', weapon: 'pistol', direction: { x: 0, y: 0, z: -1 } });
-  assert.equal(room.zombie.hp, 66);
+  assert.equal(room.horde.enemies[0].hp, 66);
   p.arsenal.pistol.readyAt = 0;
   await msg({ type: 'shoot', weapon: 'pistol', direction: { x: 1, y: 0, z: 0 } });
-  assert.equal(room.zombie.hp, 66);
+  assert.equal(room.horde.enemies[0].hp, 66);
   assert.equal(p.arsenal.pistol.magazine, 10);
   await msg({ type: 'reload', weapon: 'pistol' });
   assert.ok(p.arsenal.pistol.reloadAt > 0);
   p.arsenal.pistol.readyAt = 0;
   await msg({ type: 'shoot', weapon: 'pistol', direction: { x: 0, y: 0, z: -1 } });
-  assert.equal(room.zombie.hp, 66);
+  assert.equal(room.horde.enemies[0].hp, 66);
   await msg({ type: 'bond', species: 'reedwisp' });
   assert.equal(p.collection.creatures.reedwisp.owned, false);
   await msg({ type: 'resupply', id: 'town' });
@@ -184,10 +192,10 @@ test('real room validates firearm direction, ammo, cooldown, range, cover and bo
   const b = BUILDINGS[0];
   p.x = b.x;
   p.z = b.z + 12;
-  room.zombie.x = b.x;
-  room.zombie.z = b.z - 12;
+  room.horde.enemies[0].x = b.x;
+  room.horde.enemies[0].z = b.z - 12;
   await msg({ type: 'shoot', weapon: 'pistol', direction: { x: 0, y: 0, z: -1 } });
-  assert.equal(room.zombie.hp, 66);
+  assert.equal(room.horde.enemies[0].hp, 66);
   assert.ok(packets.some((e) => e.type === 'shot' && e.hit === false));
   p.messageAt = 0;
   p.lastMove = Date.now();

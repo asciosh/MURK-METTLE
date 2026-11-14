@@ -1,6 +1,20 @@
 // Cloudflare Durable Object — shared four-player session state.
 // This is an authoritative combat prototype, not yet an account/inventory server.
 import { DurableObject } from 'cloudflare:workers';
+import {
+  HordeSimulation,
+  admitMovement,
+  newVitals,
+  beginHealing,
+  cancelHealing,
+  stepVitals,
+  refillVitals,
+  alertHorde,
+  damageEnemy,
+  bulletTarget,
+  meleeTarget,
+  pulseTargets,
+} from '../../shared/survival.mjs';
 import { sanitizeActorPose } from '../../shared/actor-pose.mjs';
 import {
   WORLD_BOUNDARY,
@@ -13,13 +27,11 @@ import {
   fireWeapon,
   reloadWeapon,
   settleReload,
-  shotDistance,
   obstacleDistance,
   creaturePower,
 } from '../../shared/expansion.mjs';
 
 import {
-  INFECTION_TYPES,
   MISSION_KILLS,
   MISSION_SALVAGE,
   PICKUPS,
@@ -31,29 +43,11 @@ import {
   validUsername,
 } from '../../shared/coop-rules.mjs';
 
-const selectZombie = (last = null, generation = 0) => {
-  const options = INFECTION_TYPES.filter((type) => type.id !== last);
-  const type = options[Math.floor(Math.random() * options.length)];
-  return {
-    x: 0.7,
-    z: -9.5,
-    hp: type.hp,
-    max: type.hp,
-    strain: type.id,
-    speed: type.speed,
-    damage: type.damage,
-    generation,
-    encounterId: crypto.randomUUID(),
-    lastHit: 0,
-    deadAt: 0,
-  };
-};
-
 export class GameRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.players = new Map();
-    this.zombie = selectZombie();
+    this.horde = new HordeSimulation();
     this.lastTick = Date.now();
     this.timer = null;
     this.mission = { kills: 0, salvage: [], completed: 0, sequence: 0, phase: 'active' };
@@ -83,6 +77,11 @@ export class GameRoom extends DurableObject {
           arsenal: data.arsenal || newArsenal(),
           supplies: data.supplies || {},
           pose: sanitizeActorPose(data.pose),
+          survival: data.survival || newVitals(),
+          movingUntil: 0,
+          hurtUntil: 0,
+          moveBudget: 0.75,
+          budgetAt: Date.now(),
           collection: data.collection || null,
           upgrades: { sharpened: false, balanced: false },
           creatureOwned: data.creatureOwned === true,
@@ -120,10 +119,15 @@ export class GameRoom extends DurableObject {
       arsenal: newArsenal(),
       supplies: {},
       pose: sanitizeActorPose(),
+      survival: newVitals(),
+      movingUntil: 0,
+      hurtUntil: 0,
+      moveBudget: 0.75,
+      budgetAt: Date.now(),
     };
     this.players.set(server, player);
     this.saveAttachment(server, player);
-    this.send(server, { type: 'welcome', id: player.id, code });
+    this.send(server, { type: 'welcome', id: player.id, code, survival: player.survival });
     this.send(server, this.missionPacket());
     // Load server-owned creature state before accepting combat abilities.
     try {
@@ -171,6 +175,7 @@ export class GameRoom extends DurableObject {
       arsenal: player.arsenal,
       supplies: player.supplies,
       pose: player.pose,
+      survival: player.survival,
     });
   }
 
@@ -274,16 +279,43 @@ export class GameRoom extends DurableObject {
       // Guard against high packet rates and large impossible teleports.
       if (now - player.messageAt < 45) return;
       player.messageAt = now;
-      const dt = Math.min(0.5, (now - player.lastMove) / 1000);
-      if (Math.hypot(msg.x - player.x, msg.z - player.z) > 9 * dt + 1.5) return;
+      const pose = sanitizeActorPose(msg),
+        distance = Math.hypot(msg.x - player.x, msg.z - player.z);
+      if (!admitMovement(player, distance, pose.sprinting, now)) {
+        this.send(socket, { type: 'correction', x: player.x, z: player.z });
+        return;
+      }
+      if (distance > 0.025) {
+        player.movingUntil = now + 220;
+        cancelHealing(player.survival);
+      }
       if (player.hp <= 0) return;
       const constrained = constrainPosition({ x: msg.x, z: msg.z });
-      if (Math.hypot(constrained.x - msg.x, constrained.z - msg.z) > 0.05) return;
+      if (Math.hypot(constrained.x - msg.x, constrained.z - msg.z) > 0.05) {
+        this.send(socket, { type: 'correction', x: player.x, z: player.z });
+        return;
+      }
       player.x = msg.x;
       player.z = msg.z;
       player.yaw = msg.yaw;
       player.lastMove = now;
       player.pose = sanitizeActorPose(msg);
+      this.saveAttachment(socket, player);
+      return;
+    }
+    if (msg.type === 'heal') {
+      if (player.movingUntil > now) {
+        this.send(socket, { type: 'error', message: 'Stand still briefly before bandaging.' });
+        return;
+      }
+      if (!beginHealing(player.survival, player.hp, now)) {
+        this.send(socket, {
+          type: 'error',
+          message: 'Bandages require missing health, supplies and a living survivor.',
+        });
+        return;
+      }
+      this.send(socket, { type: 'survival', survival: player.survival });
       this.saveAttachment(socket, player);
       return;
     }
@@ -298,6 +330,8 @@ export class GameRoom extends DurableObject {
           return;
         }
         player.supplies[cache.id] = now;
+        refillVitals(player.survival);
+        this.send(socket, { type: 'survival', survival: player.survival });
         for (const id of Object.keys(WEAPONS)) player.arsenal[id].reserve = WEAPONS[id].reserve;
       }
       this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
@@ -382,29 +416,36 @@ export class GameRoom extends DurableObject {
     }
     if (msg.type === 'restart') {
       if (player.hp <= 0) {
+        const wiped = [...this.players.values()].every((p) => p.hp <= 0);
         player.hp = 100;
         player.x = 0;
         player.z = 0;
+        player.yaw = 0;
         player.lastMove = now;
+        player.survival = newVitals();
+        player.hurtUntil = 0;
+        player.movingUntil = 0;
+        player.moveBudget = 0.75;
+        player.budgetAt = now;
         player.arsenal = newArsenal();
-        this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
+        if (wiped) this.horde.reset([player]);
         this.saveAttachment(socket, player);
-        this.send(socket, { type: 'damage', hp: 100 });
+        this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
+        this.send(socket, { type: 'respawn', hp: 100, x: 0, z: 0, survival: player.survival });
       }
       return;
     }
-    if (msg.type !== 'attack' && msg.type !== 'pulse' && msg.type !== 'shoot') return;
-    const zombie = this.zombie;
-    if (player.hp <= 0 || (zombie.hp <= 0 && msg.type !== 'shoot')) return;
-    const pulse = msg.type === 'pulse';
-    const shooting = msg.type === 'shoot';
-    const species = player.collection?.active || 'lanternkin';
-    const power = creaturePower(species, player.collection?.creatures[species]?.xp || 0);
+    if (!['attack', 'pulse', 'shoot'].includes(msg.type) || player.hp <= 0) return;
+    const pulse = msg.type === 'pulse',
+      shooting = msg.type === 'shoot';
+    const species = player.collection?.active || 'lanternkin',
+      power = creaturePower(species, player.collection?.creatures[species]?.xp || 0);
     if (pulse && !player.creatureOwned) {
-      this.send(socket, { type: 'error', message: 'Bond with Lanternkin before using Pulse.' });
+      this.send(socket, { type: 'error', message: 'Bond with a creature before using Pulse.' });
       return;
     }
-    let damage;
+    let targets = [],
+      damage = 0;
     if (shooting) {
       const d = msg.direction;
       if (
@@ -420,8 +461,10 @@ export class GameRoom extends DurableObject {
         this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
         return;
       }
+      cancelHealing(player.survival);
       player.pose = { ...sanitizeActorPose(player.pose), weapon: msg.weapon };
-      const hit = zombie.hp > 0 ? shotDistance(origin, d, zombie, weapon.range) : null;
+      const hit = bulletTarget(this.horde.enemies, origin, d, weapon.range);
+      alertHorde(this.horde.enemies, player, now);
       this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
       this.saveAttachment(socket, player);
       this.broadcast({
@@ -430,70 +473,70 @@ export class GameRoom extends DurableObject {
         by: player.id,
         origin,
         direction: d,
-        distance: hit ?? obstacleDistance(origin, d, weapon.range),
-        hit: hit !== null,
+        distance: hit?.distance ?? obstacleDistance(origin, d, weapon.range),
+        hit: !!hit,
       });
-      if (hit === null) return;
+      if (hit) targets = [hit.enemy];
       damage = weapon.damage;
     } else {
       const cooldown = pulse ? power.cooldown * 1000 : 480;
       if (now - (pulse ? player.pulseAt : player.attackAt) < cooldown) return;
       if (pulse) player.pulseAt = now;
       else player.attackAt = now;
-      const distance = Math.hypot(zombie.x - player.x, zombie.z - player.z);
-      if (distance > (pulse ? power.range : player.upgrades?.balanced ? 3.35 : 2.65)) return;
-      if (!pulse) {
-        const vx = (zombie.x - player.x) / Math.max(distance, 0.001),
-          vz = (zombie.z - player.z) / Math.max(distance, 0.001);
-        if (-Math.sin(player.yaw) * vx - Math.cos(player.yaw) * vz < -0.15) return;
+      cancelHealing(player.survival);
+      if (pulse) {
+        targets = pulseTargets(this.horde.enemies, player, power.range);
+        damage = power.damage;
+        alertHorde(this.horde.enemies, player, now, 18);
+      } else {
+        const target = meleeTarget(this.horde.enemies, player, player.upgrades?.balanced ? 3.35 : 2.65);
+        if (target) targets = [target];
+        damage = player.upgrades?.sharpened ? 55 : 40;
       }
-      damage = pulse ? power.damage : player.upgrades?.sharpened ? 55 : 40;
     }
-    zombie.hp = Math.max(0, zombie.hp - damage);
-    if (zombie.hp === 0) {
-      zombie.deadAt = now;
-      // Co-op XP is awarded by the room, never by a player-supplied packet.
-      // Account storage uses the unique encounter ID to reject duplicate awards.
-      const eventId = `kill:${zombie.encounterId}`;
-      try {
-        const target = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
-        const response = await target.fetch(
-          new Request('https://internal/api/account/coop-reward', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-MM-Account': player.username,
-              'X-MM-Reward-Source': 'game-room-v1',
-            },
-            body: JSON.stringify({ id: eventId, pulse, species }),
-          }),
-        );
-        if (!response.ok) throw new Error(`Reward store returned ${response.status}`);
-        const result = await response.json();
-        if (result.collection) {
-          player.collection = result.collection;
-          this.send(socket, { type: 'collection-state', collection: player.collection });
-          this.saveAttachment(socket, player);
-        }
-        this.send(socket, {
-          type: 'reward',
-          xp: 50,
-          creatureXp: pulse ? 40 : 0,
-          material: result.material || null,
-          totals: result.stats,
-          duplicate: !!result.duplicate,
-        });
-      } catch (error) {
-        // No client-side award fallback: failure must remain visible and
-        // investigated rather than creating untrusted progression.
-        this.send(socket, { type: 'error', message: 'Cloud reward could not be saved. Please report this match.' });
-        console.error('Co-op reward failed', error);
-      }
-      this.mission.kills = Math.min(MISSION_KILLS, this.mission.kills + 1);
+    // Mark every death synchronously before awaiting account writes, so overlapping inputs cannot double-credit it.
+    const killed = targets.filter((enemy) => damageEnemy(enemy, damage));
+    if (killed.length) {
+      this.mission.kills = Math.min(MISSION_KILLS, this.mission.kills + killed.length);
       await this.persistMission();
       this.broadcast(this.missionPacket());
-      this.broadcast({ type: 'kill', by: player.id, pulse, x: zombie.x, z: zombie.z });
     }
+    for (const enemy of killed) await this.creditKill(socket, player, enemy, pulse, species);
+  }
+  async creditKill(socket, player, enemy, pulse, species) {
+    try {
+      const target = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
+      const response = await target.fetch(
+        new Request('https://internal/api/account/coop-reward', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-MM-Account': player.username,
+            'X-MM-Reward-Source': 'game-room-v1',
+          },
+          body: JSON.stringify({ id: `kill:${enemy.encounterId}`, pulse, species }),
+        }),
+      );
+      if (!response.ok) throw new Error(`Reward store returned ${response.status}`);
+      const result = await response.json();
+      if (result.collection) {
+        player.collection = result.collection;
+        this.send(socket, { type: 'collection-state', collection: player.collection });
+        this.saveAttachment(socket, player);
+      }
+      this.send(socket, {
+        type: 'reward',
+        xp: 50,
+        creatureXp: pulse ? 40 : 0,
+        material: result.material || null,
+        totals: result.stats,
+        duplicate: !!result.duplicate,
+      });
+    } catch (error) {
+      this.send(socket, { type: 'error', message: 'Cloud reward could not be saved. Please report this match.' });
+      console.error('Co-op reward failed', error);
+    }
+    this.broadcast({ type: 'kill', by: player.id, pulse, x: enemy.x, z: enemy.z });
   }
   webSocketClose(socket) {
     this.drop(socket);
@@ -508,7 +551,7 @@ export class GameRoom extends DurableObject {
     this.players.delete(socket);
     if (!this.players.size) {
       this.stopTick();
-      this.zombie = selectZombie();
+      this.horde = new HordeSimulation();
     }
   }
 
@@ -530,48 +573,25 @@ export class GameRoom extends DurableObject {
         }
       }
     }
-    const zombie = this.zombie;
-    if (zombie.hp === 0) {
-      if (now - zombie.deadAt > 6000) {
-        this.zombie = selectZombie(zombie.strain, zombie.generation + 1);
-        const alive = [...this.players.values()].find((p) => p.hp > 0);
-        if (alive) {
-          const spawn = constrainPosition(
-            { x: alive.x + Math.sin(alive.yaw) * -12, z: alive.z - Math.cos(alive.yaw) * 12 },
-            0.5,
-          );
-          this.zombie.x = spawn.x;
-          this.zombie.z = spawn.z;
-        }
+    for (const [socket, p] of this.players) {
+      const healed =
+        p.hp > 0
+          ? stepVitals(p.survival, dt, now, { moving: p.movingUntil > now, sprint: p.pose?.sprinting === true })
+          : 0;
+      if (healed) {
+        p.hp = Math.min(100, p.hp + healed);
+        this.send(socket, { type: 'damage', hp: p.hp });
       }
-    } else {
-      const alive = [...this.players.entries()].filter(([, p]) => p.hp > 0);
-      alive.sort(
-        (a, b) => Math.hypot(zombie.x - a[1].x, zombie.z - a[1].z) - Math.hypot(zombie.x - b[1].x, zombie.z - b[1].z),
-      );
-      if (alive.length) {
-        const [socket, target] = alive[0];
-        const dist = Math.hypot(zombie.x - target.x, zombie.z - target.z);
-        if (dist > 40) {
-          const spawn = constrainPosition(
-            { x: target.x - Math.sin(target.yaw) * 12, z: target.z - Math.cos(target.yaw) * 12 },
-            0.5,
-          );
-          zombie.x = spawn.x;
-          zombie.z = spawn.z;
-        }
-        if (dist > 1.62 && dist < 18) {
-          const step = Math.min(dist - 1.62, zombie.speed * dt);
-          zombie.x += ((target.x - zombie.x) / dist) * step;
-          zombie.z += ((target.z - zombie.z) / dist) * step;
-          constrainPosition(zombie, 0.43);
-        } else if (dist <= 1.62 && now - zombie.lastHit > 1350) {
-          zombie.lastHit = now;
-          target.hp = Math.max(0, target.hp - zombie.damage);
-          this.saveAttachment(socket, target);
-          this.send(socket, { type: 'damage', hp: target.hp });
-        }
-      }
+      p.sprinting = p.survival.sprinting;
+    }
+    const hits = this.horde.step([...this.players.values()], dt, now);
+    for (const hit of hits) {
+      const entry = [...this.players].find(([, p]) => p.id === hit.playerId);
+      if (!entry) continue;
+      const [socket, p] = entry;
+      cancelHealing(p.survival);
+      this.send(socket, { type: 'damage', hp: p.hp });
+      this.saveAttachment(socket, p);
     }
     this.broadcast({
       type: 'snapshot',
@@ -582,6 +602,8 @@ export class GameRoom extends DurableObject {
         yaw: p.yaw,
         hp: p.hp,
         ...sanitizeActorPose(p.pose),
+        sprinting: p.survival.sprinting,
+        survival: p.survival,
         reloadProgress: (() => {
           const weapon = p.pose?.weapon || 'pistol';
           const end = p.arsenal[weapon].reloadAt;
@@ -591,14 +613,9 @@ export class GameRoom extends DurableObject {
         species: p.collection?.active || 'lanternkin',
         creatureXp: p.collection?.creatures[p.collection.active]?.xp || 0,
       })),
-      zombie: {
-        x: this.zombie.x,
-        z: this.zombie.z,
-        hp: this.zombie.hp,
-        max: this.zombie.max,
-        strain: this.zombie.strain,
-        generation: this.zombie.generation,
-      },
+      horde: this.horde.packet(),
+      // Kept for older open clients until they reload into the multi-enemy protocol.
+      zombie: this.horde.packet().enemies[0] || null,
     });
   }
 }
