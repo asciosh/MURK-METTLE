@@ -8,12 +8,12 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — v0.22</title>
+    <title>Murk &amp; Mettle — v0.23</title>
   </head>
   <body>
     <div id="app">
       <section class="co-op-bar" aria-label="Session status and field menu">
-        <span class="co-op-title">V0.22 · PRIVATE BETA</span>
+        <span class="co-op-title">V0.23 · PRIVATE BETA</span>
         <span id="room-status" role="status" aria-live="polite">Solo · Cloud account</span>
         <span id="account-state" role="status" aria-live="polite">Sign in</span>
         <button id="field-menu-toggle" type="button" aria-controls="field-menu" aria-expanded="false">☰ FIELD MENU</button>
@@ -58,7 +58,7 @@
         <div class="build-tag">
           <span class="status-dot"></span>
           <span>THE WILDLANDS</span>
-          <b>0.22</b>
+          <b>0.23</b>
         </div>
       </header>
 
@@ -78,12 +78,17 @@
           <div id="mission-kills">0/3 infected eliminated</div>
           <div id="mission-salvage">0/2 salvage collected</div>
           <small>Once both are complete, reach the cyan beacon near the ruins and press E.</small>
+          <small id="horde-status">GROUP 1 · 3 INFECTED ACTIVE</small><small class="noise-note">Gunfire draws nearby infected.</small>
           <small id="mission-total">0 successful extractions</small>
         </section>
         <div id="mission-hint" class="mission-hint" role="status"></div>
         <section class="player-status" aria-label="Player vitality">
           <div class="status-heading"><span class="hud-label">VITALITY</span><span id="player-health-text" class="health-number">100 / 100</span></div>
           <div class="health-track"><div id="player-health-fill" class="health-fill" style="width: 100%"></div></div>
+          <div class="survival-heading"><span>STAMINA</span><span id="stamina-text">100 / 100</span></div>
+          <div class="stamina-track"><div id="stamina-fill" class="stamina-fill"></div></div>
+          <button id="heal-button" type="button" class="heal-button" disabled>H · BANDAGE (2)</button>
+          <div class="heal-track"><div id="heal-fill"></div></div>
         </section>
 
         <section class="progress-panel" aria-label="RPG progression">
@@ -149,11 +154,11 @@
 
         <div class="hud-bottom-right">
           <div class="control-chip"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>MOVE</span></div>
-          <div class="control-chip"><kbd>SHIFT</kbd><span>SPRINT</span></div>
+          <div class="control-chip"><kbd>SHIFT</kbd><span>SPRINT / STAMINA</span></div>
           <div class="control-chip"><kbd>MOUSE</kbd><span>LOOK</span></div>
           <div class="control-chip attack-chip"><kbd>LMB</kbd><span>FIRE</span></div>
           <div class="control-chip"><kbd>RMB</kbd><span>AIM</span></div><div class="control-chip"><kbd>R</kbd><span>RELOAD</span></div><div class="control-chip"><kbd>SPACE</kbd><span>MELEE</span></div><div class="control-chip"><kbd>E</kbd><span>INTERACT</span></div>
-          <div class="control-chip"><kbd>Q</kbd><span>PULSE</span></div>
+          <div class="control-chip"><kbd>Q</kbd><span>PULSE</span></div><div class="control-chip"><kbd>H</kbd><span>BANDAGE</span></div>
           <div class="control-chip"><kbd>ESC</kbd><span>RELEASE</span></div>
         </div>
 
@@ -168,9 +173,9 @@
           <div class="title-rule"></div>
           <p class="title-description">An abandoned settlement. A forest reclaiming its dead. Explore the expanded Wildlands, survive the infected, and evolve the creatures that choose to trust you.</p>
           <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
-          <p class="title-hint">WASD MOVE · RMB AIM · LMB FIRE · R RELOAD · 1/2 WEAPON · SPACE MELEE · E INTERACT · Q PULSE · C COMPANION</p>
+          <p class="title-hint">WASD MOVE · RMB AIM · LMB FIRE · R RELOAD · 1/2 WEAPON · SPACE MELEE · E INTERACT · Q PULSE · H BANDAGE · C COMPANION</p>
         </div>
-        <p class="title-build">MURK &amp; METTLE / v0.22 · ORIGINAL INDIE PROTOTYPE</p>
+        <p class="title-build">MURK &amp; METTLE / v0.23 · ORIGINAL INDIE PROTOTYPE</p>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>

@@ -21,16 +21,38 @@ export class InputController {
   private abilityPressed = false;
   private inventoryPressed = false;
   private disposed = false;
+  private healPressed = false;
+  consumeHealPressed(): boolean {
+    const pressed = this.healPressed;
+    this.healPressed = false;
+    return pressed;
+  }
   private firePressed = false;
   private fireHeld = false;
   private aimHeld = false;
   private weaponPressed: 1 | 2 | null = null;
   private cyclePressed = false;
-  isAiming(): boolean { return this.aimHeld; }
-  isFiring(): boolean { return this.fireHeld; }
-  consumeFirePressed(): boolean { const v=this.firePressed;this.firePressed=false;return v; }
-  consumeWeaponPressed(): 1 | 2 | null { const v=this.weaponPressed;this.weaponPressed=null;return v; }
-  consumeCyclePressed(): boolean { const v=this.cyclePressed;this.cyclePressed=false;return v; }
+  isAiming(): boolean {
+    return this.aimHeld;
+  }
+  isFiring(): boolean {
+    return this.fireHeld;
+  }
+  consumeFirePressed(): boolean {
+    const v = this.firePressed;
+    this.firePressed = false;
+    return v;
+  }
+  consumeWeaponPressed(): 1 | 2 | null {
+    const v = this.weaponPressed;
+    this.weaponPressed = null;
+    return v;
+  }
+  consumeCyclePressed(): boolean {
+    const v = this.cyclePressed;
+    this.cyclePressed = false;
+    return v;
+  }
 
   constructor(
     private readonly element: HTMLElement,
@@ -50,7 +72,9 @@ export class InputController {
 
   requestCapture(): void {
     if (!this.disposed && document.pointerLockElement !== this.element) {
-      void this.element.requestPointerLock().catch(() => { /* May be denied; next canvas click retries. */ });
+      void this.element.requestPointerLock().catch(() => {
+        /* May be denied; next canvas click retries. */
+      });
     }
   }
 
@@ -116,12 +140,29 @@ export class InputController {
   };
 
   private isEditable(target: EventTarget | null): boolean {
-    return target instanceof Element && !!target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]');
+    return (
+      target instanceof Element &&
+      !!target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')
+    );
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.isEditable(event.target) || this.isEditable(document.activeElement)) return;
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'Space'].includes(event.code)) {
+    if (
+      [
+        'KeyW',
+        'KeyA',
+        'KeyS',
+        'KeyD',
+        'ArrowUp',
+        'ArrowDown',
+        'ArrowLeft',
+        'ArrowRight',
+        'ShiftLeft',
+        'ShiftRight',
+        'Space',
+      ].includes(event.code)
+    ) {
       event.preventDefault();
     }
     if (event.code === 'Space' && !event.repeat) this.attackPressed = true;
@@ -132,6 +173,7 @@ export class InputController {
     if (event.code === 'Digit1' && !event.repeat) this.weaponPressed = 1;
     if (event.code === 'Digit2' && !event.repeat) this.weaponPressed = 2;
     if (event.code === 'KeyC' && !event.repeat) this.cyclePressed = true;
+    if (event.code === 'KeyH' && !event.repeat) this.healPressed = true;
     this.keys.add(event.code);
   };
 
@@ -141,12 +183,20 @@ export class InputController {
 
   private readonly handleMouseDown = (event: MouseEvent): void => {
     if (document.pointerLockElement !== this.element) return;
-    if (event.button === 0) { this.firePressed = true; this.fireHeld = true; }
+    if (event.button === 0) {
+      this.firePressed = true;
+      this.fireHeld = true;
+    }
     if (event.button === 2) this.aimHeld = true;
   };
 
-  private readonly handleContextMenu = (event: Event): void => { event.preventDefault(); };
-  private readonly handleMouseUp = (event: MouseEvent): void => { if(event.button===0)this.fireHeld=false;if(event.button===2)this.aimHeld=false; };
+  private readonly handleContextMenu = (event: Event): void => {
+    event.preventDefault();
+  };
+  private readonly handleMouseUp = (event: MouseEvent): void => {
+    if (event.button === 0) this.fireHeld = false;
+    if (event.button === 2) this.aimHeld = false;
+  };
 
   private readonly handleMouseMove = (event: MouseEvent): void => {
     if (document.pointerLockElement !== this.element) return;
@@ -156,12 +206,17 @@ export class InputController {
 
   private readonly handlePointerLockChange = (): void => {
     this.onPointerLockChange(document.pointerLockElement === this.element);
-    if(document.pointerLockElement !== this.element)this.handleWindowBlur();
+    if (document.pointerLockElement !== this.element) this.handleWindowBlur();
   };
 
   private readonly handleWindowBlur = (): void => {
     this.keys.clear();
-    this.firePressed=false;this.fireHeld=false;this.aimHeld=false;this.weaponPressed=null;this.cyclePressed=false;
+    this.healPressed = false;
+    this.firePressed = false;
+    this.fireHeld = false;
+    this.aimHeld = false;
+    this.weaponPressed = null;
+    this.cyclePressed = false;
     this.mouseX = 0;
     this.mouseY = 0;
     this.attackPressed = false;
@@ -184,6 +239,11 @@ export class InputController {
     document.removeEventListener('mouseup', this.handleMouseUp);
     this.element.removeEventListener('contextmenu', this.handleContextMenu);
     this.keys.clear();
-    this.firePressed=false;this.fireHeld=false;this.aimHeld=false;this.weaponPressed=null;this.cyclePressed=false;
+    this.healPressed = false;
+    this.firePressed = false;
+    this.fireHeld = false;
+    this.aimHeld = false;
+    this.weaponPressed = null;
+    this.cyclePressed = false;
   }
 }

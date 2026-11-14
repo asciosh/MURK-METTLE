@@ -9,7 +9,6 @@ import {
   WEAPONS,
   creaturePower,
   evolutionStage,
-  shotDistance,
   obstacleDistance,
   type SpeciesId,
 } from '../../../shared/expansion.mjs';
@@ -19,7 +18,21 @@ import { Player } from './Player';
 import { readModelManifest, type ModelManifest } from './AnimationController';
 import { World } from './World';
 import { Minimap } from './Minimap';
-import { Zombie } from './Zombie';
+import { InfectedGroup, infectedName } from './InfectedGroup';
+import {
+  SURVIVAL,
+  newVitals,
+  beginHealing,
+  cancelHealing,
+  stepVitals,
+  refillVitals,
+  alertHorde,
+  bulletTarget,
+  meleeTarget,
+  pulseTargets,
+  type Vitals,
+  type Combatant,
+} from '../../../shared/survival.mjs';
 import { Companion } from './Companion';
 import { Inventory, ITEM_DEFINITIONS, type ItemId } from './Inventory';
 import { Loot } from './Loot';
@@ -59,7 +72,7 @@ export class Game {
   private aiming = false;
   private recoilOffset = 0;
   private evolutionTime = 0;
-  private encounterRelocateTime = 0;
+
   private readonly camera = new THREE.PerspectiveCamera(58, 1, 0.1, 350);
   private readonly renderer: THREE.WebGLRenderer;
   private assetManifest: ModelManifest = {};
@@ -69,7 +82,11 @@ export class Game {
   private readonly minimap = new Minimap();
   private readonly player: Player;
   private readonly input: InputController;
-  private zombie: Zombie;
+  private readonly infected: InfectedGroup;
+  private vitals: Vitals = newVitals();
+  private lastServerVitals: Vitals | null = null;
+  private readonly soloTarget: Combatant = { id: 'solo', x: 0, z: 0, yaw: 0, hp: 100, hurtUntil: 0 };
+  private wasCoop = false;
   private readonly companion: Companion;
   private readonly creaturePanel: HTMLElement | null;
   private readonly bondHint: HTMLElement | null;
@@ -109,7 +126,7 @@ export class Game {
   private readonly roomStatus: HTMLElement | null;
   private readonly roomCode: HTMLInputElement | null;
   private networkTimer = 0;
-  private remoteZombieGeneration = -1;
+
   private antidotePending = false;
 
   private readonly drops: Loot[] = [];
@@ -157,7 +174,7 @@ export class Game {
   private resizeObserver: ResizeObserver | null = null;
   private hudTimer = 0;
   private attackCooldown = 0;
-  private zombieRespawnTimer = 0;
+
   private toastTimer = 0;
   private damageFlashTimer = 0;
   private running = false;
@@ -183,7 +200,7 @@ export class Game {
     this.world = new World(this.scene);
     this.createExtractionBeacon();
     this.player = new Player(this.scene);
-    this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
+    this.infected = new InfectedGroup(this.scene);
     this.companion = new Companion(this.scene);
     this.firearms = new Firearms(this.scene, this.player);
     this.collection = new Collection(this.progression.state);
@@ -239,6 +256,7 @@ export class Game {
     this.bondHint = document.querySelector<HTMLElement>('#bond-hint');
     this.abilityButton = document.querySelector<HTMLButtonElement>('#ability-button');
     this.abilityButton?.addEventListener('click', this.handleAbilityClick);
+    document.querySelector('#heal-button')?.addEventListener('click', this.handleHealClick);
     this.lootHint = document.querySelector<HTMLElement>('#loot-hint');
     this.bondStrainFill = document.querySelector<HTMLElement>('#bond-strain-fill');
     this.bondStrainLabel = document.querySelector<HTMLElement>('#bond-strain-label');
@@ -263,7 +281,7 @@ export class Game {
     this.assetManifest = await readModelManifest();
     const models = this.assetManifest;
     if (models.survivor?.url) void this.player.installModel(models.survivor);
-    if (models.zombie?.url) void this.zombie.installModel(models.zombie);
+    if (models.zombie?.url) this.infected.installModel(models.zombie);
     if (models.lanternkin?.url) void this.companion.installModel(models.lanternkin);
   }
 
@@ -356,6 +374,13 @@ export class Game {
     if (movement.lengthSq() > 1) movement.normalize();
     if (this.player.getHealth() <= 0) movement.set(0, 0, 0);
 
+    const moving = movement.lengthSq() > 0.0001;
+    const sprintRequested = this.input.isSprinting() && !this.input.isAiming() && this.player.getHealth() > 0;
+    const healed = stepVitals(this.vitals, deltaSeconds, Date.now(), { moving, sprint: sprintRequested });
+    if (healed && !this.multiplayer.connected && this.player.getHealth() > 0) {
+      this.player.heal(healed);
+      this.showToast('BANDAGED  //  +40 vitality.', 'success');
+    }
     this.aiming = this.input.isAiming() && this.player.getHealth() > 0;
     this.player.aiming = this.aiming;
     this.player.aimPitch = this.cameraPitch;
@@ -367,7 +392,7 @@ export class Game {
       : 0;
     this.player.aimYaw = this.cameraYaw;
     this.firearms.aiming = this.aiming;
-    this.player.update(movement, deltaSeconds, !this.aiming && this.input.isSprinting(), this.world);
+    this.player.update(movement, deltaSeconds, this.vitals.sprinting, this.world);
     const weapon = this.input.consumeWeaponPressed();
     if (weapon) this.firearms.switchWeapon(weapon === 1 ? 'pistol' : 'rifle');
     if (this.input.consumeCyclePressed()) this.cycleCreature();
@@ -396,24 +421,18 @@ export class Game {
       this.coopVisuals.updatePlayers(this.multiplayer.peers, deltaSeconds);
       if (this.roomStatus && this.multiplayer.code)
         this.roomStatus.textContent = `Room ${this.multiplayer.code} · ${this.multiplayer.peers.size + 1}/4 players`;
-      this.syncRoomZombie(deltaSeconds);
+      if (this.multiplayer.self?.survival && this.multiplayer.self.survival !== this.lastServerVitals) {
+        this.lastServerVitals = this.multiplayer.self.survival;
+        this.vitals = { ...this.lastServerVitals };
+      }
+      if (this.multiplayer.horde) this.infected.sync(this.multiplayer.horde, deltaSeconds);
     }
 
-    if (
-      !this.multiplayer.connected &&
-      !this.zombie.isDead() &&
-      this.zombie.getPosition().distanceTo(this.player.getPosition()) > 40
-    ) {
-      this.encounterRelocateTime += deltaSeconds;
-      if (this.encounterRelocateTime > 3) {
-        this.spawnZombie();
-        this.encounterRelocateTime = 0;
-      }
-    } else this.encounterRelocateTime = 0;
     this.companion.update(deltaSeconds, this.player.getPosition(), this.player.root.rotation.y, this.world);
     if (this.input.consumeInventoryPressed()) this.toggleInventory();
     if (this.input.consumeInteractPressed()) this.handleInteract();
     if (this.input.consumeAbilityPressed()) this.handleCreatureAbility();
+    if (this.input.consumeHealPressed()) this.handleHealClick();
     if (this.input.consumeAttackPressed()) this.handlePlayerAttack();
     if (this.input.consumeRestartPressed()) {
       if (this.player.getHealth() <= 0) this.resetEncounter();
@@ -421,37 +440,32 @@ export class Game {
         this.multiplayer.send('reload', { weapon: this.firearms.selected });
     }
 
-    if (!this.multiplayer.connected && !this.zombie.isDead()) {
-      const landedHit = this.zombie.update(this.player.getPosition(), deltaSeconds, this.world);
-      if (landedHit && this.player.getHealth() > 0) {
-        const appliedDamage = this.player.takeDamage(this.zombie.damage);
-        if (appliedDamage > 0) {
-          this.damageFlashTimer = 0.2;
-          if (this.companion.isBound()) this.addBondStrain(18);
-          this.showToast(`YOU WERE HIT  //  -${appliedDamage} VITALITY`, 'danger');
-          if (this.player.getHealth() <= 0) {
-            this.defeatOverlay?.classList.add('visible');
-            this.say('defeat');
-            this.showToast('EXPEDITION FAILED  //  Press R to try again.', 'danger');
-          }
-        }
+    if (!this.multiplayer.connected) {
+      const position = this.player.getPosition();
+      Object.assign(this.soloTarget, {
+        x: position.x,
+        z: position.z,
+        yaw: this.player.root.rotation.y,
+        hp: this.player.getHealth(),
+        sprinting: this.vitals.sprinting,
+      });
+      const hits = this.infected.stepSolo(this.soloTarget, deltaSeconds, Date.now());
+      for (const hit of hits) {
+        this.player.takeDamage(hit.damage);
+        cancelHealing(this.vitals);
+        this.damageFlashTimer = 0.2;
+        if (this.companion.isBound()) this.addBondStrain(18);
+        this.showToast(`YOU WERE HIT  //  -${hit.damage} VITALITY`, 'danger');
       }
-    } else if (!this.multiplayer.connected && this.player.getHealth() > 0) {
-      this.zombieRespawnTimer += deltaSeconds;
-      if (this.zombieRespawnTimer >= 6) {
-        this.spawnZombie();
-        this.showToast(`NEW STRAIN  //  ${this.zombie.displayName.toUpperCase()} detected.`, 'warning');
+      if (this.player.getHealth() <= 0) {
+        this.defeatOverlay?.classList.add('visible');
       }
     }
 
     this.damageFlash?.classList.toggle('active', this.damageFlashTimer > 0);
     this.updateCamera(deltaSeconds);
     this.updateHud(deltaSeconds);
-    this.minimap.update(
-      this.player.getPosition(),
-      this.zombie.isDead() ? null : this.zombie.getPosition(),
-      this.player.root.rotation.y,
-    );
+    this.minimap.update(this.player.getPosition(), this.infected.alive, this.player.root.rotation.y);
     this.renderScene();
   };
 
@@ -482,6 +496,13 @@ export class Game {
   };
   private readonly handleLeaveRoom = (): void => {
     this.multiplayer.disconnect();
+    this.wasCoop = false;
+    this.player.reset();
+    this.firearms.reset();
+    this.vitals = newVitals();
+    this.lastServerVitals = null;
+    this.infected.resetSolo({ ...this.soloTarget, x: 0, z: 0, hp: 100, hurtUntil: 0 });
+    this.defeatOverlay?.classList.remove('visible');
     this.coopCollection = null;
     this.collectionSignature = '';
     this.syncCollectionVisuals();
@@ -490,15 +511,25 @@ export class Game {
     else this.companion.retreat();
     this.updateCraftingHud();
     this.clearRemotePlayers();
-    this.remoteZombieGeneration = -1;
-    this.zombie.dispose();
-    this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
     if (this.roomStatus) this.roomStatus.textContent = 'Solo · Cloud account';
     this.updateMissionHud();
     this.updateProgressHud();
   };
   private readonly onRoomEvent = (event: RoomEvent): void => {
-    if (event.type === 'arsenal') {
+    if (event.type === 'correction') {
+      this.player.root.position.set(event.x, 0, event.z);
+    } else if (event.type === 'survival') {
+      this.vitals = { ...event.survival };
+    } else if (event.type === 'respawn') {
+      this.player.reset();
+      this.player.root.position.set(event.x, 0, event.z);
+      this.vitals = { ...event.survival };
+      this.lastServerVitals = null;
+      this.soloTarget.hurtUntil = 0;
+      this.defeatOverlay?.classList.remove('visible');
+      this.cameraYaw = 0;
+      this.showToast('SURVIVOR RECOVERED  //  Back at field camp.', 'success');
+    } else if (event.type === 'arsenal') {
       this.firearms.arsenal = event.arsenal;
     } else if (event.type === 'shot') {
       if (event.by !== this.multiplayer.id) this.coopVisuals.triggerShot(event.by, event.weapon || 'pistol');
@@ -538,9 +569,15 @@ export class Game {
       this.updateCompanionHud();
       void this.coopProgress.refresh().then(() => this.updateProgressHud());
     } else if (event.type === 'welcome') {
+      this.wasCoop = true;
+      this.player.reset();
+      this.vitals = { ...(event.survival || newVitals()) };
+      this.lastServerVitals = null;
+      this.infected.clear();
+      this.soloTarget.hurtUntil = 0;
+      this.defeatOverlay?.classList.remove('visible');
       if (this.roomStatus) this.roomStatus.textContent = `Room ${event.code} · connected`;
       this.showToast(`ROOM JOINED  //  ${event.code}`, 'success');
-      this.remoteZombieGeneration = -1;
       this.updateMissionHud();
       this.updateCraftingHud();
       void this.coopProgress.refresh().then(() => this.updateProgressHud());
@@ -557,11 +594,15 @@ export class Game {
     } else if (event.type === 'error') {
       if (this.roomStatus) this.roomStatus.textContent = event.message;
       this.showToast(event.message, 'warning');
-      if (!this.multiplayer.connected) this.clearRemotePlayers();
+      if (!this.multiplayer.connected) {
+        this.clearRemotePlayers();
+        if (this.wasCoop) this.handleLeaveRoom();
+      }
     } else if (event.type === 'damage') {
       const lost = this.player.getHealth() - event.hp;
       if (lost > 0) {
         this.player.takeDamage(lost);
+        cancelHealing(this.vitals);
         this.damageFlashTimer = 0.2;
         if (this.companion.isBound()) this.addBondStrain(18);
         if (event.hp <= 0) {
@@ -569,7 +610,7 @@ export class Game {
           this.say('defeat');
         }
       }
-      if (event.hp === 100 && this.player.getHealth() < 100) this.player.reset();
+      if (event.hp > this.player.getHealth()) this.player.heal(event.hp - this.player.getHealth());
     } else if (event.type === 'kill') {
       // In co-op the server credits materials to the verified killer; never spawn local salvage.
       if (event.by === this.multiplayer.id)
@@ -593,26 +634,6 @@ export class Game {
   private refreshRoomPickups(): void {
     this.coopVisuals.updateSamples(this.roomMission);
   }
-  private syncRoomZombie(dt: number): void {
-    const state = this.multiplayer.zombie;
-    if (!state) return;
-    if (state.generation !== this.remoteZombieGeneration) {
-      this.zombie.dispose();
-      this.zombie = new Zombie(
-        this.scene,
-        new THREE.Vector3(state.x, 0, state.z),
-        state.strain as import('./Zombie').InfectedStrain,
-        state.generation,
-      );
-      this.remoteZombieGeneration = state.generation;
-    }
-    const motion = new THREE.Vector3(state.x - this.zombie.root.position.x, 0, state.z - this.zombie.root.position.z);
-    this.zombie.updateNetworkVisual(dt, motion);
-    this.zombie.root.position.set(state.x, 0, state.z);
-    const damageNeeded = this.zombie.getHealth() - state.hp;
-    if (damageNeeded > 0) this.zombie.takeDamage(damageNeeded);
-  }
-
   private readonly handleGraphicsQuality = (event: Event): void => {
     const quality = (event.target as HTMLSelectElement).value;
     const low = quality === 'low';
@@ -725,9 +746,24 @@ export class Game {
           : nearby
             ? `E · BOND WITH ${CREATURES[nearby].name.toUpperCase()}`
             : this.firearms.nearSupply(pos)
-              ? 'E · RESUPPLY AMMO (45s RESTOCK)'
+              ? 'E · RESUPPLY AMMO + BANDAGES (45s RESTOCK)'
               : '';
   }
+  private readonly handleHealClick = (): void => {
+    if (!this.fieldEntered || this.player.getHealth() <= 0) return;
+    const axes = this.input.getMovementAxes();
+    if (axes.forward || axes.right) {
+      this.showToast('STAND STILL  //  Bandaging takes 2.6 seconds.', 'warning');
+      return;
+    }
+    if (this.multiplayer.connected) {
+      this.multiplayer.send('heal');
+      return;
+    }
+    if (beginHealing(this.vitals, this.player.getHealth(), Date.now()))
+      this.showToast('BANDAGING  //  Stay still. Hits and attacks interrupt healing.', 'info');
+    else this.showToast(this.player.getHealth() >= 100 ? 'VITALITY FULL' : 'NO BANDAGE AVAILABLE', 'warning');
+  };
   private handleShooting(): void {
     if (this.player.getHealth() <= 0) return;
     // Shoot in the camera direction even when moving sideways.
@@ -736,19 +772,22 @@ export class Game {
     const weapon = WEAPONS[this.firearms.selected];
     const camOrigin = this.aimRay.ray.origin,
       camDirection = this.aimRay.ray.direction;
-    const camHit = shotDistance(camOrigin, camDirection, this.zombie.getPosition(), weapon.range);
-    const camDistance = camHit ?? obstacleDistance(camOrigin, camDirection, weapon.range);
+    const camHit = bulletTarget(this.infected.alive, camOrigin, camDirection, weapon.range);
+    const camDistance = camHit?.distance ?? obstacleDistance(camOrigin, camDirection, weapon.range);
     const aimPoint = camOrigin.clone().addScaledVector(camDirection, camDistance);
     const origin = this.player.getPosition().clone();
     origin.y = 1.32;
     const direction = aimPoint.sub(origin).normalize();
     if (!this.firearms.tryFire()) return;
     this.recoilOffset += this.firearms.selected === 'rifle' ? 0.009 : 0.022;
-    const hit = !this.zombie.isDead() ? shotDistance(origin, direction, this.zombie.getPosition(), weapon.range) : null;
+    cancelHealing(this.vitals);
+    const hit = bulletTarget(this.infected.alive, origin, direction, weapon.range);
+    if (!this.multiplayer.connected)
+      alertHorde(this.infected.simulation.enemies, this.player.getPosition(), Date.now());
     const visualOrigin = this.firearms.muzzle();
     const visualTarget = origin
       .clone()
-      .addScaledVector(direction, hit ?? obstacleDistance(origin, direction, weapon.range));
+      .addScaledVector(direction, hit?.distance ?? obstacleDistance(origin, direction, weapon.range));
     const visualDirection = visualTarget.sub(visualOrigin);
     this.firearms.effect(visualOrigin, visualDirection.clone().normalize(), visualDirection.length());
     if (this.multiplayer.connected)
@@ -758,10 +797,8 @@ export class Game {
       });
     else if (hit !== null) {
       this.firearms.markHit();
-      if (this.zombie.takeDamage(weapon.damage)) {
-        this.registerKill(false);
-        this.zombieRespawnTimer = 0;
-      }
+      if (this.infected.damage(hit.enemy.id, weapon.damage))
+        this.registerKill(false, new THREE.Vector3(hit.enemy.x, 0, hit.enemy.z));
     }
   }
 
@@ -772,11 +809,11 @@ export class Game {
     this.radioPanel?.classList.add('visible');
   }
 
-  private spawnLoot(): void {
+  private spawnLoot(position: THREE.Vector3): void {
     const ids: ItemId[] = ['spore', 'scrap', 'fiber'];
     const id = ids[this.dropSequence % ids.length];
     this.dropSequence++;
-    const drop = new Loot(this.scene, id, this.zombie.getPosition().clone());
+    const drop = new Loot(this.scene, id, position.clone());
     this.drops.push(drop);
     // Keep the prototype from accumulating unbounded 3D meshes.
     if (this.drops.length > 12) this.drops.shift()?.dispose(this.scene);
@@ -788,13 +825,16 @@ export class Game {
     const supply = this.firearms.nearSupply(playerPos);
     if (supply) {
       if (this.multiplayer.connected) this.multiplayer.send('resupply', { id: supply.id });
-      else
+      else {
+        const refilled = this.firearms.resupply(playerPos);
+        if (refilled) refillVitals(this.vitals);
         this.showToast(
-          this.firearms.resupply(playerPos)
-            ? 'SUPPLIES RECOVERED  //  Ammo reserves restored.'
+          refilled
+            ? 'SUPPLIES RECOVERED  //  Ammo and bandages restored.'
             : 'CACHE RESTOCKING  //  Returns after 45 seconds.',
           'info',
         );
+      }
       return;
     }
     const wild = SPECIES_IDS.find(
@@ -910,6 +950,7 @@ export class Game {
   private handleCreatureAbility(): void {
     if (this.player.getHealth() <= 0 || !this.companion.isBound()) return;
     if (this.abilityCooldown > 0) return;
+    cancelHealing(this.vitals);
     const power = this.activePower;
     this.abilityCooldown = power.cooldown;
     this.companion.triggerPulse();
@@ -920,28 +961,26 @@ export class Game {
     if (this.multiplayer.connected) {
       this.multiplayer.send('pulse');
       this.showToast('PULSE RELEASED  //  Server checks target distance.', 'info');
-    } else if (
-      !this.zombie.isDead() &&
-      this.zombie.getPosition().distanceTo(this.player.getPosition()) <= power.range
-    ) {
-      const killed = this.zombie.takeDamage(power.damage);
-      if (killed) {
-        this.registerKill(true);
-        this.zombieRespawnTimer = 0;
-        this.showToast('LANTERN PULSE  //  Infected eliminated! +50 XP / +40 companion XP', 'success');
-      } else {
-        const evolved = this.collection.grant(CREATURE_XP_PER_PULSE_HIT);
-        if (evolved) this.showEvolution(evolved);
-        const leveled = this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_HIT);
-        this.showToast(
-          leveled
-            ? 'LANTERNKIN LEVEL UP!'
-            : `${power.name.toUpperCase()} PULSE  //  ${power.damage} damage / +10 companion XP`,
-          'success',
-        );
-      }
     } else {
-      this.showToast('LANTERN PULSE  //  No infected within range.', 'info');
+      const targets = pulseTargets(this.infected.alive, this.player.getPosition(), power.range);
+      let kills = 0;
+      for (const target of targets) {
+        if (this.infected.damage(target.id, power.damage)) {
+          this.registerKill(true, new THREE.Vector3(target.x, 0, target.z));
+          kills++;
+        } else {
+          const evolved = this.collection.grant(CREATURE_XP_PER_PULSE_HIT);
+          if (evolved) this.showEvolution(evolved);
+          this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_HIT);
+        }
+      }
+      alertHorde(this.infected.simulation.enemies, this.player.getPosition(), Date.now(), 18);
+      this.showToast(
+        targets.length
+          ? `PULSE  //  ${targets.length} infected hit · ${kills} eliminated`
+          : 'PULSE  //  No visible infected within range.',
+        'info',
+      );
     }
     this.addBondStrain(35);
     this.updateCompanionHud();
@@ -980,39 +1019,29 @@ export class Game {
     this.attackCooldown = 0.48;
     this.player.triggerAttack();
 
-    if (this.zombie.isDead()) {
-      this.showToast('NO TARGET  //  Wait for the next infected.', 'info');
-      return;
-    }
-
+    cancelHealing(this.vitals);
     if (this.multiplayer.connected) {
-      this.multiplayer.send('attack', { sharpened: this.crafting.upgrades.sharpened });
+      this.multiplayer.send('attack');
       return;
     }
-    const toEnemy = this.zombie.getPosition().clone().sub(this.player.getPosition());
-    toEnemy.y = 0;
-    const distance = toEnemy.length();
-    const facing = new THREE.Vector3(-Math.sin(this.player.root.rotation.y), 0, -Math.cos(this.player.root.rotation.y));
-    const directionToEnemy = distance > 0.001 ? toEnemy.clone().normalize() : facing.clone();
-    const facingDot = facing.dot(directionToEnemy);
-
-    if (distance > (this.crafting.upgrades.balanced ? 3.35 : 2.65) || facingDot < -0.15) {
-      this.showToast('SWING MISSED  //  Get closer and face the infected.', 'info');
+    const position = this.player.getPosition(),
+      target = meleeTarget(
+        this.infected.alive,
+        { x: position.x, z: position.z, yaw: this.player.root.rotation.y },
+        this.crafting.upgrades.balanced ? 3.35 : 2.65,
+      );
+    if (!target) {
+      this.showToast('SWING MISSED  //  Face a nearby infected.', 'info');
       return;
     }
-
-    const killed = this.zombie.takeDamage(this.crafting.upgrades.sharpened ? 55 : 40);
-    if (killed) {
-      this.registerKill(false);
-      this.zombieRespawnTimer = 0;
-      this.showToast('INFECTED ELIMINATED  //  +50 PLAYER XP', 'success');
-    } else {
-      this.showToast(`HIT CONFIRMED  //  ${this.zombie.getHealth()} INFECTED HEALTH`, 'success');
-    }
+    if (this.infected.damage(target.id, this.crafting.upgrades.sharpened ? 55 : 40)) {
+      this.registerKill(false, new THREE.Vector3(target.x, 0, target.z));
+      this.showToast('INFECTED ELIMINATED  //  +50 XP', 'success');
+    } else this.showToast(`HIT CONFIRMED  //  ${target.hp} infected health`, 'success');
   }
 
-  private registerKill(fromPulse: boolean): void {
-    this.spawnLoot();
+  private registerKill(fromPulse: boolean, position: THREE.Vector3): void {
+    this.spawnLoot(position);
     if (!this.multiplayer.connected) this.expedition.recordKill();
     this.updateMissionHud();
     const leveled = this.progression.recordKill();
@@ -1024,34 +1053,23 @@ export class Game {
     }
   }
 
-  private spawnZombie(): void {
-    this.zombie.dispose();
-    const playerPosition = this.player.getPosition();
-    const spawnDirection = new THREE.Vector3(-Math.sin(this.cameraYaw), 0, -Math.cos(this.cameraYaw));
-    const spawnPosition = playerPosition.clone().addScaledVector(spawnDirection, 9.5);
-    spawnPosition.y = 0;
-    this.world.constrainActorPosition(spawnPosition, 0.5);
-    this.zombie = new Zombie(this.scene, spawnPosition);
-    if (this.assetManifest.zombie?.url) void this.zombie.installModel(this.assetManifest.zombie);
-    this.zombieRespawnTimer = 0;
-  }
-
   private resetEncounter(): void {
+    if (this.multiplayer.connected) {
+      this.multiplayer.send('restart');
+      return;
+    }
     this.player.reset();
-    if (!this.multiplayer.connected) this.firearms.reset();
-    if (!this.multiplayer.connected) this.expedition.resetMission();
+    this.firearms.reset();
+    this.vitals = newVitals();
+    this.soloTarget.hurtUntil = 0;
+    this.infected.resetSolo({ ...this.soloTarget, x: 0, z: 0, hp: 100, yaw: 0 });
+    this.expedition.resetMission();
     this.updateMissionHud();
-    if (this.multiplayer.connected) this.multiplayer.send('restart');
-    // On defeat, strain is reset but a retreating companion remains recoverable.
     if (this.companion.isBound()) this.bondStrain = Math.max(0, this.bondStrain - 20);
     this.cameraYaw = 0;
     this.attackCooldown = 0;
-    this.zombieRespawnTimer = 0;
     this.defeatOverlay?.classList.remove('visible');
-    this.zombie.dispose();
-    this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
-    this.remoteZombieGeneration = -1;
-    this.showToast(`EXPEDITION RESTARTED  //  ${this.zombie.displayName.toUpperCase()} ahead.`, 'info');
+    this.showToast('EXPEDITION RESTARTED  //  Restocked and ready.', 'info');
   }
 
   private showToast(message: string, type: 'info' | 'success' | 'warning' | 'danger'): void {
@@ -1113,16 +1131,35 @@ export class Game {
     if (this.playerHealthText) this.playerHealthText.textContent = `${health} / 100`;
     this.playerHealthFill?.classList.toggle('low', health <= 35);
 
-    if (!this.zombie.isDead()) {
-      const enemyHealth = this.zombie.getHealth();
-      this.enemyPanel?.classList.add('visible');
-      if (this.enemyHealthFill)
-        this.enemyHealthFill.style.width = `${(enemyHealth / this.zombie.getMaxHealth()) * 100}%`;
-      if (this.enemyHealthText) this.enemyHealthText.textContent = `${enemyHealth} / ${this.zombie.getMaxHealth()}`;
-      if (this.enemyStateText) this.enemyStateText.textContent = this.zombie.displayName.toUpperCase();
-    } else {
-      this.enemyPanel?.classList.remove('visible');
+    const focus = this.infected.focus(position);
+    const enemyNearby = focus && Math.hypot(focus.x - position.x, focus.z - position.z) <= 35;
+    this.enemyPanel?.classList.toggle('visible', !!enemyNearby);
+    if (focus) {
+      if (this.enemyHealthFill) this.enemyHealthFill.style.width = `${(focus.hp / focus.max) * 100}%`;
+      if (this.enemyHealthText) this.enemyHealthText.textContent = `${focus.hp} / ${focus.max}`;
+      if (this.enemyStateText)
+        this.enemyStateText.textContent = `${infectedName(focus.strain).toUpperCase()}${focus.state === 'windup' ? ' · STRIKING' : ''}`;
     }
+    const stamina = document.querySelector<HTMLElement>('#stamina-fill'),
+      staminaLabel = document.querySelector('#stamina-text');
+    if (stamina) stamina.style.width = `${this.vitals.stamina}%`;
+    if (staminaLabel)
+      staminaLabel.textContent = this.vitals.exhausted ? 'EXHAUSTED' : `${Math.round(this.vitals.stamina)} / 100`;
+    const heal = document.querySelector<HTMLButtonElement>('#heal-button'),
+      progress = document.querySelector<HTMLElement>('#heal-fill');
+    const remaining = Math.max(0, this.vitals.healEndsAt - Date.now());
+    if (heal) {
+      heal.textContent = remaining
+        ? `BANDAGING · ${(remaining / 1000).toFixed(1)}s`
+        : `H · BANDAGE (${this.vitals.bandages})`;
+      heal.disabled = health <= 0 || health >= 100 || !this.vitals.bandages || remaining > 0;
+    }
+    if (progress) progress.style.width = remaining ? `${100 * (1 - remaining / SURVIVAL.healDuration)}%` : '0%';
+    const status = document.querySelector('#horde-status');
+    if (status)
+      status.textContent = this.infected.nextWaveAt
+        ? `AREA CLEAR · NEXT GROUP IN ${Math.max(0, Math.ceil((this.infected.nextWaveAt - Date.now()) / 1000))}s`
+        : `GROUP ${this.infected.wave || 1} · ${this.infected.alive.length} INFECTED ACTIVE`;
 
     this.updateCompanionHud();
     const nearestDrop = this.multiplayer.connected ? undefined : this.drops.find((drop) => drop.canPickUp(position));
@@ -1261,9 +1298,17 @@ export class Game {
     this.renderer.setAnimationLoop(null);
     this.input.dispose();
     this.abilityButton?.removeEventListener('click', this.handleAbilityClick);
+    document.querySelector('#heal-button')?.removeEventListener('click', this.handleHealClick);
     document.querySelector('#room-join')?.removeEventListener('click', this.handleJoinRoom);
     document.querySelector('#room-leave')?.removeEventListener('click', this.handleLeaveRoom);
     this.multiplayer.disconnect();
+    this.wasCoop = false;
+    this.player.reset();
+    this.firearms.reset();
+    this.vitals = newVitals();
+    this.lastServerVitals = null;
+    this.infected.resetSolo({ ...this.soloTarget, x: 0, z: 0, hp: 100, hurtUntil: 0 });
+    this.defeatOverlay?.classList.remove('visible');
     this.coopCollection = null;
     this.collectionSignature = '';
     this.syncCollectionVisuals();
@@ -1278,7 +1323,7 @@ export class Game {
     this.companion.dispose();
     this.resizeObserver?.disconnect();
     this.player.dispose();
-    this.zombie.dispose();
+    this.infected.dispose();
     this.scene.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
       object.geometry.dispose();

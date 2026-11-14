@@ -1,6 +1,8 @@
-# Murk & Mettle · v0.22
+# Murk & Mettle · v0.23
 
 A third-person browser zombie-survival and creature-collection RPG. Built with Three.js, TypeScript, Vite and Cloudflare Durable Objects.
+
+v0.23 adds infected groups, gunshot investigation, dodgeable melee wind-ups, sprint stamina and interruptible bandages in solo and co-op. See [v0.23 notes](docs/changelog/CHANGELOG-v0.23.md) and [testing steps](docs/V0.23-TESTING.md).
 
 v0.22 adds articulated survivor/gun animations, shared co-op poses, natural foliage motion and an optional Cinematic graphics mode. See [v0.22 notes](docs/changelog/CHANGELOG-v0.22.md) and [testing steps](docs/V0.22-TESTING.md).
 

@@ -430,6 +430,13 @@ export class Player {
     return applied;
   }
 
+  heal(amount: number): number {
+    if (this.health <= 0 || !Number.isFinite(amount) || amount <= 0) return 0;
+    const applied = Math.min(100 - this.health, amount);
+    this.health += applied;
+    return applied;
+  }
+
   getHealth(): number {
     return this.health;
   }

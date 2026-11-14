@@ -66,3 +66,11 @@ body.hit-confirmed .reticle::before,body.hit-confirmed .reticle::after {backgrou
 .collection-details {margin-block:8px;color:var(--muted);font:9px 'DM Mono',monospace;}
 .collection-details summary {padding-block:5px;color:#bdc4ac;cursor:pointer;line-height:1.6;}
 .collection-details[open] summary {color:#e0e5cf;}
+
+.survival-heading {display:flex;justify-content:space-between;gap:8px;margin-top:10px;color:var(--muted);font:8px 'DM Mono',monospace;}
+.stamina-track,.heal-track {height:3px;background:#d4d4ba1a;margin-top:5px;overflow:hidden;}
+.stamina-fill {height:100%;width:100%;background:#b8a777;transition:width .1s linear;}
+.heal-track {height:2px;margin-top:4px;}.heal-track>div {height:100%;width:0;background:#b4c9a1;}
+.heal-button {width:100%;padding:7px;margin-top:9px;color:#d6deca;border:1px solid #9ead9340;background:#2b372a;font:9px 'DM Mono',monospace;pointer-events:auto;cursor:pointer;}
+.heal-button:disabled {opacity:.5;cursor:default;}
+#horde-status {color:#d0af8a;}
