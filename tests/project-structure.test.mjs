@@ -18,6 +18,16 @@ test('Cloudflare migration classes and tags are unchanged; only source path chan
   assert.equal(config.assets.directory, './dist');
 });
 
+test('previews provide all account and room bindings without linking production namespaces', async () => {
+  const config = JSON.parse(await read('wrangler.jsonc'));
+  assert.deepEqual(config.previews.durable_objects.bindings, config.durable_objects.bindings);
+  for (const binding of config.previews.durable_objects.bindings) {
+    assert.equal(binding.script_name, undefined);
+    assert.equal(binding.environment, undefined);
+    assert.ok(config.migrations.some(m => m.new_sqlite_classes?.includes(binding.class_name)));
+  }
+});
+
 test('room rules reject malformed input and agree with existing solo extraction geometry', async () => {
   assert.equal(MAX_PLAYERS, 4);
   assert.equal(MISSION_KILLS, 3);
@@ -46,7 +56,9 @@ test('client and backend entrypoints, GLB manifest and required modules exist', 
     'server/cloudflare/account.mjs', 'server/cloudflare/profile.mjs',
     'server/local/index.mjs', 'scripts/dev.mjs', 'public/models/survivor.glb'
   ]) await access(resolve(root, path));
-  assert.match(await read('scripts/dev.mjs'), /server\/local\/index\.mjs/);
+  const dev = await read('scripts/dev.mjs');
+  assert.match(dev, /spawn\(bin\('wrangler'\)/);
+  assert.match(dev, /'build', '--watch'/);
   assert.match(await read('src/main.ts'), /client\/game\/Game/);
   assert.doesNotMatch(await read('src/main.ts'), /\.\/game\/Game/);
 });

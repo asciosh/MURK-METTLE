@@ -5,8 +5,17 @@ import { DurableObject } from 'cloudflare:workers';
 const SAVE_KEYS = [
   'murk-mettle-v04-progression', 'murk-mettle-v05-inventory',
   'murk-mettle-v06-crafting', 'murk-mettle-v07-expeditions',
-  'murk-mettle-v05-bond-retreat',
+  'murk-mettle-v05-bond-retreat', 'murk-mettle-v21-collection',
 ];
+
+const SPECIES = ['lanternkin','emberling','reedwisp'];
+async function readCollection(storage) {
+  const saved=await storage.get('coop-collection');
+  if(saved)return saved;
+  const old=await storage.get('coop-creature')||{owned:false,xp:0};
+  return {active:'lanternkin',creatures:{lanternkin:{owned:old.owned===true,xp:old.xp||0},emberling:{owned:false,xp:0},reedwisp:{owned:false,xp:0}}};
+}
+
 const MAX_BODY = 4096;
 const COOP_MATERIALS = ['scrap', 'fiber', 'spore'];
 const COOP_RECIPES = Object.freeze({
@@ -78,8 +87,15 @@ export class PlayerAccount extends DurableObject {
         if (prior) return { ok: true, duplicate: true, ...coopState(stats, inventory, upgrades) };
         const creature = await txn.get('coop-creature') || { species: 'lanternkin', owned: false, xp: 0 };
         // A pulse kill is eligible for creature XP only if ownership was verified.
-        if (event.pulse && !creature.owned) return { error: 'Creature not bonded' };
-        if (event.pulse) { creature.xp = Math.min(250000, Math.max(creature.xp, stats.creatureXp) + 40); await txn.put('coop-creature', creature); }
+        const collection=await readCollection(txn);
+        const species=event.species===undefined?'lanternkin':event.species;
+        if(!SPECIES.includes(species))return {error:'Invalid species'};
+        const entry=collection.creatures[species];
+        if (event.pulse && !entry.owned) return { error: 'Creature not bonded' };
+        const gained=entry.owned?(event.pulse?40:event.species?12:0):0;
+        entry.xp=Math.min(250000,entry.xp+gained);
+        await txn.put('coop-collection',collection);
+        if(species==='lanternkin'&&entry.owned){creature.xp=entry.xp;creature.owned=true;await txn.put('coop-creature',creature);}
         stats = { ...stats, xp: stats.xp + 50, kills: stats.kills + 1,
           creatureXp: Math.max(stats.creatureXp, creature.xp) };
         // Deterministic server loot: one material awarded per unique confirmed kill.
@@ -88,7 +104,7 @@ export class PlayerAccount extends DurableObject {
         await txn.put(key, true);
         await txn.put('coop-stats', stats);
         await txn.put('coop-inventory', inventory);
-        return { ok: true, duplicate: false, material, ...coopState(stats, inventory, upgrades) };
+        return { ok: true, duplicate: false, material, collection, ...coopState(stats, inventory, upgrades) };
       });
       return result.error ? json(result, 409) : json(result);
     }
@@ -114,6 +130,22 @@ export class PlayerAccount extends DurableObject {
       return json(result);
     }
 
+    if(op==='coop-collection') {
+      if(request.headers.get('X-MM-Reward-Source')!=='game-room-v1')return json({error:'Forbidden'},403);
+      if(request.method==='GET')return json({collection:await readCollection(storage)});
+      if(request.method!=='POST')return json({error:'Method not allowed'},405);
+      let payload;try{payload=await request.json();}catch{return json({error:'Invalid payload'},400);}
+      if(!SPECIES.includes(payload?.species)||!['bond','select'].includes(payload?.action))return json({error:'Invalid species or action'},400);
+      const result=await storage.transaction(async txn=>{
+        const collection=await readCollection(txn),entry=collection.creatures[payload.species];
+        if(payload.action==='select'&&!entry.owned)return {error:'Creature not owned'};
+        entry.owned=true;collection.active=payload.species;
+        await txn.put('coop-collection',collection);
+        if(payload.species==='lanternkin')await txn.put('coop-creature',{species:'lanternkin',owned:true,xp:entry.xp});
+        return {collection};
+      });
+      return result.error?json(result,409):json(result);
+    }
     // Internal-only persistent ownership and creature progression.
     if (op === 'coop-creature') {
       if (request.headers.get('X-MM-Reward-Source') !== 'game-room-v1')
@@ -129,6 +161,7 @@ export class PlayerAccount extends DurableObject {
       const creature = await storage.transaction(async txn => {
         const existing = await txn.get('coop-creature') || { species: 'lanternkin', owned: false, xp: (await txn.get('coop-stats'))?.creatureXp || 0 };
         if (!existing.owned) { existing.owned = true; await txn.put('coop-creature', existing); }
+        const collection=await readCollection(txn);collection.creatures.lanternkin={owned:true,xp:existing.xp};await txn.put('coop-collection',collection);
         return existing;
       });
       return json({ ok: true, creature });
@@ -180,7 +213,7 @@ export class PlayerAccount extends DurableObject {
     if (!sessions[tokenHash] || sessions[tokenHash] <= now) return json({ error: 'Session expired; log in again' }, 401);
     if (op === 'coop-state') {
       if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
-      return json({ ok: true, ...coopState(await storage.get('coop-stats'),
+      return json({ ok: true, collection:await readCollection(storage), ...coopState(await storage.get('coop-stats'),
         await storage.get('coop-inventory'), await storage.get('coop-upgrades')) });
     }
     if (op === 'coop-craft') {

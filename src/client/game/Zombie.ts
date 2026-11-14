@@ -247,6 +247,14 @@ export class Zombie {
     return false;
   }
 
+  updateNetworkVisual(dt:number,direction:THREE.Vector3):void {
+    this.animationClock+=dt;this.animator.update(dt);this.modelVisual.visible=!this.animator.installed;
+    const moving=direction.lengthSq()>.00001;
+    this.animator.setState(this.isDead()?'death':moving?'run':'idle');
+    if(moving)this.faceDirection(direction);
+    const gait=moving?Math.sin(this.animationClock*8.5)*.5:0;
+    this.leftLeg.rotation.x=gait;this.rightLeg.rotation.x=-gait;this.leftArm.rotation.x=-.5+gait*.4;this.rightArm.rotation.x=-.5-gait*.4;
+  }
   private faceDirection(direction: THREE.Vector3): void {
     const targetYaw = Math.atan2(-direction.x, -direction.z);
     const difference = THREE.MathUtils.euclideanModulo(

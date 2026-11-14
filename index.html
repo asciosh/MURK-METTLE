@@ -8,12 +8,12 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — v0.20</title>
+    <title>Murk &amp; Mettle — v0.21</title>
   </head>
   <body>
     <div id="app">
       <section class="co-op-bar" aria-label="Session status and field menu">
-        <span class="co-op-title">V0.20 · PRIVATE BETA</span>
+        <span class="co-op-title">V0.21 · PRIVATE BETA</span>
         <span id="room-status" role="status" aria-live="polite">Solo · Cloud account</span>
         <span id="account-state" role="status" aria-live="polite">Sign in</span>
         <button id="field-menu-toggle" type="button" aria-controls="field-menu" aria-expanded="false">☰ FIELD MENU</button>
@@ -31,6 +31,7 @@
             <button id="coop-craft-balanced" type="button" disabled>CO-OP GRIP</button>
             <button id="coop-craft-restorative" type="button" disabled>CO-OP ANTIDOTE</button>
           </div>
+          <label class="graphics-label">GRAPHICS <select id="graphics-quality" aria-label="Graphics quality"><option value="high">Detailed · shadows</option><option value="low">Performance · no shadows</option></select></label>
           <strong>PLAYER PROGRESS</strong>
           <div class="field-menu-row"><button id="account-toggle" type="button">PLAYER ACCOUNT</button></div>
         </div>
@@ -57,12 +58,19 @@
         <div class="build-tag">
           <span class="status-dot"></span>
           <span>THE WILDLANDS</span>
-          <b>0.20</b>
+          <b>0.21</b>
         </div>
       </header>
 
       <main id="game-viewport" aria-label="Murk and Mettle playable prototype">
         <div class="reticle" aria-hidden="true"><span></span></div>
+        <div id="region-name" class="region-name">WILDLANDS / FOREST TRAIL</div>
+        <div id="evolution-announcement" class="evolution-announcement" role="status"></div>
+        <div id="exploration-hint" class="exploration-hint" role="status"></div>
+        <section class="weapon-panel" aria-label="Firearm and ammunition">
+          <span id="weapon-name">M9 / SIDEARM</span><strong id="weapon-ammo">12 / 60</strong>
+          <small id="weapon-hint">R · RELOAD   1 / 2 · SWITCH</small>
+        </section>
 
         <section class="mission-panel" aria-label="Expedition objectives">
           <strong>OPERATION: FIELD RECOVERY</strong>
@@ -91,21 +99,22 @@
         </section>
 
         <section id="creature-panel" class="creature-panel" aria-label="Field companion collection">
-          <div class="creature-eyebrow">FIELD JOURNAL · 001 / 001</div>
-          <div class="creature-name">✦ LANTERNKIN <span class="creature-status-wild">WILD</span><span class="creature-status-bonded">BONDED ✓</span></div>
-          <p>Floating woodland companion. Its light pulse damages infected nearby.</p>
+          <div class="creature-eyebrow">FIELD JOURNAL · 3 SPECIES</div>
+          <div class="creature-name"><span id="creature-name">LANTERNKIN</span> <span class="creature-status-wild">WILD</span><span class="creature-status-bonded">BONDED ✓</span></div>
+          <p>Bond with wild creatures. Fight together to evolve at 120 and 400 XP.</p>
           <div class="progress-top"><span class="creature-eyebrow">COMPANION PROGRESSION</span><b id="creature-level">UNBONDED</b></div>
           <div class="progress-track"><div id="creature-xp-fill" class="progress-fill creature-xp-fill" style="width: 0%"></div></div>
           <div id="creature-xp-text" class="progress-bottom">BOND TO EARN XP</div>
+          <div id="evolution-status" class="evolution-status">Explore to discover three species.</div><div id="creature-roster" class="creature-roster" aria-label="Select an owned companion"></div>
           <div class="strain-top"><span>BOND STRAIN</span><span id="bond-strain-label">0% STRAIN</span></div>
           <div class="strain-track"><div id="bond-strain-fill" class="strain-fill"></div></div>
           <button id="ability-button" class="ability-button" type="button" disabled>LOCKED · FIND LANTERNKIN</button>
         </section>
         <section id="inventory-panel" class="inventory-panel" aria-label="Field backpack">
-          <div class="inventory-title"><strong>FIELD BACKPACK</strong><span>3 SLOTS · MAX 20 EACH</span></div>
+          <div class="inventory-title"><strong>FIELD BACKPACK</strong><span>3 MATERIALS · MAX 20 EACH</span></div>
           <p>Recover materials from infected and craft upgrades for the next expedition.</p>
           <div id="inventory-grid" class="inventory-grid"></div>
-          <div class="craft-heading">FIELD CRAFTING (v0.6)</div>
+          <div class="craft-heading">FIELD CRAFTING</div>
           <div id="crafting-list" class="crafting-list"></div>
           <p class="inventory-footnote">Press I to close or use the BACKPACK button.</p>
         </section>
@@ -141,8 +150,8 @@
           <div class="control-chip"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>MOVE</span></div>
           <div class="control-chip"><kbd>SHIFT</kbd><span>SPRINT</span></div>
           <div class="control-chip"><kbd>MOUSE</kbd><span>LOOK</span></div>
-          <div class="control-chip attack-chip"><kbd>SPACE / LMB</kbd><span>MELEE</span></div>
-          <div class="control-chip"><kbd>E</kbd><span>BOND</span></div>
+          <div class="control-chip attack-chip"><kbd>LMB</kbd><span>FIRE</span></div>
+          <div class="control-chip"><kbd>RMB</kbd><span>AIM</span></div><div class="control-chip"><kbd>R</kbd><span>RELOAD</span></div><div class="control-chip"><kbd>SPACE</kbd><span>MELEE</span></div><div class="control-chip"><kbd>E</kbd><span>INTERACT</span></div>
           <div class="control-chip"><kbd>Q</kbd><span>PULSE</span></div>
           <div class="control-chip"><kbd>ESC</kbd><span>RELEASE</span></div>
         </div>
@@ -156,11 +165,11 @@
           <h1 id="title-heading">MURK <span>&amp;</span><br> METTLE</h1>
           <p class="title-tagline">FIND YOUR WILD. <strong>FIGHT THE ROT.</strong></p>
           <div class="title-rule"></div>
-          <p class="title-description">The Bloom is consuming the wildlands. Track the infected, salvage what you can, and protect the creatures that still trust you.</p>
+          <p class="title-description">An abandoned settlement. A forest reclaiming its dead. Explore the expanded Wildlands, survive the infected, and evolve the creatures that choose to trust you.</p>
           <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
-          <p class="title-hint">WASD MOVE · SHIFT SPRINT · SPACE ATTACK · E INTERACT · Q COMPANION</p>
+          <p class="title-hint">WASD MOVE · RMB AIM · LMB FIRE · R RELOAD · 1/2 WEAPON · SPACE MELEE · E INTERACT · Q PULSE · C COMPANION</p>
         </div>
-        <p class="title-build">MURK &amp; METTLE / v0.20 · ORIGINAL INDIE PROTOTYPE</p>
+        <p class="title-build">MURK &amp; METTLE / v0.21 · ORIGINAL INDIE PROTOTYPE</p>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>
