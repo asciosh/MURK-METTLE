@@ -37,6 +37,7 @@ export class CoopVisuals {
         this.remotePlayers.set(id, actor);
       }
       const moving = Math.hypot(state.x - actor.root.position.x, state.z - actor.root.position.z) > 0.001;
+      actor.setEffectsLights(this.lightsEnabled);
       actor.updateRemote(state, dt);
       let ally = this.companions.get(id);
       if (state.creatureOwned && !ally) {

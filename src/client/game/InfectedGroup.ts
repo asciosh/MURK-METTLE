@@ -18,7 +18,10 @@ export class InfectedGroup {
   private readonly actors = new Map<string, Zombie>();
   private readonly fallen: { actor: Zombie; age: number }[] = [];
   private model: ModelEntry | undefined;
-  constructor(private readonly scene: THREE.Scene) {}
+  constructor(
+    private readonly scene: THREE.Scene,
+    private readonly onImpact: (position: THREE.Vector3) => void = () => {},
+  ) {}
   resetSolo(player: Combatant): void {
     this.clear();
     this.simulation.reset([player]);
@@ -42,8 +45,10 @@ export class InfectedGroup {
     const living = new Set(this.states.filter((s) => s.hp > 0).map((s) => s.id));
     for (const [id, actor] of this.actors)
       if (!living.has(id)) {
-        if (this.states.some((s) => s.id === id && s.hp <= 0)) this.fallen.push({ actor, age: 0 });
-        else actor.dispose();
+        if (this.states.some((s) => s.id === id && s.hp <= 0)) {
+          this.onImpact(actor.root.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+          this.fallen.push({ actor, age: 0 });
+        } else actor.dispose();
         this.actors.delete(id);
       }
     for (let i = this.fallen.length - 1; i >= 0; i--) {
@@ -72,13 +77,17 @@ export class InfectedGroup {
       actor.updateNetworkVisual(dt, motion, state.state);
       actor.root.position.set(state.x, 0, state.z);
       const difference = actor.getHealth() - state.hp;
-      if (difference > 0) actor.takeDamage(difference);
+      if (difference > 0) {
+        actor.takeDamage(difference);
+        this.onImpact(actor.root.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+      }
     }
   }
   damage(id: string, amount: number): boolean {
     const enemy = this.simulation.enemies.find((e) => e.id === id);
     if (!enemy) return false;
     const killed = damageEnemy(enemy, amount);
+    this.onImpact(new THREE.Vector3(enemy.x, 1.2, enemy.z));
     this.actors.get(id)?.takeDamage(amount);
     return killed;
   }

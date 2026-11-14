@@ -56,6 +56,8 @@ export class Player {
   private fallenBlend = 0;
   private remoteDeathTime = 0;
   private hitReaction = 0;
+  private aimBlend = 0;
+  private readonly relaxedHand = new THREE.Vector3(-0.25, 1.02, 0.04);
   aiming = false;
   aimYaw = 0;
 
@@ -355,6 +357,7 @@ export class Player {
     );
     this.sprintBlend = THREE.MathUtils.damp(this.sprintBlend, this.isMoving && sprinting ? 1 : 0, 9, deltaSeconds);
     this.idleClock += deltaSeconds;
+    this.aimBlend = THREE.MathUtils.damp(this.aimBlend, this.weaponRaised ? 1 : 0, 16, deltaSeconds);
     this.animator.setState(
       this.health <= 0
         ? 'death'
@@ -373,7 +376,7 @@ export class Player {
       this.movementBlend * Math.abs(Math.sin(this.walkClock)) * (0.018 + this.sprintBlend * 0.016) +
       Math.sin(this.idleClock * 1.9) * 0.009;
     this.visual.position.y = bob + this.fallenBlend * 0.14;
-    this.visual.rotation.z = -this.fallenBlend * 1.47;
+    this.visual.rotation.z = -this.fallenBlend * 1.47 + this.hitReaction * 0.055;
     this.visual.rotation.x = this.fallenBlend * 0.12 - this.hitReaction * 0.08;
 
     const attackProgress = this.attackTime > 0 ? 1 - this.attackTime / 0.28 : 0;
@@ -393,7 +396,9 @@ export class Player {
       leg.rotation.z = this.motionSide * weight * Math.sin(this.walkClock + i * Math.PI) * 0.15;
     }
     this.fallbackModel.rotation.z = weight * Math.sin(this.walkClock) * 0.014 - this.motionSide * weight * 0.055;
-    this.fallbackModel.rotation.x = this.sprintBlend * -0.09;
+    this.fallbackModel.rotation.x = this.sprintBlend * -0.09 - this.aimBlend * 0.025;
+    this.fallbackModel.rotation.y =
+      Math.sin((this.attackTime / 0.28) * Math.PI) * 0.16 - (this.recoilTime / 0.12) * 0.025;
     this.headRig.rotation.y = THREE.MathUtils.damp(
       this.headRig.rotation.y,
       Math.sin(this.idleClock * 0.65) * 0.035 * (1 - weight),
@@ -447,12 +452,13 @@ export class Player {
       this.fallbackModel.worldToLocal(this.weaponSocket.localToWorld(new THREE.Vector3(x, y, z)));
     const rightHand = handTarget(0, -0.1, 0.035);
     const leftHand = this.weapon === 'rifle' ? handTarget(-0.045, -0.04, -0.28) : handTarget(-0.09, -0.1, 0.01);
-    if (!raised && !this.reloading && !this.bandaging) {
-      leftHand.set(
+    if (!this.reloading && !this.bandaging) {
+      this.relaxedHand.set(
         -0.25,
         1.02 + Math.sin(this.walkClock) * weight * 0.1,
         0.04 - Math.cos(this.walkClock) * weight * 0.12,
       );
+      leftHand.lerp(this.relaxedHand, 1 - this.aimBlend);
     }
     if (this.bandaging) {
       leftHand.set(-0.06, 1.34, -0.25);
@@ -524,12 +530,15 @@ export class Player {
     this.raisedTime = 0.32;
     this.gun.fire();
   }
+  setEffectsLights(enabled: boolean): void {
+    this.gun.setLightsEnabled(enabled);
+  }
   muzzlePosition(): THREE.Vector3 {
     return this.gun.muzzlePosition();
   }
 
   triggerAttack(): void {
-    this.animator.setState('attack');
+    this.animator.setState('attack', true);
     this.attackTime = 0.28;
   }
 

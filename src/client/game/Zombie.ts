@@ -398,6 +398,8 @@ export class Zombie {
     this.modelVisual.position.y = bob - this.strikeBlend * 0.045;
     this.modelVisual.rotation.x =
       0.05 + this.visualMove * 0.06 + this.strikeBlend * 0.11 - Math.sin((this.hitFlashTime / 0.16) * Math.PI) * 0.23;
+    this.modelVisual.rotation.y = Math.sin((this.hitFlashTime / 0.16) * Math.PI) * (this.appearance % 2 ? -0.16 : 0.16);
+    this.modelVisual.position.z = Math.sin((this.hitFlashTime / 0.16) * Math.PI) * 0.09;
     this.modelVisual.rotation.z =
       Math.sin(phase) * 0.025 * this.visualMove + Math.sin(this.animationClock * 1.3) * 0.012;
     for (const [i, leg] of [this.leftLeg, this.rightLeg].entries()) {
