@@ -1,6 +1,6 @@
 export interface RemotePlayer { id: string; x: number; z: number; yaw: number; hp: number; }
 export interface RemoteZombie { x: number; z: number; hp: number; max: number; strain: string; generation: number; }
-export type RoomEvent = { type: 'welcome'; id: string; code: string } | { type: 'snapshot'; players: RemotePlayer[]; zombie: RemoteZombie } | { type: 'damage'; hp: number } | { type: 'kill'; by: string; pulse: boolean; x: number; z: number } | { type: 'reward'; xp: number; creatureXp: number; duplicate: boolean; totals: { xp: number; kills: number; creatureXp: number } } | { type: 'error'; message: string };
+export type RoomEvent = { type: 'welcome'; id: string; code: string } | { type: 'snapshot'; players: RemotePlayer[]; zombie: RemoteZombie } | { type: 'damage'; hp: number } | { type: 'kill'; by: string; pulse: boolean; x: number; z: number } | { type: 'reward'; xp: number; creatureXp: number; material?: string | null; duplicate: boolean; totals: { xp: number; kills: number; creatureXp: number } } | { type: 'error'; message: string };
 type Frame = { at: number; players: RemotePlayer[]; zombie: RemoteZombie };
 const INTERPOLATION_DELAY_MS = 120;
 const blend = (a: number, b: number, t: number): number => a + (b - a) * t;
@@ -26,7 +26,7 @@ export class Multiplayer {
       if (this.ws !== socket) return;
       try {
         const data = JSON.parse(event.data as string) as RoomEvent;
-        if (data.type === 'welcome') { this.id = data.id; this.code = data.code; this.connected = true; }
+        if (data.type === 'welcome') { this.id = data.id; this.code = data.code; this.connected = true; this.send('sync-equipment'); }
         if (data.type === 'snapshot') {
           this.frames.push({ at: performance.now(), players: data.players, zombie: data.zombie });
           if (this.frames.length > 5) this.frames.shift();

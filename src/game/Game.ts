@@ -11,6 +11,7 @@ import { Inventory, ITEM_DEFINITIONS, type ItemId } from './Inventory';
 import { Loot } from './Loot';
 import { Crafting, RECIPES, type RecipeId } from './Crafting';
 import { Multiplayer, type RoomEvent } from './Multiplayer';
+import { CoopProgress } from './CoopProgress';
 import { Expedition, EXTRACTION_X, EXTRACTION_Z, EXTRACTION_RADIUS, KILLS_REQUIRED, SALVAGE_REQUIRED } from './Expedition';
 import { Progression, levelFromXp, xpInLevel, CREATURE_XP_PER_PULSE_HIT, CREATURE_XP_PER_PULSE_KILL } from './Progression';
 
@@ -41,6 +42,14 @@ export class Game {
   private readonly missionHint: HTMLElement | null;
   private readonly crafting = new Crafting(this.inventory);
   private readonly multiplayer = new Multiplayer();
+  private readonly coopProgress = new CoopProgress(recipe => {
+    if (recipe === 'restorative') {
+      this.bondStrain = Math.max(0, this.bondStrain - 60);
+      if (this.recoveringBond) this.antidotePending = true;
+      this.updateCompanionHud();
+    }
+    this.multiplayer.send('sync-equipment');
+  });
   private readonly remotePlayers = new Map<string, Player>();
   private readonly roomStatus: HTMLElement | null;
   private readonly roomCode: HTMLInputElement | null;
@@ -345,7 +354,8 @@ export class Game {
       const completed = id !== 'restorative' && this.crafting.upgrades[id];
       const cost = Object.entries(recipe.cost).map(([item, count]) => `${count} ${item}`).join(' + ');
       button.textContent = `${recipe.name} · ${recipe.description} · ${completed ? 'CRAFTED' : cost}`;
-      button.disabled = !this.crafting.canCraft(id);
+      button.disabled = this.multiplayer.connected || !this.crafting.canCraft(id);
+      if (this.multiplayer.connected) button.title = 'Use the verified co-op crafting buttons in FIELD MENU.';
       button.addEventListener('click', () => {
         if (!this.crafting.craft(id)) return;
         if (id === 'restorative') {
@@ -363,11 +373,17 @@ export class Game {
   private readonly handleJoinRoom = (): void => {
     const code = this.roomCode?.value.trim().toUpperCase() || 'BLOOM';
     this.multiplayer.connect(code);
+    // Prevent remaining solo loot from being mistaken for account-owned co-op salvage.
+    for (const drop of this.drops) drop.dispose(this.scene);
+    this.drops.length = 0;
+    this.updateCraftingHud();
+    void this.coopProgress.refresh();
     this.updateMissionHud();
     if (this.roomStatus) this.roomStatus.textContent = `Connecting to ${code}…`;
   };
   private readonly handleLeaveRoom = (): void => {
     this.multiplayer.disconnect();
+    this.updateCraftingHud();
     this.clearRemotePlayers();
     this.remoteZombieGeneration = -1;
     this.zombie.dispose();
@@ -381,6 +397,7 @@ export class Game {
       this.showToast(`ROOM JOINED  //  ${event.code}`, 'success');
       this.remoteZombieGeneration = -1;
       this.updateMissionHud();
+      this.updateCraftingHud();
     } else if (event.type === 'error') {
       if (this.roomStatus) this.roomStatus.textContent = event.message;
       this.showToast(event.message, 'warning');
@@ -395,12 +412,12 @@ export class Game {
       }
       if (event.hp === 100 && this.player.getHealth() < 100) this.player.reset();
     } else if (event.type === 'kill') {
-      // Prototype: shared enemy kill; each player receives an individual salvage drop.
-      this.spawnLoot();
+      // In co-op the server credits materials to the verified killer; never spawn local salvage.
       if (event.by === this.multiplayer.id) this.showToast('KILL CONFIRMED  //  Crediting Cloudflare account…', 'success');
       else this.showToast('TEAM KILL  //  Salvage available!', 'success');
     } else if (event.type === 'reward') {
-      if (!event.duplicate) this.showToast(`CLOUD REWARD  //  +${event.xp} co-op XP · ${event.totals.kills} trusted kills`, 'success');
+      if (!event.duplicate) this.showToast(`CLOUD REWARD  //  +${event.xp} co-op XP · ${event.material ?? 'material'} · ${event.totals.kills} trusted kills`, 'success');
+      void this.coopProgress.refresh();
     }
   };
   private updateRemotePlayers(_deltaSeconds: number): void {
@@ -462,7 +479,8 @@ export class Game {
       }
       return;
     }
-    const candidate = this.drops.find(drop => drop.canPickUp(playerPos));
+    // Co-op item economy is wholly server-owned; local pickup is solo-only.
+    const candidate = this.multiplayer.connected ? undefined : this.drops.find(drop => drop.canPickUp(playerPos));
     if (candidate) {
       if (!this.inventory.add(candidate.id)) {
         this.showToast(`PACK FULL  //  ${ITEM_DEFINITIONS[candidate.id].name} has reached 20 / 20.`, 'warning');
@@ -769,6 +787,7 @@ export class Game {
     document.querySelector('#room-join')?.removeEventListener('click', this.handleJoinRoom);
     document.querySelector('#room-leave')?.removeEventListener('click', this.handleLeaveRoom);
     this.multiplayer.disconnect();
+    this.updateCraftingHud();
     this.clearRemotePlayers();
     this.inventoryButton?.removeEventListener('click', this.handleInventoryClick);
     for (const drop of this.drops) drop.dispose(this.scene);

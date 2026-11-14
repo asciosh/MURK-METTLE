@@ -8,12 +8,12 @@
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — v0.14</title>
+    <title>Murk &amp; Mettle — v0.16</title>
   </head>
   <body>
     <div id="app">
       <section class="co-op-bar" aria-label="Session status and field menu">
-        <span class="co-op-title">V0.14 · PRIVATE BETA</span>
+        <span class="co-op-title">V0.16 · PRIVATE BETA</span>
         <span id="room-status" role="status" aria-live="polite">Solo · Cloud account</span>
         <span id="account-state" role="status" aria-live="polite">Sign in</span>
         <button id="field-menu-toggle" type="button" aria-controls="field-menu" aria-expanded="false">☰ FIELD MENU</button>
@@ -23,6 +23,13 @@
             <input id="room-code" maxlength="12" value="BLOOM" aria-label="Room code" placeholder="Room code" />
             <button id="room-join" type="button">JOIN / CREATE</button>
             <button id="room-leave" type="button">SOLO</button>
+          </div>
+          <strong>VERIFIED CO-OP PROGRESSION</strong>
+          <div id="coop-account-state" class="coop-trust-state" role="status">Join a room to earn verified rewards.</div>
+          <div class="field-menu-row coop-trust-buttons">
+            <button id="coop-craft-sharpened" type="button" disabled>CO-OP BLADE</button>
+            <button id="coop-craft-balanced" type="button" disabled>CO-OP GRIP</button>
+            <button id="coop-craft-restorative" type="button" disabled>CO-OP ANTIDOTE</button>
           </div>
           <strong>PLAYER PROGRESS</strong>
           <div class="field-menu-row"><button id="account-toggle" type="button">PLAYER ACCOUNT</button></div>
@@ -50,7 +57,7 @@
         <div class="build-tag">
           <span class="status-dot"></span>
           <span>THE WILDLANDS</span>
-          <b>0.14</b>
+          <b>0.16</b>
         </div>
       </header>
 
@@ -153,7 +160,7 @@
           <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
           <p class="title-hint">WASD MOVE · SHIFT SPRINT · SPACE ATTACK · E INTERACT · Q COMPANION</p>
         </div>
-        <p class="title-build">MURK &amp; METTLE / v0.14 · ORIGINAL INDIE PROTOTYPE</p>
+        <p class="title-build">MURK &amp; METTLE / v0.16 · ORIGINAL INDIE PROTOTYPE</p>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>

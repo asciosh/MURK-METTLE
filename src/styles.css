@@ -536,3 +536,8 @@ button:focus-visible, input:focus-visible, .wordmark:focus-visible { outline: 2p
 .account-panel { z-index:10000; }
 #account-save-now { background:#427651; }
 .account-panel button[hidden] {display:none!important;}
+
+/* v0.16: authenticated co-op wallet lives in the field menu, not over the game canvas */
+.coop-trust-state { font-size: 0.78rem; color: #bce3c7; line-height: 1.5; overflow-wrap: anywhere; }
+.coop-trust-buttons { flex-wrap: wrap; }
+.coop-trust-buttons button { min-height: 34px; flex: 1 1 95px; }

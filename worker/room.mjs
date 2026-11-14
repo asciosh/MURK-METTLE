@@ -31,7 +31,7 @@ export class GameRoom extends DurableObject {
       if (data?.id && this.players.size < MAX_PLAYERS) this.players.set(ws, {
         id: data.id, username: data.username || '', x: data.x ?? 0, z: data.z ?? 0, yaw: data.yaw ?? 0,
         hp: data.hp ?? 100, lastMove: Date.now(), attackAt: 0, pulseAt: 0,
-        messageAt: 0,
+        messageAt: 0, upgrades: { sharpened: false, balanced: false },
       });
     }
     if (this.players.size) this.startTick();
@@ -97,6 +97,21 @@ export class GameRoom extends DurableObject {
       this.saveAttachment(socket, player);
       return;
     }
+    if (msg.type === 'sync-equipment') {
+      // Obtain upgrades from account storage; never accept equipment flags from packets.
+      try {
+        const target = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
+        const response = await target.fetch(new Request('https://internal/api/account/coop-equipment', {
+          method: 'GET', headers: { 'X-MM-Account': player.username, 'X-MM-Reward-Source': 'game-room-v1' },
+        }));
+        if (response.ok) {
+          const data = await response.json();
+          player.upgrades = { sharpened: data.upgrades?.sharpened === true,
+            balanced: data.upgrades?.balanced === true };
+        }
+      } catch (error) { console.warn('Unable to verify equipment', error); }
+      return;
+    }
     if (msg.type === 'restart') {
       if (player.hp <= 0) {
         player.hp = 100; player.x = 0; player.z = 0;
@@ -114,15 +129,14 @@ export class GameRoom extends DurableObject {
     if (now - (pulse ? player.pulseAt : player.attackAt) < cooldown) return;
     if (pulse) player.pulseAt = now; else player.attackAt = now;
     const distance = Math.hypot(zombie.x - player.x, zombie.z - player.z);
-    if (distance > (pulse ? 7.5 : 2.65)) return;
+    if (distance > (pulse ? 7.5 : (player.upgrades?.balanced ? 3.35 : 2.65))) return;
     if (!pulse) {
       const vx = (zombie.x - player.x) / Math.max(distance, 0.001);
       const vz = (zombie.z - player.z) / Math.max(distance, 0.001);
       if ((-Math.sin(player.yaw) * vx - Math.cos(player.yaw) * vz) < -0.15) return;
     }
-    // Deliberately preserve v0.10 combat protocol. Equipment ownership remains
-    // client-reported for now; server-side progression validation is future work.
-    zombie.hp = Math.max(0, zombie.hp - (pulse ? 35 : 40));
+    // Co-op weapon upgrades are loaded from the authenticated account, never from client input.
+    zombie.hp = Math.max(0, zombie.hp - (pulse ? 35 : (player.upgrades?.sharpened ? 55 : 40)));
     if (zombie.hp === 0) {
       zombie.deadAt = now;
       // Co-op XP is awarded by the room, never by a player-supplied packet.
@@ -138,7 +152,7 @@ export class GameRoom extends DurableObject {
         if (!response.ok) throw new Error(`Reward store returned ${response.status}`);
         const result = await response.json();
         this.send(socket, { type: 'reward', xp: 50, creatureXp: pulse ? 40 : 0,
-          totals: result.stats, duplicate: !!result.duplicate });
+          material: result.material || null, totals: result.stats, duplicate: !!result.duplicate });
       } catch (error) {
         // No client-side award fallback: failure must remain visible and
         // investigated rather than creating untrusted progression.
