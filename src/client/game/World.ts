@@ -1,8 +1,11 @@
+import { addHabitatArt } from './HabitatArt';
+import { forestZone, foliageScale, WORLD_DECOR_BUDGET } from './world-composition.mjs';
 import { OutdoorMotion, fernGeometry, waterRipples } from './OutdoorMotion';
 import { InstanceDetail } from './InstanceDetail';
 import type { RenderProfile } from '../../../shared/render-profile.mjs';
 import { SurfaceMaterials } from './SurfaceMaterials';
 import { terrainMaterial } from './TerrainMaterial';
+import { addZoneStory } from './WorldStory';
 import { addSettlementDetails } from './WorldDetails';
 import * as THREE from 'three';
 import {
@@ -21,6 +24,7 @@ export class World {
   private readonly detailMeshes: { detail: InstanceDetail; kind: 'foliage' | 'grass' | 'undergrowth' }[] = [];
   private readonly surfaces = new SurfaceMaterials();
   private readonly textures: THREE.Texture[] = [];
+  private readonly generatedTextures = new Map<string, THREE.CanvasTexture>();
   private readonly windTime = { value: 0 };
   private readonly depthMaterials: THREE.Material[] = [];
   private readonly crates = new Map<string, THREE.Group>();
@@ -32,9 +36,17 @@ export class World {
     this.createSupplies();
     this.createLandmarks();
     addSettlementDetails(this.scene, this.surfaces);
+    this.textures.push(...addZoneStory(this.scene, this.surfaces));
+    const habitatFronds = addHabitatArt(this.scene, this.surfaces, this.texture('leaf'));
+    this.applyWind(habitatFronds);
+    this.detailMeshes.push({ detail: new InstanceDetail(habitatFronds, 16), kind: 'undergrowth' });
     this.outdoor = new OutdoorMotion(this.scene);
   }
-  private texture(kind: 'soil' | 'bark' | 'concrete' | 'brick' | 'leaf' | 'grass' | 'road'): THREE.CanvasTexture {
+  private texture(
+    kind: 'soil' | 'bark' | 'concrete' | 'brick' | 'leaf' | 'pine' | 'grass' | 'road',
+  ): THREE.CanvasTexture {
+    const cached = this.generatedTextures.get(kind);
+    if (cached) return cached;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 512;
     const ctx = canvas.getContext('2d')!;
@@ -44,7 +56,50 @@ export class World {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
       return seed / 4294967296;
     };
-    if (kind === 'grass') {
+    if (kind === 'pine') {
+      // Original evergreen bough atlas: five tapered sprays, not solid cone geometry.
+      for (let b = 0; b < 5; b++) {
+        const y = 28 + b * 42,
+          width = 20 + b * 19;
+        ctx.fillStyle = b % 2 ? '#3b553d' : '#476146';
+        ctx.beginPath();
+        ctx.moveTo(128, y - 25);
+        for (let k = 0; k < 12; k++) {
+          const t = k / 11;
+          ctx.lineTo(128 - width * t + (k % 2 ? 4 : -2), y - 12 + t * 34);
+        }
+        ctx.lineTo(128, y + 11);
+        for (let k = 11; k >= 0; k--) {
+          const t = k / 11;
+          ctx.lineTo(128 + width * t + (k % 2 ? -4 : 2), y - 12 + t * 34);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#6d7354';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(128, y - 22);
+        ctx.lineTo(128, y + 20);
+        ctx.stroke();
+        for (let k = 0; k < 70; k++) {
+          const side = k % 2 ? 1 : -1,
+            t = rand(),
+            x = 128 + side * width * t;
+          ctx.strokeStyle = `rgb(${55 + rand() * 35},${75 + rand() * 38},${48 + rand() * 28})`;
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.moveTo(128, y - 12 + t * 24);
+          ctx.lineTo(x, y + 15 + t * 10);
+          ctx.stroke();
+          for (let needle = 0; needle < 3; needle++) {
+            ctx.beginPath();
+            ctx.moveTo(x, y + 10);
+            ctx.lineTo(x + side * (4 + rand() * 5), y + 3 + needle * 5);
+            ctx.stroke();
+          }
+        }
+      }
+    } else if (kind === 'grass') {
       for (let i = 0; i < 40; i++) {
         const base = 12 + rand() * 232,
           tip = base + (rand() - 0.5) * 62,
@@ -177,6 +232,7 @@ export class World {
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     texture.anisotropy = 8;
     this.textures.push(texture);
+    this.generatedTextures.set(kind, texture);
     return texture;
   }
   private mesh(
@@ -213,6 +269,7 @@ export class World {
     }
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     const ground = this.mesh(geometry, terrainMaterial(this.surfaces), 0, -0.025, 0);
+    ground.name = 'flat-playable-ground';
     ground.castShadow = false;
     // A continuous ridgeline replaces the obvious sphere-shaped background hills.
     const mountains = new THREE.PlaneGeometry(430, 430, 90, 90);
@@ -244,9 +301,9 @@ export class World {
     }
     const pebbleGeo = new THREE.IcosahedronGeometry(0.13, 1);
     const mat = new THREE.MeshStandardMaterial({ color: 0x77786c, roughness: 1 });
-    const pebbles = new THREE.InstancedMesh(pebbleGeo, mat, 850);
+    const pebbles = new THREE.InstancedMesh(pebbleGeo, mat, WORLD_DECOR_BUDGET.pebbles);
     const d = new THREE.Object3D();
-    for (let i = 0; i < 850; i++) {
+    for (let i = 0; i < WORLD_DECOR_BUDGET.pebbles; i++) {
       const x = Math.sin(i * 674.21) * 88,
         z = Math.cos(i * 341.43) * 88;
       d.position.set(x, 0.04, z);
@@ -277,6 +334,8 @@ export class World {
   private createForest(): void {
     const barkMaterial = this.surfaces.material('bark', 0xffffff, 2);
     const leaf = this.texture('leaf');
+    const pineTrees = TREES.filter((t) => forestZone(t.x, t.z) === 'pine');
+    const broadTrees = TREES.filter((t) => forestZone(t.x, t.z) !== 'pine');
     const branches = new THREE.InstancedMesh(
       new THREE.CylinderGeometry(0.035, 0.1, 2.8, 6),
       barkMaterial,
@@ -292,7 +351,21 @@ export class World {
         side: THREE.DoubleSide,
         roughness: 1,
       }),
-      TREES.length * 10,
+      broadTrees.length * 10,
+    );
+    const pineMaterial = (foliage.material as THREE.MeshStandardMaterial).clone();
+    pineMaterial.map = this.texture('pine');
+    const pineFoliage = new THREE.InstancedMesh(foliage.geometry.clone(), pineMaterial, pineTrees.length * 10);
+    let broadIndex = 0,
+      pineIndex = 0;
+    const stormHome = CREATURES.stormrook;
+    const stormTree = TREES.reduce(
+      (best, t, i) =>
+        Math.hypot(t.x - stormHome.x, t.z - stormHome.z) <
+        Math.hypot(TREES[best].x - stormHome.x, TREES[best].z - stormHome.z)
+          ? i
+          : best,
+      0,
     );
     const d = new THREE.Object3D();
     const color = new THREE.Color();
@@ -302,6 +375,10 @@ export class World {
       d.scale.setScalar(t.size);
       d.updateMatrix();
       trunks.setMatrixAt(i, d.matrix);
+      trunks.setColorAt(i, color.setHex(i === stormTree ? 0xb1b8ad : 0xffffff));
+      const zone = forestZone(t.x, t.z);
+      const crown = zone === 'pine' ? pineFoliage : foliage;
+      const crownIndex = zone === 'pine' ? pineIndex++ : broadIndex++;
       for (let j = 0; j < 10; j++) {
         const angle = j * 2.4 + i;
         d.position.set(
@@ -310,20 +387,29 @@ export class World {
           t.z + Math.cos(angle) * 0.7 * t.size,
         );
         d.rotation.set(Math.cos(angle) * 1.05, 0, -Math.sin(angle) * 1.05);
-        d.scale.setScalar(t.size);
+        d.scale.set(
+          t.size * (zone === 'pine' ? 0.65 : 1),
+          t.size * (zone === 'pine' ? 0.8 : 1),
+          t.size * (zone === 'pine' ? 0.65 : 1),
+        );
         d.updateMatrix();
         branches.setMatrixAt(i * 10 + j, d.matrix);
+        const shape = foliageScale(zone, j);
         d.position.set(
-          t.x + Math.sin(j * 2.3) * (1.5 + (j % 3) * 0.35) * t.size,
-          (6.2 + (j % 4) * 0.58) * t.size,
-          t.z + Math.cos(j * 2.3) * (1.5 + (j % 3) * 0.35) * t.size,
+          t.x + Math.sin(j * 2.3) * (zone === 'pine' ? 0.25 : 1.5 + (j % 3) * 0.35) * t.size,
+          shape.y * t.size,
+          t.z + Math.cos(j * 2.3) * (zone === 'pine' ? 0.25 : 1.5 + (j % 3) * 0.35) * t.size,
         );
         d.rotation.set((j % 3) * 0.38, j * 2.4 + i, Math.sin(j) * 0.32);
-        d.scale.set(1.1 * t.size, (0.7 + (j % 2) * 0.2) * t.size, t.size);
+        d.scale.set(shape.width * t.size * (i === stormTree ? 0.45 : 1), shape.height * t.size, t.size);
+        if (zone === 'wetland') d.rotation.z += 0.32 * Math.sin(j * 2.3);
         d.updateMatrix();
-        foliage.setMatrixAt(i * 10 + j, d.matrix);
+        crown.setMatrixAt(crownIndex * 10 + j, d.matrix);
         color.setHSL(0.2 + (i % 7) * 0.005, 0.1, 0.67 + (i % 4) * 0.045);
-        foliage.setColorAt(i * 10 + j, color);
+        if (zone === 'wetland') color.setHSL(0.25, 0.1, 0.72);
+        if (zone === 'pine') color.setHSL(0.29, 0.12, 0.66 + (i % 3) * 0.03);
+        if (i === stormTree) color.setRGB(1, 0.64, 0.45);
+        crown.setColorAt(crownIndex * 10 + j, color);
       }
     }
     trunks.castShadow = true;
@@ -336,9 +422,16 @@ export class World {
     branches.castShadow = true;
     branches.receiveShadow = true;
     branches.computeBoundingSphere();
-    this.scene.add(trunks, foliage, branches);
+    pineFoliage.name = 'southern-pine-crowns';
+    foliage.name = 'broadleaf-and-willow-crowns';
+    pineFoliage.castShadow = true;
+    pineFoliage.receiveShadow = false;
+    this.applyWind(pineFoliage);
+    pineFoliage.computeBoundingSphere();
+    this.scene.add(trunks, foliage, pineFoliage, branches);
     this.detailMeshes.push(
       { detail: new InstanceDetail(foliage, 10), kind: 'foliage' },
+      { detail: new InstanceDetail(pineFoliage, 10), kind: 'foliage' },
       { detail: new InstanceDetail(branches, 10), kind: 'foliage' },
     );
     // Crossing textured grass cards replace the former solid triangular plants.
@@ -352,12 +445,17 @@ export class World {
         color: 0xb1b293,
         roughness: 1,
       }),
-      6500,
+      WORLD_DECOR_BUDGET.grass,
     );
-    for (let i = 0; i < 6500; i++) {
+    for (let i = 0; i < WORLD_DECOR_BUDGET.grass; i++) {
       const x = Math.sin(i * 127.1) * 88,
         z = Math.sin(i * 311.7) * 88;
-      d.position.set(x, Math.abs(x) < 5 ? -0.6 : 0.23, z);
+      const wet = Math.hypot(x + 48, z + 31) < 13;
+      const town = Math.abs(x) < 30 && z < -29 && z > -80;
+      const trail = Math.abs(x) < 5 || (Math.abs(z) < 3 && x > -56 && x < 66);
+      d.position.set(x, wet || town || trail ? -1 : 0.23, z);
+      color.setHex(forestZone(x, z) === 'pine' ? 0xa0aa91 : 0xbfc098);
+      grass.setColorAt(i, color);
       d.rotation.set(0, i * 2.4, 0);
       d.scale.setScalar(0.6 + (i % 7) * 0.12);
       d.updateMatrix();
@@ -368,8 +466,8 @@ export class World {
     grass.computeBoundingSphere();
     this.scene.add(grass);
     this.detailMeshes.push({ detail: new InstanceDetail(grass), kind: 'grass' });
-    const undergrowth = new THREE.InstancedMesh(fernGeometry(), foliage.material, 900);
-    for (let i = 0; i < 900; i++) {
+    const undergrowth = new THREE.InstancedMesh(fernGeometry(), foliage.material, WORLD_DECOR_BUDGET.ferns);
+    for (let i = 0; i < WORLD_DECOR_BUDGET.ferns; i++) {
       const x = Math.sin(i * 531.6) * 86,
         z = Math.cos(i * 214.7) * 86;
       const clearing = Math.abs(x) < 6 || (Math.abs(x) < 30 && z < -29) || Math.hypot(x + 48, z + 28) < 13;
@@ -590,8 +688,26 @@ export class World {
     }
     reeds.computeBoundingSphere();
     this.scene.add(reeds);
+    const pads = new THREE.InstancedMesh(
+      new THREE.CircleGeometry(0.29, 10, 0.15, Math.PI * 1.86),
+      new THREE.MeshStandardMaterial({ color: 0x64785c, roughness: 0.72, side: THREE.DoubleSide }),
+      WORLD_DECOR_BUDGET.lilyPads,
+    );
+    for (let i = 0; i < WORLD_DECOR_BUDGET.lilyPads; i++) {
+      const a = i * 2.4,
+        r = 3 + (i % 9) * 0.7;
+      d.position.set(-48 + Math.cos(a) * r, 0.026, -31 + Math.sin(a) * r);
+      d.rotation.set(-Math.PI / 2, 0, i * 1.7);
+      d.scale.setScalar(0.7 + (i % 4) * 0.2);
+      d.updateMatrix();
+      pads.setMatrixAt(i, d.matrix);
+    }
+    pads.name = 'reedwater-lily-pads';
+    pads.computeBoundingSphere();
+    this.scene.add(pads);
+    this.detailMeshes.push({ detail: new InstanceDetail(pads), kind: 'undergrowth' });
     const planks = this.surfaces.material('bark', 0xb4aa92, 2);
-    for (let i = 0; i < 22; i++) this.mesh(new THREE.BoxGeometry(2.5, 0.16, 0.42), planks, -48, 0.15, -15 - i * 0.48);
+    for (let i = 0; i < 22; i++) this.mesh(new THREE.BoxGeometry(2.5, 0.016, 0.42), planks, -48, 0.013, -15 - i * 0.48);
   }
   private createSupplies(): void {
     const olive = new THREE.MeshStandardMaterial({ color: 0x505e48, metalness: 0.35, roughness: 0.75 });
@@ -622,6 +738,7 @@ export class World {
         def.z,
       );
       ground.rotation.x = -Math.PI / 2;
+      ground.name = 'creature-habitat-surface';
       ground.castShadow = false;
     }
   }
@@ -633,9 +750,11 @@ export class World {
       ? 'HAVEN / ABANDONED SETTLEMENT'
       : Math.hypot(position.x + 48, position.z + 28) < 24
         ? 'REEDWATER / WETLAND'
-        : position.x > 35
-          ? 'EAST RIDGE / RELAY STATION'
-          : 'WILDLANDS / FOREST TRAIL';
+        : position.z > 28
+          ? 'SOUTHERN PINES / SURVEY WOOD'
+          : position.x > 35
+            ? 'EAST RIDGE / RELAY STATION'
+            : 'WILDLANDS / FOREST TRAIL';
   }
   constrainPlayerPosition(position: THREE.Vector3): void {
     constrainPosition(position);

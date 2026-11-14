@@ -73,7 +73,7 @@ export class Game {
   private lastFrameAt = 0;
   private readonly touch: TouchControls;
   private environmentTarget: THREE.WebGLRenderTarget | null = null;
-  private readonly sun = new THREE.DirectionalLight(0xffdfb5, 2.65);
+  private readonly sun = new THREE.DirectionalLight(0xffdbad, 3.0);
   private readonly firearms: Firearms;
   private readonly collection: Collection;
   private coopCollection: CollectionState | null = null;
@@ -204,8 +204,8 @@ export class Game {
     this.renderer.domElement.tabIndex = 0;
     this.viewport.prepend(this.renderer.domElement);
 
-    this.scene.background = new THREE.Color(0xa6aea7);
-    this.scene.fog = new THREE.FogExp2(0xa6aea7, 0.0065);
+    this.scene.background = new THREE.Color(0xaab7af);
+    this.scene.fog = new THREE.FogExp2(0xaab7af, 0.0055);
     this.createLighting();
 
     this.world = new World(this.scene);
@@ -335,7 +335,7 @@ export class Game {
     this.scene.environment = this.environmentTarget.texture;
     this.scene.environmentIntensity = 1.0;
     pmrem.dispose();
-    this.scene.add(new THREE.HemisphereLight(0xb8c7d1, 0x66604e, 2.15));
+    this.scene.add(new THREE.HemisphereLight(0xc0d4df, 0x5e5e46, 1.85));
     const sun = this.sun;
     sun.position.set(-25, 35, 18);
     sun.castShadow = true;
