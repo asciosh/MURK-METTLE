@@ -1,1 +1,3 @@
-{}
+{
+  "survivor": { "url": "/models/survivor.glb", "scale": 0.88, "presentation": "equipment" }
+}

@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+  <head>
+    <link rel="icon" href="data:," />
+  </head>
+  <body style="margin: 0; background: #14201f">
+    <script type="module">
+      import * as T from '/node_modules/three/build/three.module.js';
+      import { Player } from '/src/client/game/Player.ts';
+      import { Zombie } from '/src/client/game/Zombie.ts';
+      import { Companion } from '/src/client/game/Companion.ts';
+      import { ActorAnimator } from '/src/client/game/AnimationController.ts';
+      const scene = new T.Scene();
+      scene.background = new T.Color('#283a39');
+      const renderer = new T.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(1);
+      renderer.toneMapping = T.ACESFilmicToneMapping;
+      document.body.append(renderer.domElement);
+      const camera = new T.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 50);
+      camera.position.set(0, 4, -12);
+      camera.lookAt(0, 1, 0);
+      scene.add(new T.HemisphereLight(0xd3e5ff, 0x71604a, 2.5));
+      const sun = new T.DirectionalLight(0xffd9b5, 3);
+      sun.position.set(-3, 6, -4);
+      scene.add(sun);
+      const floor = new T.Mesh(
+        new T.PlaneGeometry(35, 35),
+        new T.MeshStandardMaterial({ color: 0x394640, roughness: 1 }),
+      );
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+      const players = [new Player(scene), new Player(scene)];
+      players[0].root.position.x = -3;
+      players[1].root.position.x = -1.5;
+      const entry = {
+        url: '/models/survivor.glb',
+        scale: 0.88,
+        presentation: 'equipment',
+      };
+      await Promise.all(players.map((p) => p.installModel(entry)));
+      const zombies = ['runner', 'barkhide', 'sporeling', 'ashwalker'].map(
+        (s, i) => new Zombie(scene, new T.Vector3(i * 1.15, 0, 0), s, i),
+      );
+      const companion = new Companion(scene);
+      companion.root.position.set(-0.7, 1.25, -2);
+      let mode = 'idle',
+        frame = 0;
+      const world = {
+        constrainPlayerPosition() {},
+        constrainActorPosition() {},
+      };
+      function render() {
+        frame++;
+        for (const [i, p] of players.entries()) {
+          p.bandaging = mode === 'heal';
+          p.aiming = mode === 'aim';
+          p.weapon = i ? 'rifle' : 'pistol';
+          p.updateRemote(
+            {
+              x: -3 + i * 1.5 + (mode === 'walk' || mode === 'run' ? Math.sin(frame / 60) * 0.3 : 0),
+              z: 0,
+              yaw: 0,
+              hp: 100,
+              moving: mode === 'walk',
+              sprinting: mode === 'run',
+              weapon: p.weapon,
+              aiming: mode === 'aim',
+              survival: { healEndsAt: mode === 'heal' ? Date.now() + 2000 : 0 },
+            },
+            1 / 60,
+          );
+        }
+        for (const z of zombies) {
+          if (mode === 'death') z.renderDeath(1 / 60, Math.min(0.7, frame / 120));
+          else
+            z.updateNetworkVisual(
+              1 / 60,
+              new T.Vector3(mode === 'walk' ? 0.01 : 0, 0, 0),
+              mode === 'attack' ? 'windup' : 'idle',
+            );
+        }
+        companion.updateRemote(1 / 60, new T.Vector3(-0.7, 0, -2), 0, false);
+        renderer.render(scene, camera);
+        requestAnimationFrame(render);
+      }
+      render();
+      window.gallery = {
+        players,
+        zombies,
+        companion,
+        scene,
+        renderer,
+        camera,
+        ActorAnimator,
+        T,
+        setMode(m) {
+          mode = m;
+          frame = m === 'death' ? 60 : 0;
+          if (m === 'hit') zombies.forEach((z) => z.takeDamage(1));
+          if (m === 'pulse') companion.triggerPulse();
+        },
+        stats() {
+          return {
+            ...renderer.info.render,
+            memory: { ...renderer.info.memory },
+          };
+        },
+      };
+      window.ready = true;
+    </script>
+  </body>
+</html>

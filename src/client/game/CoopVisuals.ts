@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { ModelEntry } from './AnimationController';
 import { Player } from './Player';
 import { Companion } from './Companion';
 import type { WeaponId } from '../../../shared/expansion.mjs';
@@ -7,6 +8,11 @@ import type { RemotePlayer, MissionState } from './Multiplayer';
 /** Owns co-op-only actor and mission-sample visuals. No network or save access. */
 export class CoopVisuals {
   lightsEnabled = true;
+  private model?: ModelEntry;
+  installSurvivorModel(entry: ModelEntry): void {
+    this.model = entry;
+    for (const actor of this.remotePlayers.values()) void actor.installModel(entry);
+  }
   private readonly remotePlayers = new Map<string, Player>();
   private readonly companions = new Map<string, Companion>();
   private readonly samples = new Map<string, THREE.Group>();
@@ -26,6 +32,7 @@ export class CoopVisuals {
       let actor = this.remotePlayers.get(id);
       if (!actor) {
         actor = new Player(this.scene);
+        if (this.model) void actor.installModel(this.model);
         actor.root.name = `ally-${id}`;
         this.remotePlayers.set(id, actor);
       }
@@ -67,7 +74,11 @@ export class CoopVisuals {
       const object = new THREE.Group();
       const crystal = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.43),
-        new THREE.MeshStandardMaterial({ color: 0x8be4e1, emissive: 0x237c86, emissiveIntensity: 1.6 }),
+        new THREE.MeshStandardMaterial({
+          color: 0x8be4e1,
+          emissive: 0x237c86,
+          emissiveIntensity: 1.6,
+        }),
       );
       crystal.position.y = 0.95;
       object.add(crystal);

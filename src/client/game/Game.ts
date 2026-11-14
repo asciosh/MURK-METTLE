@@ -312,7 +312,10 @@ export class Game {
   private async loadOptionalModels(): Promise<void> {
     this.assetManifest = await readModelManifest();
     const models = this.assetManifest;
-    if (models.survivor?.url) void this.player.installModel(models.survivor);
+    if (models.survivor?.url) {
+      void this.player.installModel(models.survivor);
+      this.coopVisuals.installSurvivorModel(models.survivor);
+    }
     if (models.zombie?.url) this.infected.installModel(models.zombie);
     if (models.lanternkin?.url) void this.companion.installModel(models.lanternkin);
   }

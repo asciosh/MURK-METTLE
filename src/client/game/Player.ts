@@ -1,3 +1,4 @@
+import { batchRigidParts } from './ActorGeometry';
 import { solveLeg, footCycle } from '../../../shared/actor-motion.mjs';
 import { acquireActorSurfaces, releaseActorSurfaces } from './SurfaceMaterials';
 import * as THREE from 'three';
@@ -8,7 +9,7 @@ import { WeaponPresentation } from './WeaponPresentation';
 import { solveArm, type ActorPose } from '../../../shared/actor-pose.mjs';
 import type { WeaponId } from '../../../shared/expansion.mjs';
 
-/** Temporary procedural survivor model. Replace with an original rigged GLB later. */
+/** Articulated survivor with compatible GLB equipment and procedural weapon-hand posing. */
 export class Player {
   readonly root = new THREE.Group();
 
@@ -75,11 +76,21 @@ export class Player {
   private createModel(): void {
     this.fallbackModel = new THREE.Group();
     this.visual.add(this.fallbackModel);
-    const bodyMaterial = this.surfaces.material('fabric', 0xbdc4a9, 4);
-    const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x262c28, roughness: 0.92 });
+    const bodyMaterial = this.surfaces.material('fabric', 0x718578, 4);
+    const darkMaterial = new THREE.MeshStandardMaterial({
+      color: 0x262c28,
+      roughness: 0.92,
+    });
     const skinMaterial = this.surfaces.material('skin', 0xffe4ca);
-    const accentMaterial = new THREE.MeshStandardMaterial({ color: 0x796e58, roughness: 0.72 });
-    const visorMaterial = new THREE.MeshStandardMaterial({ color: 0x17231e, roughness: 0.3, metalness: 0.15 });
+    const accentMaterial = new THREE.MeshStandardMaterial({
+      color: 0x796e58,
+      roughness: 0.72,
+    });
+    const visorMaterial = new THREE.MeshStandardMaterial({
+      color: 0x17231e,
+      roughness: 0.3,
+      metalness: 0.15,
+    });
 
     const profile = [
       new THREE.Vector2(0.19, -0.32),
@@ -118,6 +129,7 @@ export class Player {
     this.fallbackModel.add(scarf);
 
     const backpack = new THREE.Mesh(new RoundedBoxGeometry(0.39, 0.55, 0.24, 2, 0.025), darkMaterial);
+    backpack.name = 'fallback-pack';
     backpack.position.set(0, 1.15, 0.24);
     backpack.castShadow = true;
     this.fallbackModel.add(backpack);
@@ -154,7 +166,10 @@ export class Player {
     belt.scale.y = 0.72;
     this.fallbackModel.add(belt);
     const legMat = this.surfaces.material('fabric', 0x646b60, 3);
-    const bootMat = new THREE.MeshStandardMaterial({ color: 0x1e2723, roughness: 0.93 });
+    const bootMat = new THREE.MeshStandardMaterial({
+      color: 0x1e2723,
+      roughness: 0.93,
+    });
     const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.23, 18, 12), legMat);
     pelvis.scale.set(1.04, 0.62, 0.72);
     pelvis.position.y = 0.84;
@@ -197,18 +212,32 @@ export class Player {
     }
     this.addExpeditionEquipment();
     for (const part of [...this.fallbackModel.children])
-      if (part.position.y >= 1.65 && Math.abs(part.position.z) < 0.25) this.headRig.add(part);
+      if (part.position.y >= 1.65 && Math.abs(part.position.z) < 0.25) {
+        part.position.y -= 1.63;
+        this.headRig.add(part);
+      }
+    this.headRig.position.y = 1.63;
     this.headRig.name = 'head-look';
     this.fallbackModel.add(this.headRig, this.bandageWrap);
     this.bandageWrap.visible = false;
+    batchRigidParts(this.fallbackModel, new Set([this.bandageWrap, backpack]));
   }
 
   /** Original meshes, built at runtime with no external model/IP dependency. */
   private addExpeditionEquipment(): void {
-    const coat = this.surfaces.material('fabric', 0xabb69e, 3);
-    const trim = new THREE.MeshStandardMaterial({ color: 0x8c826b, roughness: 0.8 });
-    const rust = new THREE.MeshStandardMaterial({ color: 0x796958, roughness: 0.79 });
-    const charcoal = new THREE.MeshStandardMaterial({ color: 0x182c2a, roughness: 0.82 });
+    const coat = this.surfaces.material('fabric', 0x65786b, 3);
+    const trim = new THREE.MeshStandardMaterial({
+      color: 0x8c826b,
+      roughness: 0.8,
+    });
+    const rust = new THREE.MeshStandardMaterial({
+      color: 0x796958,
+      roughness: 0.79,
+    });
+    const charcoal = new THREE.MeshStandardMaterial({
+      color: 0x182c2a,
+      roughness: 0.82,
+    });
     const glass = new THREE.MeshStandardMaterial({
       color: 0x6b7971,
       emissive: 0x17211b,
@@ -259,6 +288,28 @@ export class Player {
         add(new THREE.BoxGeometry(0.024, 0.009, 0.014), trim, side * 0.12, 1.08 + k * 0.035, 0.369);
       add(new THREE.BoxGeometry(0.15, 0.016, 0.04), charcoal, side * 0.115, 1.35, -0.17);
     }
+    // Layered field harness, chest pockets and asymmetric rescue marker.
+    for (const side of [-1, 1]) {
+      const strap = add(new RoundedBoxGeometry(0.052, 0.55, 0.025, 1, 0.008), charcoal, side * 0.16, 1.22, -0.157);
+      strap.rotation.z = side * -0.09;
+      add(new RoundedBoxGeometry(0.12, 0.15, 0.055, 1, 0.012), coat, side * 0.09, 1.2, -0.183);
+      add(new THREE.BoxGeometry(0.12, 0.025, 0.06), trim, side * 0.09, 1.265, -0.19);
+      const cuff = add(
+        new THREE.CylinderGeometry(0.071, 0.071, 0.07, 10),
+        charcoal,
+        0,
+        -0.24,
+        0,
+        side < 0 ? this.leftElbow : this.rightElbow,
+      );
+      cuff.name = 'reinforced-cuff';
+    }
+    add(new THREE.BoxGeometry(0.016, 0.42, 0.017), rust, 0, 1.19, -0.172);
+    const marker = new THREE.MeshStandardMaterial({
+      color: 0xd3a66b,
+      roughness: 0.84,
+    });
+    add(new THREE.BoxGeometry(0.12, 0.09, 0.025), marker, -0.07, -0.11, -0.065, this.leftArm);
     // Field radio transmitter: unmistakable back silhouette.
     add(new THREE.CylinderGeometry(0.018, 0.026, 0.5, 6), charcoal, 0.18, 1.6, 0.3);
     add(new THREE.SphereGeometry(0.018, 10, 8), glass, 0.18, 1.85, 0.3);
@@ -343,8 +394,18 @@ export class Player {
     }
     this.fallbackModel.rotation.z = weight * Math.sin(this.walkClock) * 0.014 - this.motionSide * weight * 0.055;
     this.fallbackModel.rotation.x = this.sprintBlend * -0.09;
-    this.headRig.rotation.y = Math.sin(this.idleClock * 0.65) * 0.035 * (1 - weight);
-    this.headRig.rotation.x = this.weaponRaised ? -this.aimPitch * 0.12 : Math.sin(this.idleClock * 0.9) * 0.015;
+    this.headRig.rotation.y = THREE.MathUtils.damp(
+      this.headRig.rotation.y,
+      Math.sin(this.idleClock * 0.65) * 0.035 * (1 - weight),
+      8,
+      deltaSeconds,
+    );
+    this.headRig.rotation.x = THREE.MathUtils.damp(
+      this.headRig.rotation.x,
+      this.weaponRaised ? -this.aimPitch * 0.12 : Math.sin(this.idleClock * 0.9) * 0.015,
+      10,
+      deltaSeconds,
+    );
     this.bandageWrap.visible = this.bandaging && this.health > 0;
     const raised = this.weaponRaised && !this.reloading;
     const reloadWave = this.reloading ? Math.sin(this.reloadProgress * Math.PI) : 0;
@@ -412,7 +473,11 @@ export class Player {
   }
 
   private poseArm(shoulder: THREE.Group, elbow: THREE.Group, target: THREE.Vector3, side: number): void {
-    const pose = solveArm(shoulder.position, target, { x: side * 0.55, y: -0.8, z: 0.25 });
+    const pose = solveArm(shoulder.position, target, {
+      x: side * 0.55,
+      y: -0.8,
+      z: 0.25,
+    });
     const down = new THREE.Vector3(0, -1, 0);
     const upperDirection = new THREE.Vector3(pose.elbow.x, pose.elbow.y, pose.elbow.z)
       .sub(shoulder.position)
@@ -492,7 +557,13 @@ export class Player {
   }
 
   async installModel(entry: ModelEntry): Promise<void> {
-    if (await this.animator.load(entry)) this.fallbackModel.visible = false;
+    if (await this.animator.load(entry)) {
+      this.fallbackModel.visible = !this.animator.installed;
+      if (this.animator.equipment) {
+        const pack = this.fallbackModel.getObjectByName('fallback-pack');
+        if (pack) pack.visible = false;
+      }
+    }
   }
 
   reset(): void {
