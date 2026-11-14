@@ -109,12 +109,21 @@ export class WeaponPresentation {
     }
     this.muzzle = new THREE.Mesh(
       new THREE.ConeGeometry(0.085, 0.22, 7),
-      new THREE.MeshBasicMaterial({ color: 0xffdb9c, transparent: true, opacity: 0.9, depthWrite: false }),
+      new THREE.MeshBasicMaterial({
+        color: 0xffdfad,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
     );
     this.muzzle.rotation.x = -Math.PI / 2;
     this.root.add(this.muzzle, this.light);
     this.muzzle.visible = false;
     this.update(0, 'pistol', 0);
+  }
+  setLightsEnabled(enabled: boolean): void {
+    this.light.visible = enabled;
   }
   fire(): void {
     this.flashTime = 0.055;
@@ -136,6 +145,8 @@ export class WeaponPresentation {
     this.magazine.position.y =
       reloadProgress > 0.12 && reloadProgress < 0.72 ? -Math.sin(((reloadProgress - 0.12) / 0.6) * Math.PI) * 0.24 : 0;
     this.muzzle.visible = this.flashTime > 0;
+    this.muzzle.scale.setScalar(weapon === 'rifle' ? 1.15 : 0.8);
+    (this.muzzle.material as THREE.MeshBasicMaterial).opacity = Math.min(0.9, this.flashTime / 0.055);
     this.muzzle.position.set(0, 0.035, weapon === 'rifle' ? -0.87 : -0.36);
     this.muzzle.rotation.z += dt * 93;
     this.light.position.copy(this.muzzle.position);

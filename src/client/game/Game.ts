@@ -5,6 +5,7 @@ import { progressStore } from './ProgressStore';
 import { Firearms } from './Firearms';
 import { Collection, emptyCollection, type CollectionState } from './Collection';
 import { createAtmosphere } from './Atmosphere';
+import { CombatFeedback } from './CombatFeedback';
 import { SceneEffects } from './SceneEffects';
 import {
   CREATURES,
@@ -62,6 +63,8 @@ import {
 
 export class Game {
   private readonly scene = new THREE.Scene();
+  private readonly feedback = new CombatFeedback(this.scene);
+  private renderDelta = 0;
   private effects: SceneEffects | null = null;
   private cinematic = false;
   private sky: ReturnType<typeof createAtmosphere> | null = null;
@@ -79,7 +82,6 @@ export class Game {
   private collectionSignature = '';
   private trackedCreature: SpeciesId | null = null;
   private aiming = false;
-  private recoilOffset = 0;
   private evolutionTime = 0;
 
   private readonly camera = new THREE.PerspectiveCamera(58, 1, 0.1, 350);
@@ -209,9 +211,9 @@ export class Game {
     this.world = new World(this.scene);
     this.createExtractionBeacon();
     this.player = new Player(this.scene);
-    this.infected = new InfectedGroup(this.scene);
+    this.infected = new InfectedGroup(this.scene, (position) => this.feedback.impact(position));
     this.companion = new Companion(this.scene);
-    this.firearms = new Firearms(this.scene, this.player);
+    this.firearms = new Firearms(this.scene, this.player, this.feedback);
     this.collection = new Collection(this.progression.state);
     this.recoveringBond = progressStore.getItem(this.bondRetreatKey) === '1';
     for (const id of SPECIES_IDS) {
@@ -376,6 +378,8 @@ export class Game {
       return;
     }
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
+    this.renderDelta = deltaSeconds;
+    this.feedback.update(deltaSeconds);
     this.evolutionTime = Math.max(0, this.evolutionTime - deltaSeconds);
     document.querySelector('#evolution-announcement')?.classList.toggle('visible', this.evolutionTime > 0);
     this.attackCooldown = Math.max(0, this.attackCooldown - deltaSeconds);
@@ -390,7 +394,6 @@ export class Game {
     // Low-strain resting is a deliberate choice, not an unlimited damage-free pulse.
     if (this.companion.isBound()) this.bondStrain = Math.max(0, this.bondStrain - deltaSeconds * 2.5);
     this.damageFlashTimer = Math.max(0, this.damageFlashTimer - deltaSeconds);
-    this.recoilOffset *= Math.exp(-9 * deltaSeconds);
 
     const mouse = this.input.consumeMouseDelta();
     this.cameraYaw -= mouse.x * 0.0024;
@@ -409,6 +412,7 @@ export class Game {
     if (healed && !this.multiplayer.connected && this.player.getHealth() > 0) {
       this.player.heal(healed);
       this.showToast('BANDAGED  //  +40 vitality.', 'success');
+      this.feedback.audio.play('heal');
     }
     this.aiming = this.input.isAiming() && this.player.getHealth() > 0;
     this.player.aiming = this.aiming;
@@ -488,6 +492,7 @@ export class Game {
         this.player.takeDamage(hit.damage);
         cancelHealing(this.vitals);
         this.damageFlashTimer = 0.2;
+        this.feedback.hurt();
         if (this.companion.isBound()) this.addBondStrain(18);
         this.showToast(`YOU WERE HIT  //  -${hit.damage} VITALITY`, 'danger');
       }
@@ -536,6 +541,7 @@ export class Game {
   private readonly handleLeaveRoom = (): void => {
     this.multiplayer.disconnect();
     this.wasCoop = false;
+    this.feedback.reset();
     this.player.reset();
     this.firearms.reset();
     this.vitals = newVitals();
@@ -560,6 +566,7 @@ export class Game {
     } else if (event.type === 'survival') {
       this.vitals = { ...event.survival };
     } else if (event.type === 'respawn') {
+      this.feedback.reset();
       this.player.reset();
       this.player.root.position.set(event.x, 0, event.z);
       this.vitals = { ...event.survival };
@@ -581,6 +588,13 @@ export class Game {
           event.distance,
         );
       else if (event.hit) this.firearms.markHit();
+      if (event.hit)
+        this.feedback.impact(
+          new THREE.Vector3(event.origin.x, event.origin.y, event.origin.z).addScaledVector(
+            new THREE.Vector3(event.direction.x, event.direction.y, event.direction.z),
+            event.distance,
+          ),
+        );
     } else if (event.type === 'collection-state') {
       const before = this.coopCollection;
       this.coopCollection = event.collection;
@@ -611,6 +625,7 @@ export class Game {
       void this.coopProgress.refresh().then(() => this.updateProgressHud());
     } else if (event.type === 'welcome') {
       this.wasCoop = true;
+      this.feedback.reset();
       this.player.reset();
       this.vitals = { ...(event.survival || newVitals()) };
       this.lastServerVitals = null;
@@ -645,15 +660,20 @@ export class Game {
         this.player.takeDamage(lost);
         cancelHealing(this.vitals);
         this.damageFlashTimer = 0.2;
+        this.feedback.hurt();
         if (this.companion.isBound()) this.addBondStrain(18);
         if (event.hp <= 0) {
           this.defeatOverlay?.classList.add('visible');
           this.say('defeat');
         }
       }
-      if (event.hp > this.player.getHealth()) this.player.heal(event.hp - this.player.getHealth());
+      if (event.hp > this.player.getHealth()) {
+        this.player.heal(event.hp - this.player.getHealth());
+        this.feedback.audio.play('heal');
+      }
     } else if (event.type === 'kill') {
       // In co-op the server credits materials to the verified killer; never spawn local salvage.
+      if (event.by === this.multiplayer.id) this.feedback.confirm(true);
       if (event.by === this.multiplayer.id)
         this.showToast('KILL CONFIRMED  //  Crediting Cloudflare account…', 'success');
       else this.showToast('TEAM KILL  //  Salvage available!', 'success');
@@ -704,7 +724,8 @@ export class Game {
     const selection = document.querySelector<HTMLSelectElement>('#graphics-quality');
     if (selection) selection.value = quality;
     this.cinematic = quality === 'cinematic';
-    if (this.cinematic && !this.effects) this.effects = new SceneEffects(this.renderer, this.scene, this.camera);
+    if (this.cinematic && !this.effects)
+      this.effects = new SceneEffects(this.renderer, this.scene, this.feedback.camera);
     if (!this.cinematic && this.effects) {
       this.effects.dispose();
       this.effects = null;
@@ -712,6 +733,8 @@ export class Game {
     this.renderer.shadowMap.enabled = profile.shadows;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, profile.pixelRatio));
     this.world.setQuality(profile);
+    this.feedback.setQuality(quality);
+    this.player.setEffectsLights(profile.pointLights);
     this.scene.traverse((node) => {
       if (node instanceof THREE.PointLight) node.visible = profile.pointLights;
     });
@@ -908,7 +931,7 @@ export class Game {
     origin.y = 1.32;
     const direction = aimPoint.sub(origin).normalize();
     if (!this.firearms.tryFire()) return;
-    this.recoilOffset += this.firearms.selected === 'rifle' ? 0.009 : 0.022;
+    this.feedback.shot(this.firearms.selected);
     cancelHealing(this.vitals);
     const hit = bulletTarget(this.infected.alive, origin, direction, weapon.range);
     if (!this.multiplayer.connected)
@@ -1148,6 +1171,7 @@ export class Game {
     if (this.player.getHealth() <= 0 || this.attackCooldown > 0) return;
     this.attackCooldown = 0.48;
     this.player.triggerAttack();
+    this.feedback.audio.play('melee');
 
     cancelHealing(this.vitals);
     if (this.multiplayer.connected) {
@@ -1164,6 +1188,7 @@ export class Game {
       this.showToast('SWING MISSED  //  Face a nearby infected.', 'info');
       return;
     }
+    this.firearms.markHit();
     if (this.infected.damage(target.id, this.crafting.upgrades.sharpened ? 55 : 40)) {
       this.registerKill(false, new THREE.Vector3(target.x, 0, target.z));
       this.showToast('INFECTED ELIMINATED  //  +50 XP', 'success');
@@ -1171,6 +1196,7 @@ export class Game {
   }
 
   private registerKill(fromPulse: boolean, position: THREE.Vector3): void {
+    this.feedback.confirm(true);
     this.spawnLoot(position);
     if (!this.multiplayer.connected) this.expedition.recordKill();
     this.updateMissionHud();
@@ -1191,6 +1217,7 @@ export class Game {
       this.multiplayer.send('restart');
       return;
     }
+    this.feedback.reset();
     this.player.reset();
     this.firearms.reset();
     this.vitals = newVitals();
@@ -1216,7 +1243,7 @@ export class Game {
   private updateCamera(deltaSeconds: number): void {
     const playerPosition = this.player.getPosition();
     const distance = this.aiming ? 3.0 : 5.8;
-    const pitch = this.cameraPitch - this.recoilOffset;
+    const pitch = this.cameraPitch;
     const forward = new THREE.Vector3(
       -Math.sin(this.cameraYaw) * Math.cos(pitch),
       -Math.sin(pitch),
@@ -1263,6 +1290,8 @@ export class Game {
     if (this.playerHealthFill) this.playerHealthFill.style.width = `${health}%`;
     if (this.playerHealthText) this.playerHealthText.textContent = `${health} / 100`;
     this.playerHealthFill?.classList.toggle('low', health <= 35);
+    document.body.classList.toggle('stamina-exhausted', this.vitals.exhausted);
+    document.body.classList.toggle('is-bandaging', this.vitals.healEndsAt > Date.now());
 
     const focus = this.infected.focus(position);
     const enemyNearby = focus && Math.hypot(focus.x - position.x, focus.z - position.z) <= 35;
@@ -1300,7 +1329,7 @@ export class Game {
       touchHeal.textContent = remaining ? 'HEALING' : `HEAL ${this.vitals.bandages}`;
     }
     const touchReload = document.querySelector('[data-touch="reload"]');
-    if (touchReload) touchReload.textContent = health <= 0 ? 'RESTART' : 'RELOAD';
+    if (touchReload) touchReload.textContent = health <= 0 ? 'RESTART' : this.player.reloading ? 'LOADING' : 'RELOAD';
     const phoneEncounter = document.querySelector('#touch-encounter');
     if (phoneEncounter) phoneEncounter.textContent = status?.textContent || '';
     this.updateCompanionHud();
@@ -1326,8 +1355,8 @@ export class Game {
         'visible',
         Boolean(
           nearestDrop ||
-            (this.multiplayer.connected &&
-              this.roomMission?.pickups.some((p) => Math.hypot(position.x - p.x, position.z - p.z) < 2.7)),
+          (this.multiplayer.connected &&
+            this.roomMission?.pickups.some((p) => Math.hypot(position.x - p.x, position.z - p.z) < 2.7)),
         ) && health > 0,
       );
     }
@@ -1421,8 +1450,32 @@ export class Game {
   }
 
   private renderScene(): void {
+    // Only the presentation camera receives spring lag/recoil. Gameplay rays use this.camera.
+    this.feedback.prepareCamera(this.camera, this.renderDelta);
+    const anchor = this.player
+      .getPosition()
+      .clone()
+      .add(new THREE.Vector3(0, 1.65, 0));
+    const offset = this.feedback.camera.position.clone().sub(anchor);
+    const length = offset.length();
+    if (length > 0.001) {
+      const allowed = this.world.cameraDistance(anchor, offset.clone().normalize(), length);
+      if (allowed < length)
+        this.feedback.camera.position.copy(anchor).addScaledVector(offset.normalize(), Math.max(0.08, allowed - 0.18));
+    }
+    this.feedback.camera.updateMatrixWorld();
+    const reticle = document.querySelector<HTMLElement>('.reticle');
+    const target = this.camera
+      .getWorldDirection(new THREE.Vector3())
+      .multiplyScalar(50)
+      .add(this.camera.position)
+      .project(this.feedback.camera);
+    if (reticle) {
+      reticle.style.left = `${(target.x * 0.5 + 0.5) * 100}%`;
+      reticle.style.top = `${(-target.y * 0.5 + 0.5) * 100}%`;
+    }
     if (this.cinematic && this.effects) this.effects.render();
-    else this.renderer.render(this.scene, this.camera);
+    else this.renderer.render(this.scene, this.feedback.camera);
   }
 
   private resize(): void {
@@ -1446,6 +1499,7 @@ export class Game {
     document.querySelector('#room-leave')?.removeEventListener('click', this.handleLeaveRoom);
     this.multiplayer.disconnect();
     this.wasCoop = false;
+    this.feedback.reset();
     this.player.reset();
     this.firearms.reset();
     this.vitals = newVitals();
@@ -1473,6 +1527,7 @@ export class Game {
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       for (const material of materials) material.dispose();
     });
+    this.feedback.dispose();
     this.firearms.dispose();
     this.world.dispose();
     this.environmentTarget?.dispose();

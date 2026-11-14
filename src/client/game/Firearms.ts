@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { CombatFeedback } from './CombatFeedback';
 import type { Player } from './Player';
 import {
   WEAPONS,
@@ -18,11 +19,13 @@ export class Firearms {
   aiming = false;
   private readonly tracers: { line: THREE.Line; life: number }[] = [];
   private hitTime = 0;
-  private audio: AudioContext | null = null;
+  private wasReloading = false;
+  private reloadWeaponId: WeaponId = 'pistol';
   private readonly supplyAt = new Map<string, number>();
   constructor(
     private readonly scene: THREE.Scene,
     private readonly player: Player,
+    private readonly feedback: CombatFeedback,
   ) {}
 
   switchWeapon(id: WeaponId): void {
@@ -34,14 +37,14 @@ export class Firearms {
   }
   reload(): boolean {
     const success = reloadWeapon(this.arsenal, this.selected, Date.now());
-    if (success) this.sound('reload');
+    if (success) this.feedback.audio.play('reload');
     return success;
   }
   tryFire(): boolean {
     const ok = fireWeapon(this.arsenal, this.selected, Date.now());
     if (ok) {
       this.player.triggerShot(this.selected);
-      this.sound('shot');
+      this.feedback.audio.play(this.selected);
     }
     return ok;
   }
@@ -55,12 +58,19 @@ export class Firearms {
       geometry,
       new THREE.LineBasicMaterial({ color: 0xf9dc9c, transparent: true, opacity: 0.65 }),
     );
+    if (this.tracers.length >= 16) {
+      const oldest = this.tracers.shift()!;
+      oldest.line.removeFromParent();
+      oldest.line.geometry.dispose();
+      (oldest.line.material as THREE.Material).dispose();
+    }
     this.scene.add(line);
     this.tracers.push({ line, life: 0.075 });
     if (hit) this.markHit();
   }
   markHit(): void {
     this.hitTime = 0.16;
+    this.feedback.confirm();
   }
   nearSupply(position: THREE.Vector3): (typeof SUPPLIES)[number] | undefined {
     return SUPPLIES.find((p) => Math.hypot(p.x - position.x, p.z - position.z) < 2.8);
@@ -70,7 +80,7 @@ export class Firearms {
     if (!p || Date.now() - (this.supplyAt.get(p.id) ?? 0) < 45000) return false;
     for (const id of ['pistol', 'rifle'] as WeaponId[]) this.arsenal[id].reserve = WEAPONS[id].reserve;
     this.supplyAt.set(p.id, Date.now());
-    this.sound('reload');
+    this.feedback.audio.play('reload');
     return true;
   }
   update(dt: number): void {
@@ -91,6 +101,21 @@ export class Firearms {
     const label = document.querySelector('#weapon-name'),
       ammo = document.querySelector('#weapon-ammo'),
       hint = document.querySelector('#weapon-hint');
+    const reloading = state.reloadAt > Date.now();
+    if (this.wasReloading && !reloading && this.reloadWeaponId === this.selected && state.magazine > 0)
+      this.feedback.audio.play('ready');
+    this.wasReloading = reloading;
+    this.reloadWeaponId = this.selected;
+    const panel = document.querySelector<HTMLElement>('.weapon-panel');
+    panel?.classList.toggle('reloading', reloading);
+    panel?.classList.toggle('empty', state.magazine === 0 && !reloading);
+    panel?.style.setProperty(
+      '--reload-progress',
+      `${reloading ? Math.max(0, Math.min(100, 100 * (1 - (state.reloadAt - Date.now()) / def.reload))) : 0}%`,
+    );
+    const status = document.querySelector('#weapon-state');
+    const statusText = reloading ? 'RELOADING' : state.magazine === 0 ? 'EMPTY · RELOAD' : 'READY';
+    if (status && status.textContent !== statusText) status.textContent = statusText;
     if (label) label.textContent = def.name;
     if (ammo) ammo.textContent = `${state.magazine.toString().padStart(2, '0')} / ${state.reserve}`;
     if (hint)
@@ -102,33 +127,6 @@ export class Firearms {
     document.body.classList.toggle('is-aiming', this.aiming);
     document.body.classList.toggle('hit-confirmed', this.hitTime > 0);
   }
-  private sound(kind: 'shot' | 'reload'): void {
-    try {
-      this.audio ??= new AudioContext();
-      void this.audio.resume();
-      const ctx = this.audio,
-        length = kind === 'shot' ? 0.16 : 0.13,
-        buffer = ctx.createBuffer(1, ctx.sampleRate * length, ctx.sampleRate),
-        data = buffer.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (data.length * 0.15));
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.value = kind === 'shot' ? 1800 : 600;
-      const gain = ctx.createGain();
-      gain.gain.value = kind === 'shot' ? 0.25 : 0.12;
-      source.connect(filter).connect(gain).connect(ctx.destination);
-      source.start();
-      source.onended = () => {
-        source.disconnect();
-        filter.disconnect();
-        gain.disconnect();
-      };
-    } catch {
-      /* Audio remains optional in browsers that restrict it. */
-    }
-  }
   dispose(): void {
     for (const t of this.tracers) {
       this.scene.remove(t.line);
@@ -136,6 +134,5 @@ export class Firearms {
       (t.line.material as THREE.Material).dispose();
     }
     this.tracers.length = 0;
-    void this.audio?.close();
   }
 }
