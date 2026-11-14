@@ -1,6 +1,8 @@
-# Murk & Mettle · v0.23
+# Murk & Mettle · v0.24
 
 A third-person browser zombie-survival and creature-collection RPG. Built with Three.js, TypeScript, Vite and Cloudflare Durable Objects.
+
+v0.24 adds Mossback and Stormrook, bringing the collection to five species and fifteen evolution forms. The expanded journal shows evolution chains, XP progress, pulse stats and habitat tracking. See [v0.24 notes](docs/changelog/CHANGELOG-v0.24.md) and [testing steps](docs/V0.24-TESTING.md).
 
 v0.23 adds infected groups, gunshot investigation, dodgeable melee wind-ups, sprint stamina and interruptible bandages in solo and co-op. See [v0.23 notes](docs/changelog/CHANGELOG-v0.23.md) and [testing steps](docs/V0.23-TESTING.md).
 

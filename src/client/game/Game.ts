@@ -1,6 +1,7 @@
+import { journalEntry } from '../../../shared/collection.mjs';
 import { progressStore } from './ProgressStore';
 import { Firearms } from './Firearms';
-import { Collection, type CollectionState } from './Collection';
+import { Collection, emptyCollection, type CollectionState } from './Collection';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { SceneEffects } from './SceneEffects';
 import {
@@ -69,6 +70,7 @@ export class Game {
   private readonly wildCreatures = new Map<SpeciesId, Companion>();
   private readonly aimRay = new THREE.Raycaster();
   private collectionSignature = '';
+  private trackedCreature: SpeciesId | null = null;
   private aiming = false;
   private recoilOffset = 0;
   private evolutionTime = 0;
@@ -465,7 +467,12 @@ export class Game {
     this.damageFlash?.classList.toggle('active', this.damageFlashTimer > 0);
     this.updateCamera(deltaSeconds);
     this.updateHud(deltaSeconds);
-    this.minimap.update(this.player.getPosition(), this.infected.alive, this.player.root.rotation.y);
+    this.minimap.update(
+      this.player.getPosition(),
+      this.infected.alive,
+      this.player.root.rotation.y,
+      this.trackedCreature ? CREATURES[this.trackedCreature] : null,
+    );
     this.renderScene();
   };
 
@@ -644,17 +651,9 @@ export class Game {
     this.resize();
   };
   private get currentCollection(): CollectionState {
-    return this.multiplayer.connected
-      ? (this.coopCollection ?? {
-          ...this.collection.state,
-          creatures: {
-            lanternkin: { owned: false, xp: 0 },
-            emberling: { owned: false, xp: 0 },
-            reedwisp: { owned: false, xp: 0 },
-          },
-        })
-      : this.collection.state;
+    return this.multiplayer.connected ? (this.coopCollection ?? emptyCollection()) : this.collection.state;
   }
+
   private get activePower() {
     const c = this.currentCollection;
     return creaturePower(c.active, c.creatures[c.active].xp);
@@ -667,7 +666,15 @@ export class Game {
   }
   private readonly handleRosterClick = (event: Event): void => {
     const target = (event.target as Element).closest<HTMLButtonElement>('[data-species]');
-    if (target) this.selectCreature(target.dataset.species as SpeciesId);
+    if (!target) return;
+    const id = target.dataset.species as SpeciesId;
+    if (!SPECIES_IDS.includes(id)) return;
+    if (this.currentCollection.creatures[id].owned) this.selectCreature(id);
+    else {
+      this.trackedCreature = this.trackedCreature === id ? null : id;
+      this.collectionSignature = '';
+      this.syncCollectionVisuals();
+    }
   };
   private selectCreature(id: SpeciesId): void {
     if (!SPECIES_IDS.includes(id) || !this.currentCollection.creatures[id].owned) return;
@@ -696,7 +703,8 @@ export class Game {
     for (const [id, wild] of this.wildCreatures) {
       wild.root.visible = !c.creatures[id].owned;
     }
-    const signature = JSON.stringify(c);
+    if (this.trackedCreature && c.creatures[this.trackedCreature].owned) this.trackedCreature = null;
+    const signature = JSON.stringify([c, this.trackedCreature]);
     if (signature === this.collectionSignature) return;
     this.collectionSignature = signature;
     const roster = document.querySelector('#creature-roster');
@@ -706,15 +714,37 @@ export class Game {
         const button = document.createElement('button');
         button.type = 'button';
         button.dataset.species = id;
-        button.disabled = !c.creatures[id].owned;
-        button.className = id === c.active ? 'selected' : '';
-        const power = creaturePower(id, c.creatures[id].xp);
-        button.textContent = c.creatures[id].owned
-          ? `${power.name} · ${power.stage + 1}/3`
-          : `? ${CREATURES[id].habitat}`;
-        button.title = c.creatures[id].owned
+        button.className =
+          id === c.active && c.creatures[id].owned ? 'selected' : this.trackedCreature === id ? 'tracking' : '';
+        const entry = c.creatures[id],
+          journal = journalEntry(id, entry.xp);
+        const title = document.createElement('strong');
+        title.textContent = entry.owned
+          ? `${journal.power.name} · ${journal.stage + 1}/3${id === c.active ? ' · ACTIVE' : ''}`
+          : `${CREATURES[id].name} · ${this.trackedCreature === id ? 'TRACKING' : 'TRACK'}`;
+        const habitat = document.createElement('small');
+        habitat.textContent = CREATURES[id].habitat;
+        const chain = document.createElement('small');
+        chain.textContent = journal.forms.map((f) => `${f.name} (${f.threshold} XP)`).join(' → ');
+        const stats = document.createElement('small');
+        stats.textContent = `Q PULSE · ${journal.power.damage} damage · ${journal.power.range}m · ${journal.power.cooldown}s cooldown`;
+        const progress = document.createElement('progress');
+        progress.max = 1;
+        progress.value = entry.owned ? journal.fraction : 0;
+        progress.setAttribute('aria-label', `${CREATURES[id].name} evolution progress`);
+        const hint = document.createElement('small');
+        hint.textContent = entry.owned
+          ? journal.next === null
+            ? 'Final form reached'
+            : `${journal.remaining} XP to next form · ${entry.xp} total XP`
+          : 'Track, approach and press E to bond';
+        button.append(title, habitat, chain, stats, progress, hint);
+        button.title = entry.owned
           ? 'Select companion'
-          : `Find ${CREATURES[id].name} at ${CREATURES[id].habitat}`;
+          : this.trackedCreature === id
+            ? 'Stop tracking'
+            : 'Track habitat on the map';
+        button.setAttribute('aria-pressed', String(entry.owned ? id === c.active : this.trackedCreature === id));
         roster.append(button);
       }
     }
@@ -738,6 +768,21 @@ export class Game {
         !this.currentCollection.creatures[id].owned &&
         Math.hypot(CREATURES[id].x - pos.x, CREATURES[id].z - pos.z) < 2.7,
     );
+    const tracker = document.querySelector('#creature-tracker');
+    if (tracker) {
+      const id = this.trackedCreature,
+        def = id ? CREATURES[id] : null;
+      const distance = def ? Math.hypot(def.x - pos.x, def.z - pos.z) : 0;
+      const direction = def
+        ? [
+            def.z < pos.z - 2 ? 'N' : def.z > pos.z + 2 ? 'S' : '',
+            def.x > pos.x + 2 ? 'E' : def.x < pos.x - 2 ? 'W' : '',
+          ].join('')
+        : '';
+      tracker.textContent = def
+        ? `TRACKING ${def.name.toUpperCase()} · ${Math.round(distance)}m ${direction} · ${distance < 2.7 ? 'E TO BOND' : 'Follow the gold map ring'}`
+        : '';
+    }
     const hint = document.querySelector('#exploration-hint');
     if (hint)
       hint.textContent =
@@ -971,7 +1016,8 @@ export class Game {
         } else {
           const evolved = this.collection.grant(CREATURE_XP_PER_PULSE_HIT);
           if (evolved) this.showEvolution(evolved);
-          this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_HIT);
+          if (this.currentCollection.active === 'lanternkin')
+            this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_HIT);
         }
       }
       alertHorde(this.infected.simulation.enemies, this.player.getPosition(), Date.now(), 18);
@@ -1007,7 +1053,7 @@ export class Game {
       this.abilityButton.textContent = !this.companion.isBound()
         ? this.recoveringBond
           ? 'BOND LOST · RECOVER COMPANION'
-          : 'LOCKED · FIND LANTERNKIN'
+          : 'LOCKED · BOND WITH A CREATURE'
         : this.abilityCooldown > 0
           ? `PULSE RECHARGING · ${Math.ceil(this.abilityCooldown)}s`
           : `Q · ${this.activePower.name.toUpperCase()} PULSE`;
@@ -1047,7 +1093,10 @@ export class Game {
     const leveled = this.progression.recordKill();
     const evolved = this.collection.grant(fromPulse ? 40 : 12);
     if (evolved) this.showEvolution(evolved);
-    const creatureLeveled = fromPulse && this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_KILL);
+    const creatureLeveled =
+      fromPulse &&
+      this.currentCollection.active === 'lanternkin' &&
+      this.progression.grantCreatureXp(CREATURE_XP_PER_PULSE_KILL);
     if (leveled || creatureLeveled) {
       this.showToast(leveled ? 'LEVEL UP  //  Your survivor grew stronger!' : 'LANTERNKIN LEVEL UP!', 'success');
     }

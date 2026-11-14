@@ -3,7 +3,7 @@ import type { World } from './World';
 import type { ModelEntry } from './AnimationController';
 import { CREATURES, evolutionStage, type SpeciesId } from '../../../shared/expansion.mjs';
 
-/** Three original species with distinct silhouettes and three visible growth stages. */
+/** Five original species with distinct silhouettes and three visible growth stages. */
 export class Companion {
   readonly root = new THREE.Group();
   private readonly visual = new THREE.Group();
@@ -125,6 +125,70 @@ export class Companion {
       const tail = add(new THREE.CapsuleGeometry(0.11, 0.55, 6, 12), body, 0, 0.18, 0.66);
       tail.rotation.x = 1.1;
       add(new THREE.SphereGeometry(0.13, 16, 12), glow, 0, 0.45, 0.92);
+    } else if (species === 'mossback') {
+      add(new THREE.SphereGeometry(0.4, 24, 16), body, 0, -0.05, 0, 1.2, 0.7, 1.4);
+      add(new THREE.SphereGeometry(0.4, 24, 16), dark, 0, 0.12, 0.08, 1.25, 0.72, 1.35);
+      add(new THREE.SphereGeometry(0.19, 18, 12), body, 0, -0.04, -0.55, 0.9, 0.85, 1.2);
+      for (const side of [-1, 1]) {
+        for (const z of [-0.29, 0.34]) add(new THREE.CapsuleGeometry(0.095, 0.12, 5, 10), body, side * 0.34, -0.28, z);
+        add(new THREE.SphereGeometry(0.03, 12, 8), glow, side * 0.13, 0.01, -0.69);
+        for (let i = 0; i < 2 + stage; i++) {
+          const branch = add(
+            new THREE.ConeGeometry(0.065, 0.23 + stage * 0.14, 10),
+            dark,
+            side * 0.23,
+            0.42,
+            i * 0.17 - 0.18,
+          );
+          branch.rotation.z = side * 0.38;
+          if (stage > 0)
+            add(
+              new THREE.SphereGeometry(0.1, 12, 8),
+              glow,
+              side * 0.29,
+              0.54 + stage * 0.06,
+              i * 0.17 - 0.18,
+              0.9,
+              0.45,
+              1.1,
+            );
+        }
+      }
+    } else if (species === 'stormrook') {
+      add(new THREE.SphereGeometry(0.28, 22, 16), body, 0, 0, 0, 0.8, 1.15, 1.1);
+      add(new THREE.SphereGeometry(0.19, 18, 14), body, 0, 0.32, -0.12);
+      const beak = add(new THREE.ConeGeometry(0.075, 0.22, 12), dark, 0, 0.29, -0.34);
+      beak.rotation.x = -Math.PI / 2;
+      for (const side of [-1, 1]) {
+        add(new THREE.SphereGeometry(0.03, 12, 8), glow, side * 0.13, 0.36, -0.25);
+        for (let i = 0; i < 4 + stage; i++) {
+          const feather = add(
+            new THREE.SphereGeometry(0.2, 14, 10),
+            i % 2 ? dark : body,
+            side * (0.24 + i * 0.09),
+            0.02,
+            -0.04 + i * 0.07,
+            0.42,
+            0.2,
+            2.1 + stage * 0.3,
+          );
+          feather.rotation.y = side * (0.2 + i * 0.1);
+        }
+        for (let i = 0; i <= stage; i++) {
+          const crest = add(
+            new THREE.ConeGeometry(0.045, 0.28 + stage * 0.1, 10),
+            glow,
+            side * 0.07,
+            0.54,
+            i * 0.08 - 0.08,
+          );
+          crest.rotation.z = -side * 0.3;
+        }
+      }
+      for (const x of [-0.1, 0, 0.1]) {
+        const tail = add(new THREE.SphereGeometry(0.18, 14, 10), dark, x, -0.03, 0.4, 0.35, 0.2, 1.7 + stage * 0.3);
+        tail.rotation.y = -x;
+      }
     } else {
       add(new THREE.SphereGeometry(0.35, 24, 16), body, 0, 0, 0, 1, 0.4, 1.5);
       for (const s of [-1, 1]) {
@@ -181,7 +245,7 @@ export class Companion {
     this.elapsed += dt;
     this.pulseTime = Math.max(0, this.pulseTime - dt);
     const d = CREATURES[this.speciesId],
-      height = this.speciesId === 'emberling' ? 0.58 : 1.25;
+      height = this.speciesId === 'mossback' ? 0.43 : this.speciesId === 'emberling' ? 0.58 : 1.25;
     const target = this.bound
       ? position
           .clone()

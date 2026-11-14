@@ -4,7 +4,12 @@ import { WORLD_BOUNDARY, BUILDINGS, SUPPLIES, CREATURES } from '../../../shared/
 
 export class Minimap {
   private readonly context = document.querySelector<HTMLCanvasElement>('#field-minimap')?.getContext('2d') ?? null;
-  update(player: THREE.Vector3, zombies: readonly { x: number; z: number }[], facing: number): void {
+  update(
+    player: THREE.Vector3,
+    zombies: readonly { x: number; z: number }[],
+    facing: number,
+    tracked: { x: number; z: number } | null = null,
+  ): void {
     const ctx = this.context;
     if (!ctx) return;
     const w = 220,
@@ -32,6 +37,14 @@ export class Minimap {
       ctx.fill();
     };
     for (const c of Object.values(CREATURES)) dot(c.x, c.z, '#b9c98e', 2.5);
+    if (tracked) {
+      ctx.beginPath();
+      ctx.arc(...point(tracked.x, tracked.z), 7, 0, Math.PI * 2);
+      ctx.strokeStyle = '#f2ca75';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    }
     for (const p of SUPPLIES) {
       const [x, y] = point(p.x, p.z);
       ctx.strokeStyle = '#d3b785';

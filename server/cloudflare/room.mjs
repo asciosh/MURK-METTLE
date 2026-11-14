@@ -1,3 +1,4 @@
+import { normalizeCollection } from '../../shared/collection.mjs';
 // Cloudflare Durable Object — shared four-player session state.
 // This is an authoritative combat prototype, not yet an account/inventory server.
 import { DurableObject } from 'cloudflare:workers';
@@ -82,7 +83,7 @@ export class GameRoom extends DurableObject {
           hurtUntil: 0,
           moveBudget: 0.75,
           budgetAt: Date.now(),
-          collection: data.collection || null,
+          collection: normalizeCollection(data.collection),
           upgrades: { sharpened: false, balanced: false },
           creatureOwned: data.creatureOwned === true,
         });

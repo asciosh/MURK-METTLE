@@ -1,40 +1,21 @@
-import { CREATURES, SPECIES_IDS, evolutionStage, type SpeciesId } from '../../../shared/expansion.mjs';
+import { CREATURES, evolutionStage, type SpeciesId } from '../../../shared/expansion.mjs';
 import { progressStore } from './ProgressStore';
 
-export interface CollectionState {
-  active: SpeciesId;
-  creatures: Record<SpeciesId, { owned: boolean; xp: number }>;
-}
-export const emptyCollection = (): CollectionState => ({
-  active: 'lanternkin',
-  creatures: {
-    lanternkin: { owned: false, xp: 0 },
-    emberling: { owned: false, xp: 0 },
-    reedwisp: { owned: false, xp: 0 },
-  },
-});
+import { emptyCollection, normalizeCollection, type CollectionState } from '../../../shared/collection.mjs';
+export { emptyCollection, type CollectionState };
 const KEY = 'murk-mettle-v21-collection';
 export class Collection {
   state = emptyCollection();
   constructor(legacy: { lanternkinBonded: boolean; lanternkinXp: number }) {
-    this.state.creatures.lanternkin = { owned: legacy.lanternkinBonded, xp: legacy.lanternkinXp };
+    const migrated = { owned: legacy.lanternkinBonded, xp: legacy.lanternkinXp };
+    this.state = normalizeCollection(null, migrated);
     try {
-      const raw = JSON.parse(progressStore.getItem(KEY) || 'null') as CollectionState | null;
-      if (raw) {
-        for (const id of SPECIES_IDS) {
-          const entry = raw.creatures?.[id];
-          if (entry)
-            this.state.creatures[id] = {
-              owned: entry.owned === true,
-              xp: Number.isFinite(entry.xp) ? Math.max(0, Math.min(250000, Math.floor(entry.xp))) : 0,
-            };
-        }
-        if (SPECIES_IDS.includes(raw.active) && this.state.creatures[raw.active].owned) this.state.active = raw.active;
-      }
+      this.state = normalizeCollection(JSON.parse(progressStore.getItem(KEY) || 'null'), migrated);
     } catch {
-      /* Existing saves migrate from Lanternkin progression. */
+      /* Invalid local data falls back to legacy progress. */
     }
   }
+
   bond(id: SpeciesId): void {
     this.state.creatures[id].owned = true;
     this.state.active = id;
