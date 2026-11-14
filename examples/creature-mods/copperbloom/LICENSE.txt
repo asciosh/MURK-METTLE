@@ -1,0 +1,8 @@
+Copperbloom original demonstration asset
+
+Copyright and related rights waived by asciosh under CC0 1.0 Universal, to the extent permitted by law. You may use, modify and redistribute this original model, node animation and icon, including commercially, without attribution or permission. No warranty is provided.
+
+CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/
+Legal code: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+This dedication applies to this original demo asset, not to the game engine or third-party dependencies. No franchise assets, reference models, downloaded textures or paid generation services were used.

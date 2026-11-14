@@ -1,3 +1,5 @@
+import type { ModRegistry } from '../mods/ModRegistry';
+import type { ModVisual } from '../mods/ModVisual';
 import * as THREE from 'three';
 import type { World } from './World';
 import type { ModelEntry } from './AnimationController';
@@ -7,6 +9,13 @@ import { CREATURES, evolutionStage, type SpeciesId } from '../../../shared/expan
 export class Companion {
   readonly root = new THREE.Group();
   private readonly visual = new THREE.Group();
+  private readonly cosmeticMount = new THREE.Group();
+  private cosmetic: ModVisual | null = null;
+  private cosmeticGeneration = 0;
+  private cosmeticId = '';
+  private unsubscribeCosmetic?: () => void;
+  private disposed = false;
+  private cosmeticEffects = true;
   private readonly aura: THREE.Mesh;
   private readonly light: THREE.PointLight;
   private bound = false;
@@ -23,8 +32,9 @@ export class Companion {
   constructor(
     private readonly scene: THREE.Scene,
     species: SpeciesId = 'lanternkin',
+    private readonly cosmetics?: ModRegistry,
   ) {
-    this.root.add(this.visual);
+    this.root.add(this.visual, this.cosmeticMount);
     this.aura = new THREE.Mesh(
       new THREE.RingGeometry(0.45, 0.49, 48),
       new THREE.MeshBasicMaterial({
@@ -43,6 +53,7 @@ export class Companion {
     this.setForm(species, 0);
     this.retreat();
     this.scene.add(this.root);
+    this.unsubscribeCosmetic = cosmetics?.subscribe(() => this.refreshCosmetic());
   }
   private clearVisual(): void {
     this.wings.length = 0;
@@ -272,9 +283,31 @@ export class Companion {
     this.light.color.setHex(def.glow);
     (this.aura.material as THREE.MeshBasicMaterial).color.setHex(def.glow);
     if (changed) this.triggerPulse();
+    this.refreshCosmetic();
+  }
+  private refreshCosmetic(): void {
+    const id = this.cosmetics?.selection(this.speciesId) || '';
+    if (this.disposed || id === this.cosmeticId) return;
+    this.cosmeticId = id;
+    const generation = ++this.cosmeticGeneration;
+    this.cosmetic?.dispose();
+    this.cosmetic = null;
+    this.visual.visible = true;
+    if (!id || !this.cosmetics) return;
+    void this.cosmetics.acquire(this.speciesId).then((visual) => {
+      if (!visual) return;
+      if (this.disposed || generation !== this.cosmeticGeneration) {
+        visual.dispose();
+        return;
+      }
+      this.cosmetic = visual;
+      this.cosmeticMount.add(visual.root);
+      this.visual.visible = false;
+    });
   }
   setLightEnabled(value: boolean): void {
     this.light.visible = value;
+    this.cosmeticEffects = value;
   }
   isBound(): boolean {
     return this.bound;
@@ -296,6 +329,7 @@ export class Companion {
   }
   triggerPulse(): void {
     this.pulseTime = 0.65;
+    this.cosmetic?.pulse();
   }
   update(dt: number, position: THREE.Vector3, yaw: number, world: World): void {
     const d = CREATURES[this.speciesId],
@@ -323,6 +357,7 @@ export class Companion {
   }
   private animateParts(dt: number, walking: boolean): void {
     this.elapsed += dt;
+    this.cosmetic?.update(dt, walking, this.cosmeticEffects);
     this.pulseTime = Math.max(0, this.pulseTime - dt);
     const pulse = this.pulseTime > 0 ? Math.sin((1 - this.pulseTime / 0.65) * Math.PI) : 0;
     for (const [i, petal] of this.petals.entries()) {
@@ -334,6 +369,7 @@ export class Companion {
       material.emissiveIntensity = 0.65 + Math.sin(this.elapsed * 2.3) * 0.1 + pulse * 1.2;
     const size = (1 + this.stage * 0.28) * (1 + pulse * 0.09);
     this.visual.scale.set(size * (1 + pulse * 0.04), size, size * (1 + pulse * 0.04));
+    this.cosmeticMount.scale.copy(this.visual.scale);
     this.gaitBlend = THREE.MathUtils.damp(this.gaitBlend, walking ? 1 : 0, 7, dt);
     for (const wing of this.wings)
       wing.pivot.rotation.z =
@@ -347,6 +383,7 @@ export class Companion {
   }
   private animateAura(height: number): void {
     this.visual.rotation.z = Math.sin(this.elapsed * 2) * 0.035;
+    this.cosmeticMount.rotation.copy(this.visual.rotation);
     const progress = this.pulseTime > 0 ? 1 - this.pulseTime / 0.65 : 0;
     this.aura.scale.setScalar(this.pulseTime > 0 ? 1 + progress * 18 : 1);
     this.aura.position.y = -height + 0.035;
@@ -364,6 +401,12 @@ export class Companion {
     /* Species growth currently uses original procedural meshes. */
   }
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.cosmeticGeneration++;
+    this.unsubscribeCosmetic?.();
+    this.cosmetic?.dispose();
+    this.cosmetic = null;
     this.clearVisual();
     this.aura.geometry.dispose();
     (this.aura.material as THREE.Material).dispose();

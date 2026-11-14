@@ -7,6 +7,7 @@ export function initInterface(): void {
   let previous = '';
   const activePanel = () =>
     [
+      '#mods-dialog[open]',
       '#account-panel:not([hidden])',
       '#touch-journal-sheet:not([hidden])',
       '#inventory-panel.visible',

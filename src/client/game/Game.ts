@@ -1,3 +1,5 @@
+import { ModRegistry } from '../mods/ModRegistry';
+import { ModManager } from '../mods/ModManager';
 import { setText, setWidth } from '../ui/ChangedValue';
 import { renderProfile, type QualityId } from '../../../shared/render-profile.mjs';
 import { TouchControls } from './TouchControls';
@@ -139,7 +141,9 @@ export class Game {
     }
     this.multiplayer.send('sync-equipment');
   });
-  private readonly coopVisuals = new CoopVisuals(this.scene);
+  private readonly cosmetics = new ModRegistry();
+  private readonly modUI: ModManager;
+  private readonly coopVisuals = new CoopVisuals(this.scene, this.cosmetics);
   private roomMission: import('./Multiplayer').MissionState | null = null;
   private readonly roomStatus: HTMLElement | null;
   private readonly roomCode: HTMLInputElement | null;
@@ -224,14 +228,15 @@ export class Game {
     this.createExtractionBeacon();
     this.player = new Player(this.scene);
     this.infected = new InfectedGroup(this.scene, (position) => this.feedback.impact(position));
-    this.companion = new Companion(this.scene);
+    this.companion = new Companion(this.scene, 'lanternkin', this.cosmetics);
     this.firearms = new Firearms(this.scene, this.player, this.feedback);
     this.collection = new Collection(this.progression.state);
     this.recoveringBond = progressStore.getItem(this.bondRetreatKey) === '1';
     for (const id of SPECIES_IDS) {
-      const wild = new Companion(this.scene, id);
+      const wild = new Companion(this.scene, id, this.cosmetics);
       this.wildCreatures.set(id, wild);
     }
+    this.modUI = new ModManager(this.cosmetics);
     document.querySelector('#creature-roster')?.addEventListener('click', this.handleRosterClick);
     document.querySelector('#graphics-quality')?.addEventListener('change', this.handleGraphicsQuality);
     document.querySelector('#photo-materials')?.addEventListener('change', this.handlePhotoMaterials);
@@ -766,6 +771,8 @@ export class Game {
       if (node instanceof THREE.PointLight) node.visible = profile.pointLights;
     });
     this.coopVisuals.lightsEnabled = profile.pointLights;
+    this.companion.setLightEnabled(profile.pointLights);
+    for (const wild of this.wildCreatures.values()) wild.setLightEnabled(profile.pointLights);
     if (this.sky) this.sky.material.uniforms.cloudLayers.value = profile.cloudLayers;
     this.resize();
   }
@@ -839,6 +846,7 @@ export class Game {
     const signature = JSON.stringify([c, this.trackedCreature]);
     if (signature === this.collectionSignature) return;
     this.collectionSignature = signature;
+    this.modUI?.setSpecies(c.active);
     const roster = document.querySelector('#creature-roster');
     if (roster) {
       roster.replaceChildren();
@@ -1603,6 +1611,8 @@ export class Game {
     this.infected.dispose();
     for (const wild of this.wildCreatures.values()) wild.dispose();
     this.wildCreatures.clear();
+    this.modUI.dispose();
+    this.cosmetics.dispose();
     const geometry = new Set<THREE.BufferGeometry>(),
       materials = new Set<THREE.Material>();
     this.scene.traverse((object) => {

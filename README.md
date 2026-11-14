@@ -60,6 +60,10 @@ Wrangler is included in the package lock; `npm ci` installs it reproducibly. Git
 
 The separate [Tauri 2 Windows host](desktop/README.md) preserves the hosted browser game and existing Cloudflare accounts. See [build, security and compatibility notes](docs/WINDOWS-DESKTOP.md). Browser/Android build and deployment commands above are unchanged.
 
+## Local creature cosmetics
+
+Use **Field Menu → Creature Mods** to import and preview original or properly licensed cosmetic packs. The [v1 authoring and security guide](docs/modding/README.md) documents limits and the original CC0 Copperbloom demo. Cosmetics are device-local and do not change official creature rules or cloud saves.
+
 ## Current limitations
 
 - Co-op kills, salvage, crafting and creature ownership have server validation. **Solo progression is still computed by the browser**, then revision-saved to a Cloudflare account.
