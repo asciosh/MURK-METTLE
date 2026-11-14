@@ -58,10 +58,32 @@ npm run deploy
 
 Use the existing Cloudflare Worker/account and keep `wrangler.jsonc` bindings/migrations. Do not delete Durable Objects or production data. Deployment needs your own Cloudflare login/configuration.
 
+## GitHub PR and Cloudflare branch previews
+
+The upgrade is on branch `codex/wildlands-v021` in [PR #1](https://github.com/asciosh/MURK-METTLE/pull/1). A pull request proposes changes to `main`; opening it does not itself update the production branch.
+
+1. In PR #1, open **Files changed** to review the code.
+2. Wait for the Cloudflare branch preview/check to finish. If an earlier run failed with “needs a previews block”, retry the latest branch commit after this fix appears.
+3. Open the preview URL shown by Cloudflare. Create a new test account: preview accounts and room data are isolated from production.
+4. Test shooting, reloading, bonding, collection saves and co-op before merging.
+5. When satisfied, click **Ready for review** (the PR starts as a draft), then **Merge pull request** or **Squash and merge**, and confirm. Required checks/rules may need to pass first.
+6. If Cloudflare's Git integration deploys `main`, merging starts that production build. Otherwise deploy `main` manually.
+
+Cloudflare Workers build settings for this Vite/Worker project:
+
+- Build command: `npm run build`
+- Production deploy command: `npx wrangler deploy`
+- Non-production/branch preview command: `npx wrangler preview`
+- Production branch: `main`
+
+`wrangler preview` needs the `previews` block now included in `wrangler.jsonc`. Because the code uses `env.GAME_ROOMS`, `env.PLAYER_PROFILES` and `env.PLAYER_ACCOUNTS`, the preview must declare all three bindings, rather than just an empty object. Their local class bindings and existing migrations let Cloudflare create isolated preview namespaces; do not add a production `script_name` to them. Production bindings/migrations stay in their top-level locations.
+
+References: [Cloudflare preview resources and Durable Objects](https://developers.cloudflare.com/workers/previews/resources/), [GitHub: merging a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/merging-a-pull-request).
+
 ## Validation and limits
 
 - TypeScript and Vite production build passed.
-- 15 automated tests passed, including legacy account-save revision tests, per-species collection migration, ammo conservation, reload/cooldown rules, map cover and room validation.
+- 16 automated tests passed, including legacy account-save revision tests, per-species collection migration, ammo conservation, reload/cooldown rules, map cover and room validation.
 - A real local Wrangler instance was exercised with two authenticated WebSocket clients: joining, bonding distance rejection, bonding, firearm kill, persistent creature XP, reload, and remote shot events.
 - Chromium browser checks exercised account registration, the rendered game, pistol fire, reserve-consuming reload, weapon switching, RMB aiming, held automatic fire, and ammo/minimap separation. No JavaScript runtime errors were recorded.
 - Production Cloudflare deployment, four-player load, mobile touch controls and hardware FPS benchmarking were not performed. The game remains keyboard/mouse oriented.

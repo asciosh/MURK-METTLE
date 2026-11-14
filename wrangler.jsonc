@@ -27,6 +27,15 @@
       }
     ]
   },
+  "previews": {
+    "durable_objects": {
+      "bindings": [
+        { "name": "GAME_ROOMS", "class_name": "GameRoom" },
+        { "name": "PLAYER_PROFILES", "class_name": "PlayerProfile" },
+        { "name": "PLAYER_ACCOUNTS", "class_name": "PlayerAccount" }
+      ]
+    }
+  },
   "migrations": [
     {
       "tag": "v1",
