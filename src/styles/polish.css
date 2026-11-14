@@ -22,3 +22,43 @@
   .field-menu { max-height: 72dvh; }
   .hud-stack { max-height: calc(100% - 76px); }
 }
+
+/* Wildlands expansion: quieter field equipment palette and readable combat controls. */
+:root { --acid: #c4c9ab; --panel: rgba(19,25,24,.86); --line: rgba(198,209,192,.18); }
+.region-name { position:absolute; top:94px; left:50%; transform:translateX(-50%); z-index:3; padding:9px 15px; color:#d6d7c8; background:linear-gradient(90deg,transparent,#17221ec7,transparent); font:9px 'DM Mono',monospace; letter-spacing:.2em; text-align:center; pointer-events:none; }
+.weapon-panel { position:absolute; z-index:4; bottom:115px; right:32px; width:224px; padding:15px 18px; background:linear-gradient(100deg,#16201fd9,#1c2421ed); border:1px solid #b9c1a72b; border-left:2px solid #c4b48b; pointer-events:none; }
+.weapon-panel span {display:block;font:10px 'DM Mono',monospace;letter-spacing:.16em;color:#c7cbbb;}
+.weapon-panel strong {display:block;margin:6px 0;font:32px 'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.06em;color:#f0e9d6;}
+.weapon-panel small {font:8px 'DM Mono',monospace;color:#a4ae9f;}
+.exploration-hint {position:absolute;left:50%;top:64%;transform:translateX(-50%);z-index:5;color:#e8dfbc;font:11px 'DM Mono',monospace;letter-spacing:.06em;text-shadow:0 2px 6px #000;pointer-events:none;text-align:center;}
+.creature-roster {display:grid;gap:4px;margin:10px 0;}
+.creature-roster button {text-align:left;padding:7px 8px;border:1px solid #a9b09a30;background:#202c26;color:#c4cdba;font:9px 'DM Mono',monospace;cursor:pointer;}
+.creature-roster button.selected {border-color:#bdc5a3;background:#354236;}
+.creature-roster button:disabled {opacity:.65;cursor:default;}
+.evolution-status {font:8px 'DM Mono',monospace;color:#c1b894;margin-top:8px;line-height:1.7;}
+.creature-panel p {font-size:10px;line-height:1.5;}
+body.is-aiming .reticle {width:6px;height:6px;opacity:.95;}
+body.is-aiming .reticle::before {height:6px;left:2px;}
+body.is-aiming .reticle::after {width:6px;top:2px;}
+body.hit-confirmed .reticle {filter:drop-shadow(0 0 4px #e5b37b);transform:translate(-50%,-50%) rotate(45deg) scale(1.8);}
+body.hit-confirmed .reticle::before,body.hit-confirmed .reticle::after {background:#e5b37b;}
+#game-viewport::after {content:'';position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,transparent 42%,#0c14122e 100%);}
+.minimap-panel {width:172px;}
+#field-minimap {width:100%;height:auto;}
+.hud-bottom-right {max-width:70%;gap:4px;}
+.hud-bottom-right .control-chip {padding:5px;font-size:7px;}
+.hud-stack .creature-panel {padding:12px;}
+.hud-stack .creature-panel .creature-name {font-size:18px;}
+.hud-stack .creature-panel p {margin-block:6px;}
+@media (max-width:900px){.region-name{top:86px;max-width:38%;font-size:7px;}.weapon-panel{bottom:145px;right:16px;width:180px;}.minimap-panel{width:132px;}.hud-stack .creature-panel p{display:none;}.hud-bottom-right{max-width:70%;}.creature-roster button{padding:5px;font-size:8px;}}
+@media (max-width:680px){.region-name{top:75px;}.weapon-panel{bottom:165px;width:150px;padding:10px;}.weapon-panel strong{font-size:24px;}.minimap-panel{display:none;}.hud-stack-left{width:180px;}.hud-stack-right{width:150px;}.exploration-hint{top:62%;font-size:9px;}.hud-bottom-right{max-width:none;}}
+
+.evolution-announcement {position:absolute;left:50%;top:23%;transform:translate(-50%,-8px);opacity:0;z-index:6;background:#202d28ed;border-block:1px solid #b6c899;color:#e1ebc9;padding:18px 34px;font:24px 'Barlow Condensed',sans-serif;letter-spacing:.14em;pointer-events:none;transition:opacity .4s,transform .4s;text-align:center;}.evolution-announcement.visible{opacity:1;transform:translate(-50%,0);}
+
+.weapon-panel {bottom:230px;right:32px;}
+.hud-stack>section {border-radius:3px!important;background:linear-gradient(130deg,#1b2422ed,#151d1bec)!important;}
+.creature-panel {border-left-color:#b3b99a;}.mission-panel{border-left-color:#849d98;}
+.graphics-label {display:flex;align-items:center;justify-content:space-between;gap:12px;font:10px 'DM Mono',monospace;color:#bec6b4;}
+.graphics-label select {background:#25312a;color:#d2d6c7;border:1px solid #a9b09a45;padding:8px;}
+@media(max-width:900px){.weapon-panel{bottom:190px;right:16px;width:170px;}}
+@media(max-width:680px){.weapon-panel{bottom:24px;right:12px;width:150px;}.region-name{max-width:70%;top:12px;}}

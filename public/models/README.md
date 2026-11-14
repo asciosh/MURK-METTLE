@@ -1,3 +1,7 @@
+## v0.21 default presentation
+
+The original survivor GLB remains in this folder for compatibility and reference. Its manifest entry is disabled in v0.21 so the revised procedural survivor is visible by default. The loader still supports your own animated survivor/zombie GLBs. Companion evolution currently uses original procedural species meshes.
+
 # Original GLB assets (v0.10)
 
 The included **survivor.glb** was authored programmatically for Murk & Mettle without third-party game art. It includes node-transform animation clips `Idle`, `Walk`, `Run`, `Attack`, `Hit`, and `Death`. It is an original **animated GLB**, not a skinned/bone-rigged character. For more sophisticated deformation, use a skinned model exported from Blender.

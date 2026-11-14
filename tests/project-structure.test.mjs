@@ -46,7 +46,9 @@ test('client and backend entrypoints, GLB manifest and required modules exist', 
     'server/cloudflare/account.mjs', 'server/cloudflare/profile.mjs',
     'server/local/index.mjs', 'scripts/dev.mjs', 'public/models/survivor.glb'
   ]) await access(resolve(root, path));
-  assert.match(await read('scripts/dev.mjs'), /server\/local\/index\.mjs/);
+  const dev = await read('scripts/dev.mjs');
+  assert.match(dev, /spawn\(bin\('wrangler'\)/);
+  assert.match(dev, /'build', '--watch'/);
   assert.match(await read('src/main.ts'), /client\/game\/Game/);
   assert.doesNotMatch(await read('src/main.ts'), /\.\/game\/Game/);
 });

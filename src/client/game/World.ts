@@ -1,428 +1,423 @@
 import * as THREE from 'three';
+import {
+  BUILDINGS,
+  TREES,
+  SUPPLIES,
+  CREATURES,
+  constrainPosition,
+  obstacleDistance,
+} from '../../../shared/expansion.mjs';
 
-interface CircularObstacle {
-  x: number;
-  z: number;
-  radius: number;
-}
-
-/** A small procedural test clearing; all meshes are temporary original primitives. */
+/** Deterministic 180m sector. Collision geometry is shared with the room server. */
 export class World {
-  private readonly obstacles: CircularObstacle[] = [];
-
+  private readonly textures: THREE.Texture[] = [];
+  private readonly crates = new Map<string, THREE.Group>();
   constructor(private readonly scene: THREE.Scene) {
-    this.createGround();
-    this.createPath();
-    this.createVegetation();
-    this.createRuins();
-    this.createAtmosphereDetails();
-    this.createForestFloor();
+    this.createTerrain();
+    this.createForest();
+    this.createTown();
+    this.createWetland();
+    this.createSupplies();
     this.createLandmarks();
-    this.createCanopyDetails();
-    this.createForestBackdrop();
-    this.createGroundDetail();
-    this.createForestMotes();
   }
-
-  /** Tileable pixel-art-inspired soil texture; entirely code-generated and royalty-free. */
-  private makeTerrainTexture(base: number, light: number, dark: number, repeats: number): THREE.CanvasTexture {
+  private texture(kind: 'soil' | 'bark' | 'concrete' | 'brick' | 'leaf'): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
-    canvas.width = 256; canvas.height = 256;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('2D canvas needed to generate terrain texture');
-    context.fillStyle = `#${base.toString(16).padStart(6, '0')}`;
-    context.fillRect(0, 0, 256, 256);
-    let seed = base ^ light ^ dark;
-    const random = (): number => {
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      return seed / 0x100000000;
-    };
-    for (let i = 0; i < 1550; i++) {
-      context.globalAlpha = 0.09 + random() * 0.23;
-      context.fillStyle = `#${(random() > 0.5 ? light : dark).toString(16).padStart(6, '0')}`;
-      const size = 1 + random() * 6;
-      context.fillRect(random() * 256, random() * 256, size * 1.8, size * 0.55);
-    }
-    context.globalAlpha = 1;
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(repeats, repeats);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = 4;
-    return texture;
-  }
-
-  private createGround(): void {
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(100, 100),
-      new THREE.MeshStandardMaterial({ map: this.makeTerrainTexture(0x425d47, 0x63734a, 0x273e35, 12), roughness: 1 }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    ground.name = 'ground';
-    this.scene.add(ground);
-
-    const clearing = new THREE.Mesh(
-      new THREE.CircleGeometry(23.8, 64),
-      new THREE.MeshStandardMaterial({ map: this.makeTerrainTexture(0x526b4f, 0x73885a, 0x425442, 8), roughness: 1 }),
-    );
-    clearing.rotation.x = -Math.PI / 2;
-    clearing.position.y = 0.012;
-    clearing.receiveShadow = true;
-    this.scene.add(clearing);
-  }
-
-  private createPath(): void {
-    const path = new THREE.Mesh(
-      new THREE.PlaneGeometry(6.5, 47),
-      new THREE.MeshStandardMaterial({ map: this.makeTerrainTexture(0x786b51, 0xa28d67, 0x5c5644, 12), roughness: 1 }),
-    );
-    path.rotation.x = -Math.PI / 2;
-    path.position.set(0, 0.025, -1.8);
-    path.receiveShadow = true;
-    this.scene.add(path);
-
-    const pathEdgeMaterial = new THREE.MeshStandardMaterial({ color: 0x9a8968, roughness: 1 });
-    for (const x of [-3.45, 3.45]) {
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.035, 42), pathEdgeMaterial);
-      edge.position.set(x, 0.045, -2);
-      this.scene.add(edge);
-    }
-  }
-
-  private createVegetation(): void {
-    const treePositions: Array<[number, number, number]> = [
-      [-17, -15, 1.2], [-13, -20, 0.9], [-19, -4, 1.05], [-16, 12, 1.2],
-      [-8, 19, 0.9], [2, 21, 1.15], [13, 17, 1.1], [19, 10, 1.2],
-      [20, -5, 0.95], [15, -18, 1.2], [8, -21, 0.9], [-21, 5, 0.9],
-    ];
-    for (const [x, z, scale] of treePositions) this.createTree(x, z, scale);
-
-    const rockPositions: Array<[number, number, number]> = [
-      [-11, -13, 0.9], [-7, 15, 0.7], [11, 13, 0.85], [17, -12, 0.75],
-      [-20, 1, 0.7], [4, 18, 0.7], [20, 4, 0.8], [-15, 16, 0.7],
-    ];
-    for (const [x, z, scale] of rockPositions) this.createRock(x, z, scale);
-
-    const mushroomPositions: Array<[number, number, number]> = [
-      [-10, -17, 1], [10, -17, 1.15], [-19, 8, 0.9], [17, 15, 1.1],
-      [-6, 20, 0.85], [21, -8, 0.95],
-    ];
-    for (const [x, z, scale] of mushroomPositions) this.createMushroom(x, z, scale);
-  }
-
-  private createTree(x: number, z: number, scale: number): void {
-    const tree = new THREE.Group();
-    tree.position.set(x, 0, z);
-    tree.scale.setScalar(scale);
-
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.22, 0.38, 2.4, 7),
-      new THREE.MeshStandardMaterial({ color: 0x594c38, roughness: 1 }),
-    );
-    trunk.position.y = 1.2;
-    trunk.castShadow = true;
-    trunk.receiveShadow = true;
-    tree.add(trunk);
-
-    const canopyMaterial = new THREE.MeshStandardMaterial({ color: 0x294d3c, roughness: 1 });
-    const canopy = new THREE.Mesh(new THREE.ConeGeometry(1.65, 3.8, 7), canopyMaterial);
-    canopy.position.y = 3.5;
-    canopy.castShadow = true;
-    canopy.receiveShadow = true;
-    tree.add(canopy);
-
-    const lowerCanopy = new THREE.Mesh(new THREE.IcosahedronGeometry(1.18, 1),
-      new THREE.MeshStandardMaterial({ color: 0x3d6248, roughness: 1 }));
-    lowerCanopy.position.set(0.2, 2.75, 0.1);
-    lowerCanopy.castShadow = true;
-    tree.add(lowerCanopy);
-
-    this.scene.add(tree);
-    this.obstacles.push({ x, z, radius: 0.8 * scale });
-  }
-
-  private createRock(x: number, z: number, scale: number): void {
-    const rock = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(0.75 * scale, 0),
-      new THREE.MeshStandardMaterial({ color: 0x687269, roughness: 1 }),
-    );
-    rock.position.set(x, 0.42 * scale, z);
-    rock.rotation.set(0.2, x * 0.17, 0.35);
-    rock.scale.set(1.25, 0.8, 0.95);
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    this.scene.add(rock);
-    this.obstacles.push({ x, z, radius: 0.62 * scale });
-  }
-
-  private createMushroom(x: number, z: number, scale: number): void {
-    const mushroom = new THREE.Group();
-    mushroom.position.set(x, 0, z);
-    mushroom.scale.setScalar(scale);
-
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.13, 0.19, 0.68, 8),
-      new THREE.MeshStandardMaterial({ color: 0xd6c8a8, roughness: 0.9 }),
-    );
-    stem.position.y = 0.34;
-    stem.castShadow = true;
-    mushroom.add(stem);
-
-    const cap = new THREE.Mesh(
-      new THREE.SphereGeometry(0.48, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
-      new THREE.MeshStandardMaterial({ color: 0xd36f52, roughness: 0.68, emissive: 0x321008, emissiveIntensity: 0.18 }),
-    );
-    cap.position.y = 0.66;
-    cap.castShadow = true;
-    mushroom.add(cap);
-
-    this.scene.add(mushroom);
-    this.obstacles.push({ x, z, radius: 0.42 * scale });
-  }
-
-  private createRuins(): void {
-    const ruinMaterial = new THREE.MeshStandardMaterial({ color: 0x777b6d, roughness: 1 });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.45, 1.2), ruinMaterial);
-    base.position.set(0, 0.22, -23.5);
-    base.castShadow = true;
-    base.receiveShadow = true;
-    this.scene.add(base);
-
-    for (const x of [-2.1, 2.1]) {
-      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.55, 3.8, 0.65), ruinMaterial);
-      pillar.position.set(x, 2.0, -23.5);
-      pillar.castShadow = true;
-      pillar.receiveShadow = true;
-      this.scene.add(pillar);
-    }
-
-    const lintel = new THREE.Mesh(new THREE.BoxGeometry(5.1, 0.55, 0.8), ruinMaterial);
-    lintel.position.set(0, 3.8, -23.5);
-    lintel.castShadow = true;
-    this.scene.add(lintel);
-  }
-
-  private createAtmosphereDetails(): void {
-    const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xb7d88b });
-    const points: Array<[number, number, number]> = [
-      [-5, 0.55, -8], [6, 0.7, -13], [-8, 0.65, 7], [10, 0.8, 5], [2, 0.65, 14],
-    ];
-    for (const [x, y, z] of points) {
-      const mote = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), glowMaterial);
-      mote.position.set(x, y, z);
-      this.scene.add(mote);
-    }
-  }
-
-  /** Seeded decoration makes every visit to the mission area visually consistent. */
-  private createForestFloor(): void {
-    let seed = 70421;
-    const random = (): number => {
+    canvas.width = canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+    let seed = 542;
+    const rand = () => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
       return seed / 4294967296;
     };
-    const fernMaterial = new THREE.MeshStandardMaterial({ color: 0x688d58, side: THREE.DoubleSide, roughness: 1 });
-    const grassMaterial = new THREE.MeshStandardMaterial({ color: 0x8a9c5c, side: THREE.DoubleSide, roughness: 1 });
-    const bladeGeometry = new THREE.ConeGeometry(0.16, 0.75, 3);
-    const fern = new THREE.InstancedMesh(bladeGeometry, fernMaterial, 290);
-    const grass = new THREE.InstancedMesh(bladeGeometry, grassMaterial, 270);
-    const dummy = new THREE.Object3D();
-    for (const [mesh, amount] of [[fern, 290], [grass, 270]] as const) {
-      for (let i = 0; i < amount; i++) {
-        const x = random() * 48 - 24;
-        const z = random() * 48 - 24;
-        dummy.position.set(x, 0.25, z);
-        dummy.rotation.set(0, random() * Math.PI * 2, 0);
-        const size = 0.5 + random() * 0.95;
-        dummy.scale.set(size, size, size);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
+    if (kind === 'leaf') {
+      for (let i = 0; i < 45; i++) {
+        const x = 30 + rand() * 196,
+          y = 15 + rand() * 220;
+        ctx.fillStyle = `rgb(${55 + rand() * 35},${70 + rand() * 40},${42 + rand() * 25})`;
+        ctx.beginPath();
+        ctx.ellipse(x, y, 9 + rand() * 13, 3 + rand() * 6, rand() * 6.28, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#79805b';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(x - 9, y);
+        ctx.lineTo(x + 9, y);
+        ctx.stroke();
       }
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.computeBoundingSphere();
-      this.scene.add(mesh);
+    } else {
+      ctx.fillStyle =
+        kind === 'soil' ? '#a6a18c' : kind === 'bark' ? '#60574b' : kind === 'brick' ? '#796759' : '#9b9a8e';
+      ctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 18000; i++) {
+        const n = rand() * 100;
+        ctx.fillStyle = `rgba(${n},${n},${n},${rand() * 0.23})`;
+        const x = rand() * 256,
+          y = rand() * 256;
+        ctx.fillRect(
+          x,
+          y,
+          kind === 'bark' ? 1 + rand() * 3 : 1 + rand() * 2,
+          kind === 'bark' ? rand() * 60 : 1 + rand() * 3,
+        );
+      }
+      if (kind === 'brick') {
+        ctx.strokeStyle = '#4b4b43';
+        ctx.lineWidth = 3;
+        for (let y = 0; y < 256; y += 32) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(256, y);
+          ctx.stroke();
+          for (let x = y % 64 ? -32 : 0; x < 256; x += 64) {
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x, y + 32);
+            ctx.stroke();
+          }
+        }
+      }
+      for (let i = 0; i < 70; i++) {
+        ctx.strokeStyle = `rgba(25,30,24,${rand() * 0.28})`;
+        ctx.lineWidth = rand() * 2;
+        let x = rand() * 256,
+          y = rand() * 256;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let k = 0; k < 6; k++) {
+          x += rand() * 12 - 6;
+          y += rand() * 10;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
     }
-    const wildflowers = new THREE.InstancedMesh(
-      new THREE.IcosahedronGeometry(0.085, 0),
-      new THREE.MeshBasicMaterial({ color: 0xe6be83 }), 95,
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 8;
+    this.textures.push(texture);
+    return texture;
+  }
+  private mesh(
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material,
+    x: number,
+    y: number,
+    z: number,
+    parent: THREE.Object3D = this.scene,
+  ): THREE.Mesh {
+    const m = new THREE.Mesh(geometry, material);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    parent.add(m);
+    return m;
+  }
+  private createTerrain(): void {
+    const map = this.texture('soil');
+    map.repeat.set(95, 95);
+    const geometry = new THREE.PlaneGeometry(210, 210, 100, 100);
+    geometry.rotateX(-Math.PI / 2);
+    const colors = [];
+    const position = geometry.getAttribute('position');
+    const color = new THREE.Color();
+    for (let i = 0; i < position.count; i++) {
+      const x = position.getX(i),
+        z = position.getZ(i);
+      const road = Math.abs(x) < 4.5 || (Math.abs(z) < 2.7 && x > -55 && x < 65);
+      const town = Math.abs(x) < 29 && z < -32 && z > -78;
+      const marsh = Math.hypot(x + 48, z + 28) < 16;
+      const n = Math.sin(x * 0.19) * Math.cos(z * 0.13) * 0.06 + Math.sin(x * 1.7 + z * 0.8) * 0.025;
+      color.set(road ? 0x7c7766 : town ? 0x676b5b : marsh ? 0x46554b : 0x64714c);
+      color.offsetHSL(0, -0.06, n);
+      colors.push(color.r, color.g, color.b);
+    }
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const ground = this.mesh(
+      geometry,
+      new THREE.MeshStandardMaterial({ map, bumpMap: map, bumpScale: 0.12, roughness: 0.96, vertexColors: true }),
+      0,
+      -0.025,
+      0,
     );
-    for (let i = 0; i < 95; i++) {
-      dummy.position.set(random() * 45 - 22.5, 0.44, random() * 45 - 22.5);
-      dummy.rotation.set(0, 0, 0);
-      dummy.scale.setScalar(0.6 + random() * 0.7);
-      dummy.updateMatrix(); wildflowers.setMatrixAt(i, dummy.matrix);
+    ground.castShadow = false;
+    // Soft relief beyond the navigable sector, leaving gameplay on a predictable plane.
+    const hillMat = new THREE.MeshStandardMaterial({ color: 0x4d5d51, roughness: 1 });
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2;
+      const hill = this.mesh(new THREE.SphereGeometry(1, 20, 12), hillMat, Math.cos(a) * 133, 0, Math.sin(a) * 133);
+      hill.scale.set(27, 12 + Math.sin(i * 4) * 7, 24);
+      hill.castShadow = false;
     }
-    wildflowers.instanceMatrix.needsUpdate = true;
-    wildflowers.computeBoundingSphere();
-    this.scene.add(wildflowers);
-  }
-
-  /** Landmarks intentionally stay in the existing 46m playable area; mission positions do not change. */
-  private createLandmarks(): void {
-    const stone = new THREE.MeshStandardMaterial({ color: 0x536b63, roughness: 0.96 });
-    const metal = new THREE.MeshStandardMaterial({ color: 0x789487, metalness: 0.55, roughness: 0.5 });
-    const amber = new THREE.MeshStandardMaterial({ color: 0xffaa67, emissive: 0xa75b32, emissiveIntensity: 1.35 });
-    const cyan = new THREE.MeshStandardMaterial({ color: 0x81eee2, emissive: 0x2d9e9b, emissiveIntensity: 1.25 });
-    // A weather station that marks the eastern route, away from zombie spawn and extraction.
-    const station = new THREE.Group();
-    station.position.set(13, 0, -8);
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.3, 0.28, 8), stone);
-    pad.position.y = 0.14; station.add(pad);
-    for (const x of [-1.05, 1.05]) {
-      const support = new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.3, 0.16), metal);
-      support.position.set(x, 1.72, 0); station.add(support);
+    const pebbleGeo = new THREE.IcosahedronGeometry(0.13, 1);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x77786c, roughness: 1 });
+    const pebbles = new THREE.InstancedMesh(pebbleGeo, mat, 850);
+    const d = new THREE.Object3D();
+    for (let i = 0; i < 850; i++) {
+      const x = Math.sin(i * 674.21) * 88,
+        z = Math.cos(i * 341.43) * 88;
+      d.position.set(x, 0.04, z);
+      d.scale.set(0.6 + (i % 5) * 0.3, 0.4, 1.2);
+      d.rotation.set(i, 0, i * 0.5);
+      d.updateMatrix();
+      pebbles.setMatrixAt(i, d.matrix);
     }
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.23, 2.1), stone);
-    roof.position.y = 3.35; station.add(roof);
-    const screen = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.9, 0.12), cyan);
-    screen.position.set(0, 2.15, 0.02); station.add(screen);
-    this.scene.add(station);
-    // A warm field camp to orient the spawn side of the clearing.
-    const camp = new THREE.Group(); camp.position.set(-11, 0, 8);
-    const tent = new THREE.Mesh(new THREE.ConeGeometry(2.2, 2.7, 4), new THREE.MeshStandardMaterial({ color: 0xb28a60, roughness: 1 }));
-    tent.rotation.y = Math.PI / 4; tent.position.y = 1.35; camp.add(tent);
-    const fire = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.8, 6), amber);
-    fire.position.set(3.1, 0.42, 0); camp.add(fire);
-    const glow = new THREE.PointLight(0xffa15c, 4.5, 9, 2);
-    glow.position.set(3.1, 1.0, 0); camp.add(glow);
-    this.scene.add(camp);
-    // Simple orientation monolith near the ruin corridor.
-    const marker = new THREE.Mesh(new THREE.BoxGeometry(0.75, 2.6, 0.55), stone);
-    marker.position.set(-9, 1.3, -16); marker.rotation.y = 0.3; this.scene.add(marker);
-    const rune = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.65, 0.04), cyan);
-    rune.position.set(-9, 1.7, -15.7); this.scene.add(rune);
+    pebbles.computeBoundingSphere();
+    pebbles.receiveShadow = true;
+    this.scene.add(pebbles);
   }
-
-  private createCanopyDetails(): void {
-    const soil = new THREE.MeshStandardMaterial({ color: 0x3d5547, roughness: 1 });
-    for (const [x, z, r] of [[-15,-11,3], [16,7,3.5], [-14,15,2.4], [17,-18,2.8]] as const) {
-      const mound = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 7), soil);
-      mound.scale.set(1, 0.12, 0.85); mound.position.set(x, -0.24, z);
-      mound.receiveShadow = true; this.scene.add(mound);
-    }
-  }
-
-
-  /** Distant layered trees create a forest horizon with only three instanced draw calls.
-   *  They live beyond playable bounds and intentionally have no collisions. */
-  private createForestBackdrop(): void {
+  private createForest(): void {
+    const bark = this.texture('bark');
+    bark.repeat.set(1, 3);
+    const leaf = this.texture('leaf');
+    const branches=new THREE.InstancedMesh(new THREE.CylinderGeometry(.035,.10,2.8,6),new THREE.MeshStandardMaterial({map:bark,roughness:1}),TREES.length*5);
     const trunks = new THREE.InstancedMesh(
-      new THREE.CylinderGeometry(0.23, 0.46, 3.5, 5),
-      new THREE.MeshStandardMaterial({ color: 0x435043, roughness: 1 }), 68,
+      new THREE.CylinderGeometry(0.18, 0.34, 7.5, 9),
+      new THREE.MeshStandardMaterial({ map: bark, bumpMap: bark, bumpScale: 0.08, roughness: 1 }),
+      TREES.length,
     );
-    const canopies = new THREE.InstancedMesh(
-      new THREE.ConeGeometry(2.1, 6.3, 6),
-      new THREE.MeshStandardMaterial({ color: 0x244b3b, roughness: 1, flatShading: true }), 68,
+    const foliage = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(5.3, 6),
+      new THREE.MeshStandardMaterial({ map: leaf, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }),
+      TREES.length * 5,
     );
-    const lower = new THREE.InstancedMesh(
-      new THREE.ConeGeometry(2.8, 4.7, 6),
-      new THREE.MeshStandardMaterial({ color: 0x36674c, roughness: 1, flatShading: true }), 68,
-    );
-    const item = new THREE.Object3D();
-    for (let i = 0; i < 68; i++) {
-      const angle = (i / 68) * Math.PI * 2;
-      const radius = 30 + 2.8 * Math.sin(i * 1.73);
-      const size = 0.75 + 0.45 * (0.5 + 0.5 * Math.sin(i * 13.7));
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-      item.position.set(x, 1.75 * size, z); item.scale.setScalar(size);
-      item.rotation.set(0, i * 1.618, 0); item.updateMatrix(); trunks.setMatrixAt(i, item.matrix);
-      item.position.y = 6.05 * size; item.updateMatrix(); canopies.setMatrixAt(i, item.matrix);
-      item.position.y = 4.65 * size; item.updateMatrix(); lower.setMatrixAt(i, item.matrix);
-    }
-    for (const mesh of [trunks, canopies, lower]) {
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.computeBoundingSphere();
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      this.scene.add(mesh);
-    }
-  }
-
-  /** Low-cost small set dressing; no new collisions or changed mission coordinates. */
-  private createGroundDetail(): void {
-    const soil = new THREE.MeshStandardMaterial({ color: 0x556243, roughness: 1, flatShading: true });
-    const moss = new THREE.MeshStandardMaterial({ color: 0x75905d, roughness: 1, flatShading: true });
-    const root = new THREE.MeshStandardMaterial({ color: 0x635344, roughness: 1 });
-    const debris = new THREE.MeshStandardMaterial({ color: 0x9f8d70, roughness: 1 });
-    const patch = new THREE.CircleGeometry(1, 9);
-    const dummy = new THREE.Object3D();
-    const patches = new THREE.InstancedMesh(patch, soil, 70);
-    const lichen = new THREE.InstancedMesh(patch, moss, 65);
-    const stones = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.12, 0), debris, 90);
-    let seed = 9418;
-    const rand = (): number => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
-    for (const [mesh, n, height] of [[patches, 70, 0.045], [lichen, 65, 0.052], [stones, 90, 0.12]] as const) {
-      for (let i = 0; i < n; i++) {
-        const x = rand() * 43 - 21.5, z = rand() * 43 - 21.5;
-        dummy.position.set(x, height, z);
-        dummy.rotation.set(mesh === stones ? rand() * 0.7 : -Math.PI / 2, rand() * Math.PI * 2, 0);
-        const scale = mesh === stones ? 0.6 + rand() * 1.5 : 0.35 + rand() * 1.45;
-        dummy.scale.set(scale, scale * (mesh === stones ? 0.7 : 0.6), scale);
-        dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
-      }
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.computeBoundingSphere();
-      this.scene.add(mesh);
-    }
-    // Hand-placed exposed roots around old trees.
-    for (const [x, z, angle] of [[-17, -15, 0.3], [19, 10, 1.6], [-16, 12, 2.4], [13, 17, 0.8]] as const) {
-      for (let k = 0; k < 3; k++) {
-        const cylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.16, 2.2, 5), root);
-        cylinder.position.set(x + Math.cos(angle + k * 2.1) * 0.85, 0.13, z + Math.sin(angle + k * 2.1) * 0.85);
-        cylinder.rotation.z = Math.PI / 2;
-        cylinder.rotation.y = angle + k * 2.1;
-        this.scene.add(cylinder);
+    const d = new THREE.Object3D();
+    const color = new THREE.Color();
+    for (const [i, t] of TREES.entries()) {
+      d.position.set(t.x, 3.75 * t.size, t.z);
+      d.rotation.set(0, i * 2.4, 0);
+      d.scale.setScalar(t.size);
+      d.updateMatrix();
+      trunks.setMatrixAt(i, d.matrix);
+      for (let j = 0; j < 5; j++) {
+        const angle=j*2.4+i;
+        d.position.set(t.x+Math.sin(angle)*.7*t.size,(4.8+j*.55)*t.size,t.z+Math.cos(angle)*.7*t.size);
+        d.rotation.set(Math.cos(angle)*1.05,0,-Math.sin(angle)*1.05);d.scale.setScalar(t.size);d.updateMatrix();branches.setMatrixAt(i*5+j,d.matrix);
+        d.position.set(t.x + Math.sin(j * 2.3) * t.size, (5 + j * 0.55) * t.size, t.z + Math.cos(j * 2.3) * t.size);
+        d.rotation.set(j * 0.32, j * 2.4 + i, j * 0.11);
+        d.scale.set(1.1 * t.size, (0.7 + (j % 2) * 0.2) * t.size, t.size);
+        d.updateMatrix();
+        foliage.setMatrixAt(i * 5 + j, d.matrix);
+        color.setHSL(0.2 + (i % 7) * 0.005, 0.16, 0.4 + (i % 4) * 0.025);
+        foliage.setColorAt(i * 5 + j, color);
       }
     }
-  }
-
-  private createForestMotes(): void {
-    // Sparse atmospheric pollen; additive blending provides depth without postprocess passes.
-    const count = 140;
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(count * 3);
-    let seed = 34901;
-    const rand = (): number => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] = rand() * 44 - 22;
-      positions[i * 3 + 1] = 0.9 + rand() * 5.5;
-      positions[i * 3 + 2] = rand() * 44 - 22;
+    trunks.castShadow = true;
+    trunks.receiveShadow = true;
+    foliage.castShadow = true;
+    foliage.receiveShadow = true;
+    trunks.computeBoundingSphere();
+    foliage.computeBoundingSphere();
+    branches.castShadow=true;branches.receiveShadow=true;branches.computeBoundingSphere();
+    this.scene.add(trunks, foliage, branches);
+    // Crossing textured grass cards replace the former solid triangular plants.
+    const grass = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(0.9, 0.7),
+      new THREE.MeshStandardMaterial({
+        map: leaf,
+        alphaTest: 0.5,
+        side: THREE.DoubleSide,
+        color: 0x81865c,
+        roughness: 1,
+      }),
+      4000,
+    );
+    for (let i = 0; i < 4000; i++) {
+      const x = Math.sin(i * 127.1) * 88,
+        z = Math.sin(i * 311.7) * 88;
+      d.position.set(x, Math.abs(x) < 5 ? -0.6 : 0.23, z);
+      d.rotation.set(0, i * 2.4, 0);
+      d.scale.setScalar(0.6 + (i % 7) * 0.12);
+      d.updateMatrix();
+      grass.setMatrixAt(i, d.matrix);
     }
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const motes = new THREE.Points(geometry, new THREE.PointsMaterial({
-      color: 0xe0df9b, size: 0.085, sizeAttenuation: true, transparent: true,
-      opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending,
-    }));
-    motes.frustumCulled = false;
-    this.scene.add(motes);
+    grass.receiveShadow = true;
+    grass.computeBoundingSphere();
+    this.scene.add(grass);
   }
-
-  /** Keeps the prototype player within the clearing and outside simple circular props. */
+  private createTown(): void {
+    const brick = this.texture('brick');
+    brick.repeat.set(3, 2);
+    const concrete = this.texture('concrete');
+    concrete.repeat.set(2, 2);
+    const wall = new THREE.MeshStandardMaterial({ map: brick, bumpMap: brick, bumpScale: 0.08, roughness: 0.96 });
+    const plaster = new THREE.MeshStandardMaterial({
+      map: concrete,
+      bumpMap: concrete,
+      bumpScale: 0.05,
+      roughness: 1,
+      color: 0xaaa99a,
+    });
+    const roof = new THREE.MeshStandardMaterial({ color: 0x424b48, metalness: 0.35, roughness: 0.82 });
+    const windowMat = new THREE.MeshStandardMaterial({ color: 0x192728, roughness: 0.35, metalness: 0.3 });
+    const timber = new THREE.MeshStandardMaterial({ map: this.texture('bark'), color: 0x777060, roughness: 1 });
+    for (const [i, b] of BUILDINGS.entries()) {
+      this.mesh(new THREE.BoxGeometry(b.w, b.h, b.d), i % 2 ? plaster : wall, b.x, b.h / 2, b.z);
+      this.mesh(new THREE.BoxGeometry(b.w + 0.6, 0.3, b.d + 0.6), roof, b.x, b.h + 0.15, b.z);
+      this.mesh(new THREE.BoxGeometry(b.w + 0.3, 0.3, b.d + 0.3), plaster, b.x, 0.15, b.z);
+      for (const side of [-1, 1])
+        for (let k = 0; k < 3; k++) {
+          const x = b.x - b.w * 0.3 + k * b.w * 0.3,
+            z = b.z + side * (b.d / 2 + 0.025);
+          this.mesh(new THREE.BoxGeometry(1.4, 1.8, 0.08), windowMat, x, 2.3, z);
+          const board = this.mesh(new THREE.BoxGeometry(1.65, 0.18, 0.12), timber, x, 2.3, z + side * 0.08);
+          board.rotation.z = k % 2 ? 0.24 : -0.3;
+        }
+      for (let k = 0; k < 8; k++) {
+        const vine = this.mesh(
+          new THREE.SphereGeometry(0.6, 7, 5),
+          new THREE.MeshStandardMaterial({ color: 0x46523e, roughness: 1 }),
+          b.x - b.w / 2 - 0.05,
+          b.h * (k / 8),
+          b.z + Math.sin(k) * b.d * 0.3,
+        );
+        vine.scale.set(0.2, 1.6, 1.2);
+      }
+    }
+    // Abandoned vehicle silhouettes, with weathered bodywork and rubber wheels.
+    const metal = new THREE.MeshStandardMaterial({ map: concrete, color: 0x67766c, metalness: 0.3, roughness: 0.84 });
+    const rubber = new THREE.MeshStandardMaterial({ color: 0x252a28, roughness: 1 });
+    for (const [x, z] of [
+      [-6, -37],
+      [7, -70],
+      [44, 19],
+    ]) {
+      const car = new THREE.Group();
+      car.position.set(x, 0, z);
+      car.rotation.y = 0.25;
+      this.mesh(new THREE.BoxGeometry(1.7, 0.65, 3.7), metal, 0, 0.75, 0, car);
+      this.mesh(new THREE.BoxGeometry(1.48, 0.65, 1.8), windowMat, 0, 1.4, -0.25, car);
+      this.mesh(new THREE.BoxGeometry(1.55, 0.12, 1.95), metal, 0, 1.78, -0.25, car);
+      for (const a of [-1, 1])
+        for (const b of [-1, 1]) {
+          const wheel = this.mesh(
+            new THREE.CylinderGeometry(0.37, 0.37, 0.24, 14),
+            rubber,
+            a * 0.83,
+            0.4,
+            b * 1.16,
+            car,
+          );
+          wheel.rotation.z = Math.PI / 2;
+        }
+      this.scene.add(car);
+    }
+    this.sign('HAVEN / EVACUATED', 0, 3, -33, plaster);
+    this.sign('RELAY 04', 49, 5, 31, plaster);
+  }
+  private sign(text: string, x: number, y: number, z: number, material: THREE.Material): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#27332f';
+    ctx.fillRect(0, 0, 512, 128);
+    ctx.strokeStyle = '#a3ac98';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(5, 5, 502, 118);
+    ctx.fillStyle = '#c2c5af';
+    ctx.font = 'bold 34px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(text, 256, 78);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    this.textures.push(texture);
+    this.mesh(new THREE.BoxGeometry(5.5, 0.16, 0.16), material, x, y - 1, z);
+    this.mesh(
+      new THREE.PlaneGeometry(5.3, 1.3),
+      new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide, roughness: 0.8 }),
+      x,
+      y,
+      z,
+    );
+  }
+  private createWetland(): void {
+    const water = this.mesh(
+      new THREE.CircleGeometry(12, 48),
+      new THREE.MeshPhysicalMaterial({
+        color: 0x344b48,
+        metalness: 0.35,
+        roughness: 0.22,
+        clearcoat: 0.7,
+        transparent: true,
+        opacity: 0.9,
+      }),
+      -48,
+      0.015,
+      -31,
+    );
+    water.rotation.x = -Math.PI / 2;
+    water.castShadow = false;
+    const reeds = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.018, 0.035, 1.6, 4),
+      new THREE.MeshStandardMaterial({ color: 0x686f47, roughness: 1 }),
+      240,
+    );
+    const d = new THREE.Object3D();
+    for (let i = 0; i < 240; i++) {
+      const a = i * 2.4,
+        r = 11 + (i % 11) * 0.3;
+      d.position.set(-48 + Math.cos(a) * r, 0.65, -31 + Math.sin(a) * r);
+      d.rotation.set(0.1 * Math.sin(i), 0, 0.1 * Math.cos(i));
+      d.updateMatrix();
+      reeds.setMatrixAt(i, d.matrix);
+    }
+    reeds.computeBoundingSphere();
+    this.scene.add(reeds);
+    const planks = new THREE.MeshStandardMaterial({ map: this.texture('bark'), color: 0x8a8070, roughness: 1 });
+    for (let i = 0; i < 22; i++) this.mesh(new THREE.BoxGeometry(2.5, 0.16, 0.42), planks, -48, 0.15, -15 - i * 0.48);
+  }
+  private createSupplies(): void {
+    const olive = new THREE.MeshStandardMaterial({ color: 0x505e48, metalness: 0.35, roughness: 0.75 });
+    const trim = new THREE.MeshStandardMaterial({ color: 0xb6ad81, roughness: 0.8 });
+    for (const p of SUPPLIES) {
+      const group = new THREE.Group();
+      group.position.set(p.x, 0, p.z);
+      this.mesh(new THREE.BoxGeometry(1.2, 0.7, 0.7), olive, 0, 0.35, 0, group);
+      for (const x of [-0.4, 0.4]) this.mesh(new THREE.BoxGeometry(0.08, 0.72, 0.74), trim, x, 0.36, 0, group);
+      this.scene.add(group);
+      this.crates.set(p.id, group);
+    }
+  }
+  private createLandmarks(): void {
+    const mat = new THREE.MeshStandardMaterial({ color: 0x777b6f, roughness: 1 });
+    for (const x of [-2.1, 2.1]) this.mesh(new THREE.BoxGeometry(0.55, 3.8, 0.65), mat, x, 1.9, -23.5);
+    this.mesh(new THREE.BoxGeometry(5, 0.5, 0.8), mat, 0, 3.8, -23.5);
+    const camp = new THREE.MeshStandardMaterial({ color: 0x777462, roughness: 1 });
+    const tent = this.mesh(new THREE.CylinderGeometry(0, 2.7, 2.7, 4, 1, false, Math.PI / 4), camp, -10, 1.35, 6);
+    tent.scale.z = 1.5;
+    this.sign('FIELD CAMP', -6, 2.4, 5, mat);
+    for (const def of Object.values(CREATURES)) {
+      const ground = this.mesh(
+        new THREE.CircleGeometry(1.2, 24),
+        new THREE.MeshStandardMaterial({ color: 0x737c64, roughness: 1 }),
+        def.x,
+        0.02,
+        def.z,
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.castShadow = false;
+    }
+  }
+  region(position: THREE.Vector3): string {
+    return position.z < -32 && Math.abs(position.x) < 30
+      ? 'HAVEN / ABANDONED SETTLEMENT'
+      : Math.hypot(position.x + 48, position.z + 28) < 24
+        ? 'REEDWATER / WETLAND'
+        : position.x > 35
+          ? 'EAST RIDGE / RELAY STATION'
+          : 'WILDLANDS / FOREST TRAIL';
+  }
   constrainPlayerPosition(position: THREE.Vector3): void {
-    this.constrainActorPosition(position, 0.42);
+    constrainPosition(position);
   }
-
-  /** Shared lightweight collision constraint for local actors such as the player and enemies. */
-  constrainActorPosition(position: THREE.Vector3, actorRadius: number): void {
-    const boundary = 22.7;
-    position.x = THREE.MathUtils.clamp(position.x, -boundary, boundary);
-    position.z = THREE.MathUtils.clamp(position.z, -boundary, boundary);
-
-    for (const obstacle of this.obstacles) {
-      const dx = position.x - obstacle.x;
-      const dz = position.z - obstacle.z;
-      const distance = Math.hypot(dx, dz);
-      const minimumDistance = obstacle.radius + actorRadius;
-      if (distance >= minimumDistance) continue;
-
-      const safeDistance = distance || 0.0001;
-      const normalX = distance > 0.0001 ? dx / safeDistance : 1;
-      const normalZ = distance > 0.0001 ? dz / safeDistance : 0;
-      position.x = obstacle.x + normalX * minimumDistance;
-      position.z = obstacle.z + normalZ * minimumDistance;
-    }
+  constrainActorPosition(position: THREE.Vector3, radius: number): void {
+    constrainPosition(position, radius);
+  }
+  cameraDistance(origin: THREE.Vector3, direction: THREE.Vector3, distance: number): number {
+    return obstacleDistance(origin, direction, distance);
+  }
+  dispose(): void {
+    for (const texture of this.textures) texture.dispose();
   }
 }

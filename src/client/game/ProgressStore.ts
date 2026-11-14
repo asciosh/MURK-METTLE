@@ -5,6 +5,7 @@ export const PROGRESS_KEYS = [
   'murk-mettle-v06-crafting',
   'murk-mettle-v07-expeditions',
   'murk-mettle-v05-bond-retreat',
+  'murk-mettle-v21-collection',
 ] as const;
 export type ProgressSave = Record<(typeof PROGRESS_KEYS)[number], string | null>;
 const memory = new Map<string, string>();

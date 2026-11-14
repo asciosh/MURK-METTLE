@@ -1,6 +1,8 @@
-# Murk & Mettle · v0.20
+# Murk & Mettle · v0.21
 
-A third-person browser co-op creature-collection RPG. Built with Three.js, TypeScript, Vite and Cloudflare Durable Objects.
+A third-person browser zombie-survival and creature-collection RPG. Built with Three.js, TypeScript, Vite and Cloudflare Durable Objects.
+
+v0.21 adds an expanded 180m sector, abandoned settlement and wetland, shoulder-camera firearms, and three collectible species with three evolution stages each. See [Codespaces upgrade guide](CODESPACES-UPGRADE.md) and [feature notes](docs/changelog/CHANGELOG-v0.21.md).
 
 ## Requirements
 
@@ -13,10 +15,10 @@ A third-person browser co-op creature-collection RPG. Built with Three.js, TypeS
 npm ci
 npm test
 npm run build
-npm run dev
+npx wrangler dev --local --ip 0.0.0.0 --port 8787
 ```
 
-`npm run dev` runs the **local WebSocket server** and the Vite frontend. Account login and persistent cloud progression require Cloudflare; use `npx wrangler dev` after building, or deploy.
+Use the Wrangler command above for complete local gameplay, accounts and co-op. Its local storage is independent of production. `npm run dev` builds the client, watches it for changes and starts the same complete Wrangler development Worker on port 8787. The standalone `npm run server` is a historical simplified Node WebSocket prototype; it does not implement the expansion protocol or account API.
 
 ### Deploy to Cloudflare
 
@@ -27,7 +29,7 @@ npm run build
 npx wrangler deploy --config wrangler.jsonc
 ```
 
-Wrangler is **not pinned in the bundled lockfile**: install it as shown and commit the resulting `package.json` and `package-lock.json` updates after verification. GitHub-integrated deploys must use the Cloudflare Worker configuration (`server/cloudflare/index.mjs`), not a Pages-only static deployment.
+Wrangler is included in the package lock; `npm ci` installs it reproducibly. GitHub-integrated deploys must use the Cloudflare Worker configuration (`server/cloudflare/index.mjs`), not a Pages-only static deployment.
 
 **Do not delete or recreate existing Durable Objects, migration tags, or account data.** v0.20 changes source paths, not stored data formats or object class names.
 
