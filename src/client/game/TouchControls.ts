@@ -52,9 +52,11 @@ export class TouchControls {
     canvas.addEventListener('pointercancel', this.onLookUp);
     canvas.addEventListener('lostpointercapture', this.onLookUp);
     this.root.querySelector('#touch-journal')!.addEventListener('click', this.toggleJournal);
+    document.querySelector('#journal-button')?.addEventListener('click', this.toggleJournal);
     this.sheet.querySelector('button')!.addEventListener('click', this.closeJournal);
     this.selection?.addEventListener('change', this.configure);
     this.media.addEventListener('change', this.configure);
+    document.addEventListener('field-overlay-open', this.reset);
     window.addEventListener('blur', this.reset);
     window.addEventListener('resize', this.reset);
     document.addEventListener('visibilitychange', this.visibility);
@@ -179,6 +181,13 @@ export class TouchControls {
   };
   private readonly onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') this.closeJournal();
+    if (e.code === 'KeyJ' && !e.repeat && this.active && !document.querySelector('#account-panel:not([hidden])') && !(e.target as Element)?.closest('input,textarea,select,summary,[contenteditable]')) this.toggleJournal();
+    if (e.key === 'Tab' && !this.sheet.hidden) {
+      const items = [...this.sheet.querySelectorAll<HTMLElement>('button:not(:disabled),summary,input,select,[tabindex="0"]')].filter(n => n.getClientRects().length);
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    }
   };
   private readonly reset = (): void => {
     this.stickId = null;
@@ -195,6 +204,10 @@ export class TouchControls {
       this.closeJournal();
       return;
     }
+    if (document.pointerLockElement) document.exitPointerLock();
+    if (document.querySelector('#inventory-panel.visible')) document.querySelector<HTMLButtonElement>('#inventory-close')?.click();
+    document.querySelector<HTMLElement>('#field-menu')!.hidden = true;
+    document.querySelector('#field-menu-toggle')?.setAttribute('aria-expanded', 'false');
     this.reset();
     for (const selector of ['.creature-panel', '.progress-panel', '.mission-panel', '.minimap-panel']) {
       const element = this.viewport.querySelector(selector);
@@ -207,20 +220,26 @@ export class TouchControls {
     this.sheet.hidden = false;
     document.body.classList.add('touch-journal-open');
     this.root.querySelector('#touch-journal')?.setAttribute('aria-expanded', 'true');
+    document.querySelector('#journal-button')?.setAttribute('aria-expanded', 'true');
     (this.sheet.querySelector('button') as HTMLElement).focus();
   };
   private readonly closeJournal = (): void => {
     for (const { element, placeholder } of this.movedPanels) placeholder.replaceWith(element);
     this.movedPanels.length = 0;
+    const wasOpen = !this.sheet.hidden;
     this.sheet.hidden = true;
+    document.querySelector('#journal-button')?.setAttribute('aria-expanded', 'false');
+    if (wasOpen) (this.enabled ? this.root.querySelector<HTMLElement>('#touch-journal') : document.querySelector<HTMLElement>('#journal-button'))?.focus();
     document.body.classList.remove('touch-journal-open');
     this.root.querySelector('#touch-journal')?.setAttribute('aria-expanded', 'false');
   };
   dispose(): void {
     this.reset();
     this.closeJournal();
+    document.querySelector('#journal-button')?.removeEventListener('click', this.toggleJournal);
     this.selection?.removeEventListener('change', this.configure);
     this.media.removeEventListener('change', this.configure);
+    document.removeEventListener('field-overlay-open', this.reset);
     window.removeEventListener('blur', this.reset);
     window.removeEventListener('resize', this.reset);
     document.removeEventListener('visibilitychange', this.visibility);

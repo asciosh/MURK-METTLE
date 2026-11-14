@@ -111,6 +111,7 @@ export class InputController {
     document.addEventListener('mousemove', this.handleMouseMove);
     document.addEventListener('mousedown', this.handleMouseDown);
     document.addEventListener('pointerlockchange', this.handlePointerLockChange);
+    document.addEventListener('field-overlay-open', this.handleWindowBlur);
     window.addEventListener('blur', this.handleWindowBlur);
     document.addEventListener('visibilitychange', this.handleVisibility);
     document.addEventListener('mouseup', this.handleMouseUp);
@@ -121,6 +122,7 @@ export class InputController {
     if (
       !this.disposed &&
       !this.touchEnabled &&
+      !document.querySelector('#field-menu:not([hidden]),#account-panel:not([hidden]),#touch-journal-sheet:not([hidden]),#inventory-panel.visible') &&
       typeof this.element.requestPointerLock === 'function' &&
       document.pointerLockElement !== this.element
     ) {
@@ -200,6 +202,11 @@ export class InputController {
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (document.querySelector('#field-menu:not([hidden]),#account-panel:not([hidden]),#touch-journal-sheet:not([hidden]),#inventory-panel.visible')) {
+      this.handleWindowBlur();
+      if (event.code !== 'KeyI' || !document.querySelector('#inventory-panel.visible') || this.isEditable(event.target)) return;
+    }
+    if ((event.target as Element)?.closest('button,summary') && event.code !== 'KeyI') return;
     if (this.isEditable(event.target) || this.isEditable(document.activeElement)) return;
     if (
       [
@@ -294,6 +301,7 @@ export class InputController {
     document.removeEventListener('mousemove', this.handleMouseMove);
     document.removeEventListener('mousedown', this.handleMouseDown);
     document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
+    document.removeEventListener('field-overlay-open', this.handleWindowBlur);
     window.removeEventListener('blur', this.handleWindowBlur);
     document.removeEventListener('visibilitychange', this.handleVisibility);
     document.removeEventListener('mouseup', this.handleMouseUp);

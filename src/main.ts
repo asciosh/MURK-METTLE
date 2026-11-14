@@ -1,4 +1,5 @@
 import './styles.css';
+import { initInterface } from './client/ui/Interface';
 import { Game } from './client/game/Game';
 import { initAccount } from './client/game/Account';
 import { arrangeHud } from './client/ui/HudLayout';
@@ -10,12 +11,17 @@ if (!viewport) {
 }
 
 arrangeHud(viewport);
+initInterface();
 
 // Compact menu keeps co-op and account controls out of the gameplay status strip.
 const menuToggle = document.querySelector<HTMLButtonElement>('#field-menu-toggle');
 const fieldMenu = document.querySelector<HTMLElement>('#field-menu');
 menuToggle?.addEventListener('click', () => {
   if (!fieldMenu) return;
+  if (fieldMenu.hidden) {
+    if (document.querySelector('#inventory-panel.visible')) document.querySelector<HTMLButtonElement>('#inventory-close')?.click();
+    if (document.querySelector('#touch-journal-sheet:not([hidden])')) document.querySelector<HTMLButtonElement>('#touch-journal-close')?.click();
+  }
   fieldMenu.hidden = !fieldMenu.hidden;
   menuToggle.setAttribute('aria-expanded', String(!fieldMenu.hidden));
 });

@@ -1,0 +1,808 @@
+/* Botanical field equipment: tokens shared by HUD, forms, drawers and touch controls. */
+:root {
+  --ink: #eef0e5;
+  --text-secondary: #b8c4b9;
+  --text-dim: #9bac9e;
+  --forest: #101d19;
+  --surface: #15251ff5;
+  --surface-raised: #20372d;
+  --copper: #c39473;
+  --glow: #b4d8a6;
+  --danger: #ed9c85;
+  --stroke: #9ab59f40;
+  --radius: 8px;
+  --space: 12px;
+  --shadow: 0 12px 40px #020a0759;
+  --acid: var(--glow);
+  --muted: var(--text-secondary);
+  --ui-mono: 'DM Mono', ui-monospace, monospace;
+}
+body {
+  color: var(--ink);
+}
+button,
+input,
+select,
+summary {
+  font: inherit;
+}
+button,
+select,
+input {
+  border-radius: 5px;
+}
+button {
+  touch-action: manipulation;
+}
+button:disabled {
+  cursor: default;
+}
+:where(button, a, input, select, summary):focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 3px;
+}
+:where(.field-menu, .account-panel, .inventory-panel, #touch-journal-sheet) {
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  scrollbar-color: #698775 transparent;
+}
+:where(.field-menu, .account-panel) :where(button, input, select),
+.journal-toggle,
+.inventory-toggle,
+.heal-button,
+.ability-button,
+.craft-button {
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--stroke);
+  color: var(--ink);
+  background: var(--surface-raised);
+  font: 11px/1.5 var(--ui-mono);
+  letter-spacing: 0.025em;
+}
+:where(.field-menu, .account-panel) input {
+  background: #0d1915;
+}
+:where(.field-menu, .account-panel) button:hover:enabled,
+.craft-button:hover:enabled {
+  background: #345240;
+  border-color: #9cb795;
+}
+.co-op-bar {
+  height: 48px;
+  min-height: 48px;
+  padding: 4px 24px;
+  background: #101c18;
+  border-color: var(--stroke);
+  font: 11px var(--ui-mono);
+}
+.co-op-title {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+#account-state {
+  color: var(--glow);
+}
+#room-status {
+  color: var(--ink);
+}
+#field-menu-toggle {
+  min-height: 36px;
+  background: #21372c;
+}
+.field-menu {
+  top: calc(100% + 8px);
+  right: 16px;
+  width: 440px;
+  padding: 20px;
+  max-height: calc(100dvh - 72px);
+}
+.field-menu strong {
+  margin: 16px 0 8px;
+  color: var(--copper);
+  font: 11px var(--ui-mono);
+}
+.field-menu strong:first-child {
+  margin-top: 0;
+}
+.field-menu-row {
+  gap: 8px;
+}
+.graphics-label {
+  margin-top: 14px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.graphics-label select {
+  max-width: 245px;
+}
+#photo-materials-status {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-dim);
+}
+.topbar {
+  top: 48px;
+  height: 66px;
+  padding-inline: 24px;
+  background: linear-gradient(#0c1714a6, transparent);
+  border: 0;
+}
+.build-tag {
+  display: none;
+}
+.wordmark-copy small {
+  color: var(--text-secondary);
+}
+.region-name {
+  top: 19px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+.journal-toggle,
+.inventory-toggle {
+  position: absolute;
+  z-index: 7;
+  top: 12px;
+  left: auto;
+  right: 24px;
+  transform: none;
+  cursor: pointer;
+}
+.journal-toggle {
+  right: 174px;
+}
+.hud-stack {
+  padding: 0;
+  gap: 8px;
+  width: 248px;
+  max-height: calc(100% - 105px);
+  overflow: auto;
+}
+.hud-stack-left {
+  top: auto;
+  bottom: 24px;
+  left: 24px;
+}
+.hud-stack-right {
+  top: 78px;
+  right: 24px;
+  width: 248px;
+}
+.hud-stack > section {
+  padding: 14px !important;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius) !important;
+  background: linear-gradient(135deg, #182a23f2, #101e19ed) !important;
+  box-shadow: var(--shadow);
+  backdrop-filter: none;
+}
+.hud-stack .player-status {
+  border-left: 2px solid var(--copper);
+}
+.hud-label,
+.creature-eyebrow,
+.survival-heading,
+.strain-top {
+  color: var(--text-secondary);
+  font: 10px var(--ui-mono);
+  letter-spacing: 0.06em;
+}
+.health-number {
+  font-size: 12px;
+  color: var(--ink);
+}
+.health-track {
+  height: 6px;
+  border-radius: 2px;
+}
+.health-fill {
+  background: var(--glow);
+  box-shadow: none;
+}
+.health-fill.low,
+.enemy-fill {
+  background: var(--danger);
+}
+.stamina-track {
+  height: 4px;
+}
+.stamina-fill {
+  background: var(--copper);
+}
+.heal-button {
+  min-height: 32px;
+  margin-top: 10px;
+  font-size: 10px;
+}
+.hud-stack .progress-panel {
+  padding-block: 10px !important;
+}
+.progress-bottom {
+  font-size: 9px;
+  color: var(--text-secondary);
+}
+.hud-stack .creature-panel {
+  max-height: none;
+  overflow: visible;
+}
+.creature-name {
+  color: var(--ink);
+}
+.hud-stack .creature-panel > p,
+.hud-stack .collection-details {
+  display: none;
+}
+.creature-panel .ability-button {
+  min-height: 36px;
+  margin-top: 8px;
+}
+.mission-panel {
+  font: 11px/1.6 var(--ui-mono);
+}
+.mission-panel strong {
+  color: var(--glow);
+  font-size: 11px;
+}
+.hud-stack .mission-panel small {
+  display: none;
+}
+.hud-stack .mission-panel #horde-status {
+  display: block;
+  color: var(--copper);
+  margin-top: 5px;
+}
+.enemy-panel .hud-label {
+  color: var(--danger);
+}
+.enemy-subtitle {
+  color: var(--text-secondary);
+}
+.weapon-panel {
+  right: 218px;
+  bottom: 24px;
+  top: auto;
+  width: 170px;
+  padding: 14px;
+  border: 1px solid var(--stroke);
+  border-left: 2px solid var(--copper);
+  border-radius: var(--radius);
+  background: #14231eee;
+}
+.weapon-panel strong {
+  font-size: 36px;
+  margin: 4px 0;
+  color: var(--ink);
+}
+.weapon-panel span {
+  font-size: 10px;
+}
+.weapon-panel small {
+  font-size: 9px;
+  color: var(--text-secondary);
+}
+.minimap-panel {
+  right: 24px;
+  bottom: 24px;
+  width: 174px;
+  border: 1px solid var(--stroke);
+  background: #14231eee;
+  border-radius: var(--radius);
+}
+.minimap-heading {
+  font-size: 10px;
+}
+.minimap-legend {
+  font-size: 7px;
+}
+.hud-bottom-left {
+  display: none;
+}
+.controls-reference {
+  position: absolute;
+  z-index: 6;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(340px, 28vw);
+  color: var(--text-secondary);
+  font: 10px/1.6 var(--ui-mono);
+}
+.controls-reference summary {
+  text-align: center;
+  padding: 8px;
+  cursor: pointer;
+  background: #14231ed9;
+  border: 1px solid var(--stroke);
+  border-radius: 4px;
+}
+.controls-reference .hud-bottom-right {
+  position: static;
+  display: flex;
+  max-width: none;
+  padding-top: 8px;
+}
+.controls-reference:not([open]) .hud-bottom-right {
+  display: none;
+}
+.combat-toast {
+  bottom: 172px;
+  max-width: min(480px, 46%);
+  border-radius: 5px;
+  font: 11px/1.6 var(--ui-mono);
+  background: #12221af5;
+}
+.radio-panel {
+  bottom: 74px;
+  width: min(400px, 35vw);
+  border-left-color: var(--copper);
+  font-size: 11px;
+}
+.inventory-panel {
+  top: 66px;
+  left: auto;
+  right: 24px;
+  transform: none;
+  width: min(420px, calc(100% - 32px));
+  max-height: calc(100% - 88px);
+  padding: 20px;
+  z-index: 24;
+}
+.inventory-title {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.inventory-title strong {
+  font-size: 23px;
+}
+.inventory-title span {
+  width: 100%;
+  font-size: 10px;
+}
+#inventory-close {
+  margin-left: auto;
+  min-width: 40px;
+  min-height: 40px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  border: 1px solid var(--stroke);
+  font-size: 24px;
+  cursor: pointer;
+}
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 16px 0;
+}
+.inventory-item {
+  display: grid;
+  padding: 12px 8px;
+  border: 1px solid var(--stroke);
+  border-radius: 5px;
+  background: #0d19156b;
+  font-size: 12px;
+}
+.inventory-item strong {
+  font-size: 11px;
+}
+.craft-button {
+  min-height: 48px;
+}
+.inventory-footnote {
+  font-size: 10px;
+}
+#touch-journal-sheet {
+  inset: 18px;
+  max-width: 1040px;
+  margin-inline: auto;
+  padding: 20px;
+  border-radius: var(--radius);
+  background: #12231bfc;
+}
+#touch-journal-close {
+  width: auto;
+  display: block;
+  margin-left: auto;
+  padding: 10px 20px;
+  font: 11px var(--ui-mono);
+  background: var(--surface-raised);
+}
+.touch-sheet-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+#touch-journal-sheet .touch-sheet-content > section {
+  padding: 18px;
+  background: #1b3025;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+}
+#touch-journal-sheet .creature-panel p,
+#touch-journal-sheet .mission-panel small {
+  display: block;
+  font-size: 12px;
+}
+#touch-journal-sheet .collection-details {
+  display: block;
+  font-size: 11px;
+}
+#touch-journal-sheet .creature-roster button {
+  min-height: 48px;
+  font-size: 12px;
+  padding: 12px;
+}
+#touch-journal-sheet .minimap-panel {
+  max-width: 300px;
+}
+/* Login has a deliberate identity and a readable form, including before Game exists. */
+.auth-gate {
+  background: radial-gradient(ellipse at 25% 40%, #31513c 0%, #182b22 38%, #0b1512 80%);
+  display: flex;
+  align-items: center;
+  text-align: left;
+  padding: 7vw;
+}
+.auth-story {
+  max-width: 48%;
+}
+.auth-story .eyebrow {
+  color: var(--glow);
+  font-size: 11px;
+}
+.auth-story h1 {
+  font:
+    900 clamp(64px, 8vw, 140px)/0.82 'Barlow Condensed',
+    Impact,
+    sans-serif;
+  margin: 28px 0;
+  letter-spacing: -0.02em;
+}
+.auth-story h1 span {
+  color: var(--copper);
+}
+.auth-story > p:not(.eyebrow) {
+  color: var(--text-secondary);
+  font-size: 20px;
+  line-height: 1.5;
+}
+.auth-story strong {
+  color: var(--copper);
+}
+.auth-story small {
+  font:
+    13px/1.9 'Manrope',
+    system-ui,
+    sans-serif;
+  color: var(--text-secondary);
+}
+.account-panel {
+  padding: 24px;
+  font-size: 13px;
+}
+.account-heading strong {
+  color: var(--copper);
+  font: 12px var(--ui-mono);
+}
+.account-caption {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.account-panel input {
+  min-height: 44px;
+  font-size: 16px;
+}
+.account-panel label {
+  color: var(--ink);
+}
+.signed-out .account-panel {
+  top: 50%;
+  left: 61%;
+  right: auto;
+  transform: translateY(-50%);
+  width: min(380px, 36vw);
+  max-height: calc(100dvh - 32px);
+}
+.signed-out #account-close {
+  display: none;
+}
+.signed-out .topbar {
+  visibility: hidden;
+}
+.account-buttons #account-login {
+  background: #466341;
+  border-color: #92b682;
+}
+.account-buttons button {
+  min-height: 44px;
+}
+.title-screen {
+  background: radial-gradient(ellipse at 70% 40%, #3c5d43, #182d24 48%, #0c1713);
+}
+.title-content {
+  max-width: 680px;
+}
+.title-content h1 span,
+.title-tagline strong {
+  color: var(--copper);
+}
+.title-description {
+  color: var(--text-secondary);
+}
+.title-enter {
+  color: #14221a;
+  background: var(--glow);
+  border-color: #d0e7c1;
+  min-height: 48px;
+}
+.title-chapters {
+  display: flex;
+  gap: 24px;
+  margin: 20px 0;
+  color: var(--copper);
+  font: 10px var(--ui-mono);
+}
+@media (max-width: 1100px) {
+  .controls-reference {
+    display: none;
+  }
+  .hud-stack {
+    width: 220px;
+  }
+  .region-name {
+    max-width: 34%;
+  }
+  .weapon-panel {
+    right: 184px;
+    width: 150px;
+  }
+  .minimap-panel {
+    width: 140px;
+  }
+  .journal-toggle {
+    right: 164px;
+  }
+}
+@media (max-width: 680px) {
+  .auth-gate {
+    padding: 24px;
+    display: block;
+  }
+  .auth-story {
+    max-width: none;
+  }
+  .auth-story h1 {
+    font-size: 48px;
+    margin: 10px 0;
+  }
+  .auth-story > p:not(.eyebrow),
+  .auth-story small {
+    display: none;
+  }
+  .auth-story .eyebrow {
+    font-size: 9px;
+    margin: 0;
+  }
+  .signed-out .account-panel {
+    top: 145px;
+    left: 12px;
+    right: 12px;
+    transform: none;
+    width: auto;
+    max-height: calc(100dvh - 157px);
+    padding: 18px;
+  }
+  .co-op-bar {
+    padding-inline: 10px;
+  }
+  .co-op-title {
+    display: none;
+  }
+  .field-menu {
+    right: 8px;
+    width: calc(100vw - 16px);
+    padding: 16px;
+  }
+  .graphics-label {
+    flex-wrap: wrap;
+  }
+  .graphics-label select {
+    max-width: 100%;
+  }
+  .inventory-grid {
+    gap: 4px;
+  }
+  .inventory-item {
+    padding: 10px 5px;
+    font-size: 11px;
+  }
+  .inventory-panel {
+    right: 8px;
+    width: calc(100% - 16px);
+  }
+  #touch-journal-sheet {
+    inset: 8px;
+    padding: 12px;
+  }
+  .touch-sheet-content {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+.touch-mode .journal-toggle,
+.touch-mode .controls-reference {
+  display: none;
+}
+.touch-mode .hud-stack {
+  top: 68px;
+  bottom: auto;
+  width: 136px;
+}
+.touch-mode .hud-stack-left {
+  left: 8px;
+}
+.touch-mode .hud-stack-right {
+  right: 8px;
+}
+.touch-mode .hud-stack .player-status {
+  padding: 9px !important;
+}
+.touch-mode .weapon-panel {
+  top: 68px;
+  right: 8px;
+  width: 136px;
+  padding: 9px;
+}
+.touch-mode .weapon-panel strong {
+  font-size: 27px;
+}
+.touch-mode .region-name {
+  top: 24px;
+  max-width: 34%;
+  font-size: 8px;
+}
+.touch-mode .inventory-toggle {
+  right: 8px;
+  top: 10px;
+  min-height: 44px;
+}
+#touch-controls button {
+  border-radius: 7px;
+  border-color: #acc4a850;
+  background: #1c3029e6;
+  font-size: 10px;
+}
+.touch-knob {
+  background: #b3cba966;
+}
+#touch-controls .touch-fire {
+  background: #765744e3;
+  border-color: var(--copper);
+}
+.touch-mode .combat-toast {
+  bottom: 240px;
+  max-width: 78%;
+  font-size: 10px;
+}
+.touch-mode .hud-stack-right > .enemy-panel {
+  margin-top: 85px;
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .signed-out .auth-story {
+    max-width: 42%;
+  }
+  .signed-out .auth-gate {
+    display: flex;
+    padding: 24px;
+  }
+  .signed-out .auth-story h1 {
+    font-size: 54px;
+  }
+  .signed-out .account-panel {
+    left: 50%;
+    right: 12px;
+    top: 12px;
+    transform: none;
+    width: auto;
+    max-height: calc(100dvh - 24px);
+    padding: 16px;
+  }
+  .touch-mode .hud-stack {
+    top: 64px;
+    width: 124px;
+  }
+  .touch-mode .weapon-panel {
+    top: 64px;
+    width: 124px;
+  }
+  .touch-mode .player-status .survival-heading {
+    margin-top: 5px;
+  }
+  .touch-mode .combat-toast {
+    bottom: 164px;
+    max-width: 44%;
+  }
+  .touch-mode .hud-stack-right > .enemy-panel {
+    display: none;
+  }
+  .touch-mode .title-content {
+    padding: 20px 0;
+  }
+  .touch-mode .title-content h1 {
+    font-size: 58px;
+  }
+  .touch-mode .title-description {
+    max-width: 60%;
+  }
+  .title-chapters {
+    margin: 12px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --stroke: #b7d0a8;
+    --text-secondary: #e1e8dc;
+  }
+  .hud-stack > section,
+  .weapon-panel,
+  .minimap-panel {
+    background: #0f1d17 !important;
+  }
+}
+@media (max-width: 1100px) {
+  body:not(.touch-mode) .controls-reference {
+    display: block;
+  }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .touch-mode .hud-stack-right > .enemy-panel.visible {
+    display: block;
+    position: fixed !important;
+    top: 119px !important;
+    left: calc(50% - 90px) !important;
+    width: 180px !important;
+    margin: 0;
+    padding: 8px !important;
+  }
+  .touch-mode .enemy-subtitle {
+    display: none;
+  }
+}
+.wordmark-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+#creature-name {
+  margin-left: 0;
+  font:
+    700 22px 'Barlow Condensed',
+    Impact,
+    sans-serif;
+  color: var(--ink);
+}
+.inventory-panel.visible {
+  transform: none;
+}
+.field-menu input[type='checkbox'] { width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; padding: 0; margin: 0; accent-color: var(--glow); }
+.field-menu .graphics-label:has(input[type='checkbox']) { min-height: 44px; justify-content: flex-start; }
+.field-menu button:disabled { opacity: .55; }
+.touch-mode .status-heading { gap: 4px; }
+.touch-mode .status-heading .hud-label { font-size: 8px; }
+.touch-mode .health-number { font-size: 10px; }
