@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+const read = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+const json = (p) => JSON.parse(read(p));
+test('desktop grants one local launcher command and no remote/native plugin capabilities', () => {
+  const config = json('desktop/src-tauri/tauri.conf.json');
+  assert.equal(config.app.withGlobalTauri, false);
+  assert.deepEqual(config.app.security.capabilities, ['launcher']);
+  assert.deepEqual(config.app.windows, []);
+  const files = readdirSync(new URL('../desktop/src-tauri/capabilities', import.meta.url));
+  assert.deepEqual(files, ['launcher.json']);
+  const cap = json('desktop/src-tauri/capabilities/launcher.json');
+  assert.equal(cap.local, true);
+  assert.deepEqual(cap.windows, ['launcher']);
+  assert.deepEqual(cap.permissions, ['launch-field']);
+  assert.equal(cap.remote, undefined);
+  assert.match(read('desktop/src-tauri/src/app.rs'), /open_js_links_on_click\(false\)/);
+  assert.match(read('desktop/src-tauri/src/app.rs'), /async fn start_game\(/, 'WebView2 creation must not block synchronous IPC');
+  assert.match(read('desktop/src-tauri/permissions/launcher.toml'), /commands.allow = \["start_game"\]/);
+  assert.match(read('desktop/src-tauri/build.rs'), /AppManifest::new\(\).commands\(&\["start_game"\]\)/);
+  assert.ok(!/unsafe-eval|unsafe-inline|\*/.test(config.app.security.csp));
+});
+test('desktop uses a root HTTPS deployment without changing game API, cookies or transport origins', () => {
+  const url = new URL(json('desktop/deployment.json').origin);
+  assert.equal(url.protocol, 'https:');
+  assert.equal(url.pathname, '/');
+  assert.equal(url.username + url.password + url.search + url.hash, '');
+  assert.match(read('src/client/game/Account.ts'), /fetch\('\/api\/account\/'/);
+  assert.match(read('src/client/game/Account.ts'), /credentials: 'same-origin'/);
+  assert.match(read('src/client/game/Multiplayer.ts'), /location.host/);
+  assert.match(read('server/cloudflare/account.mjs'), /HttpOnly; Secure; SameSite=Strict; Path=\//);
+  assert.match(read('server/cloudflare/index.mjs'), /origin !== url.origin/);
+});
