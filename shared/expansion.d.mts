@@ -1,4 +1,4 @@
-export type SpeciesId = 'lanternkin' | 'emberling' | 'reedwisp';
+export type SpeciesId = 'lanternkin' | 'emberling' | 'reedwisp' | 'mossback' | 'stormrook';
 export type WeaponId = 'pistol' | 'rifle';
 export type Arsenal = Record<WeaponId, { magazine: number; reserve: number; readyAt: number; reloadAt: number }>;
 export interface CreatureDefinition {

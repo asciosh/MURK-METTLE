@@ -58,7 +58,7 @@ test('expanded sector constrains actors, shares building collision and blocks sh
 });
 
 test('every creature has three named forms with deterministic evolution and stronger abilities', () => {
-  assert.equal(SPECIES_IDS.length, 3);
+  assert.equal(SPECIES_IDS.length, 5);
   for (const id of SPECIES_IDS) {
     assert.equal(CREATURES[id].forms.length, 3);
     assert.equal(evolutionStage(119), 0);
@@ -74,7 +74,7 @@ const source = (await readFile(new URL('../server/cloudflare/account.mjs', impor
   "import { DurableObject } from 'cloudflare:workers';",
   shim,
 );
-const { PlayerAccount } = await import(`data:text/javascript,${encodeURIComponent(source)}`);
+const { PlayerAccount } = await import(`data:text/javascript,${encodeURIComponent(source.replaceAll(/'\.\.\/\.\.\/shared\/([^']+)'/g, (_, file) => JSON.stringify(new URL('../shared/' + file, import.meta.url).href)))}`);
 class Storage {
   values = new Map();
   async get(k) {
@@ -125,6 +125,7 @@ test('real room validates firearm direction, ammo, cooldown, range, cover and bo
   const coopURL = new URL('../shared/coop-rules.mjs', import.meta.url).href;
   const roomSource = (await readFile(new URL('../server/cloudflare/room.mjs', import.meta.url), 'utf8'))
     .replace("import { DurableObject } from 'cloudflare:workers';", shim)
+    .replaceAll("'../../shared/collection.mjs'", JSON.stringify(new URL('../shared/collection.mjs', import.meta.url).href))
     .replaceAll("'../../shared/expansion.mjs'", JSON.stringify(expansionURL))
     .replaceAll("'../../shared/coop-rules.mjs'", JSON.stringify(coopURL))
     .replaceAll("'../../shared/survival.mjs'", JSON.stringify(new URL('../shared/survival.mjs', import.meta.url).href))

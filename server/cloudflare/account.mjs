@@ -1,3 +1,5 @@
+import { SPECIES_IDS as SPECIES } from '../../shared/expansion.mjs';
+import { normalizeCollection } from '../../shared/collection.mjs';
 import { DurableObject } from 'cloudflare:workers';
 
 // Private-beta identity: PIN-only authentication with per-account persistent lockout.
@@ -8,12 +10,8 @@ const SAVE_KEYS = [
   'murk-mettle-v05-bond-retreat', 'murk-mettle-v21-collection',
 ];
 
-const SPECIES = ['lanternkin','emberling','reedwisp'];
 async function readCollection(storage) {
-  const saved=await storage.get('coop-collection');
-  if(saved)return saved;
-  const old=await storage.get('coop-creature')||{owned:false,xp:0};
-  return {active:'lanternkin',creatures:{lanternkin:{owned:old.owned===true,xp:old.xp||0},emberling:{owned:false,xp:0},reedwisp:{owned:false,xp:0}}};
+  return normalizeCollection(await storage.get('coop-collection'),await storage.get('coop-creature'));
 }
 
 const MAX_BODY = 4096;

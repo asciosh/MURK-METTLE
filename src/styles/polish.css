@@ -74,3 +74,14 @@ body.hit-confirmed .reticle::before,body.hit-confirmed .reticle::after {backgrou
 .heal-button {width:100%;padding:7px;margin-top:9px;color:#d6deca;border:1px solid #9ead9340;background:#2b372a;font:9px 'DM Mono',monospace;pointer-events:auto;cursor:pointer;}
 .heal-button:disabled {opacity:.5;cursor:default;}
 #horde-status {color:#d0af8a;}
+
+/* The journal remains compact while every species has inspectable progression. */
+.creature-roster { max-height: 310px; overflow-y: auto; overscroll-behavior: contain; }
+.creature-roster button { display: grid; gap: 5px; text-align: left; white-space: normal; padding: 10px; width: 100%; }
+.creature-roster button small { display:block; font-size: 10px; line-height: 1.45; opacity: .85; }
+.creature-roster button.tracking { border-color: #f2ca75; background: rgba(116,93,45,.22); }
+.creature-roster progress { width:100%; height:5px; accent-color:#b7ce91; }
+#creature-tracker { color:#f2ca75; font:10px/1.6 monospace; }
+#creature-tracker:empty { display:none; }
+
+.hud-stack-left > .creature-panel { max-height: max(130px, calc(100dvh - 460px)); overflow-y: auto; overscroll-behavior: contain; }

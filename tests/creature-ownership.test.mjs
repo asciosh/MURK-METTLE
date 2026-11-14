@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const text = (await readFile(new URL('../server/cloudflare/account.mjs', import.meta.url), 'utf8'))
   .replace("import { DurableObject } from 'cloudflare:workers';", 'class DurableObject { constructor(ctx) { this.ctx = ctx; } }');
-const { PlayerAccount } = await import(`data:text/javascript,${encodeURIComponent(text)}`);
+const { PlayerAccount } = await import(`data:text/javascript,${encodeURIComponent(text.replaceAll(/'\.\.\/\.\.\/shared\/([^']+)'/g, (_, file) => JSON.stringify(new URL('../shared/' + file, import.meta.url).href)))}`);
 class Storage {
   map = new Map();
   async get(k) { return this.map.get(k); }
