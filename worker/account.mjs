@@ -76,8 +76,12 @@ export class PlayerAccount extends DurableObject {
         let inventory = await txn.get('coop-inventory') || emptyCoopInventory();
         const upgrades = await txn.get('coop-upgrades') || emptyCoopUpgrades();
         if (prior) return { ok: true, duplicate: true, ...coopState(stats, inventory, upgrades) };
+        const creature = await txn.get('coop-creature') || { species: 'lanternkin', owned: false, xp: 0 };
+        // A pulse kill is eligible for creature XP only if ownership was verified.
+        if (event.pulse && !creature.owned) return { error: 'Creature not bonded' };
+        if (event.pulse) { creature.xp = Math.min(250000, Math.max(creature.xp, stats.creatureXp) + 40); await txn.put('coop-creature', creature); }
         stats = { xp: stats.xp + 50, kills: stats.kills + 1,
-          creatureXp: stats.creatureXp + (event.pulse ? 40 : 0) };
+          creatureXp: Math.max(stats.creatureXp, creature.xp) };
         // Deterministic server loot: one material awarded per unique confirmed kill.
         const material = COOP_MATERIALS[(stats.kills - 1) % COOP_MATERIALS.length];
         inventory = { ...inventory, [material]: Math.min(20, inventory[material] + 1) };
@@ -86,9 +90,28 @@ export class PlayerAccount extends DurableObject {
         await txn.put('coop-inventory', inventory);
         return { ok: true, duplicate: false, material, ...coopState(stats, inventory, upgrades) };
       });
-      return json(result);
+      return result.error ? json(result, 409) : json(result);
     }
 
+    // Internal-only persistent ownership and creature progression.
+    if (op === 'coop-creature') {
+      if (request.headers.get('X-MM-Reward-Source') !== 'game-room-v1')
+        return json({ error: 'Forbidden' }, 403);
+      if (request.method === 'GET') {
+        const stored = await storage.get('coop-creature');
+        return json({ ok: true, creature: stored || { species: 'lanternkin', owned: false, xp: 0 } });
+      }
+      if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      let payload;
+      try { payload = await request.json(); } catch { return json({ error: 'Invalid payload' }, 400); }
+      if (payload?.action !== 'bond') return json({ error: 'Invalid action' }, 400);
+      const creature = await storage.transaction(async txn => {
+        const existing = await txn.get('coop-creature') || { species: 'lanternkin', owned: false, xp: (await txn.get('coop-stats'))?.creatureXp || 0 };
+        if (!existing.owned) { existing.owned = true; await txn.put('coop-creature', existing); }
+        return existing;
+      });
+      return json({ ok: true, creature });
+    }
     if (op === 'coop-equipment') {
       if (request.method !== 'GET' || request.headers.get('X-MM-Reward-Source') !== 'game-room-v1')
         return json({ error: 'Forbidden' }, 403);

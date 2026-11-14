@@ -383,6 +383,8 @@ export class Game {
   };
   private readonly handleLeaveRoom = (): void => {
     this.multiplayer.disconnect();
+    if (this.progression.state.lanternkinBonded && !this.recoveringBond) this.companion.bond();
+    else this.companion.retreat();
     this.updateCraftingHud();
     this.clearRemotePlayers();
     this.remoteZombieGeneration = -1;
@@ -393,7 +395,16 @@ export class Game {
     this.updateProgressHud();
   };
   private readonly onRoomEvent = (event: RoomEvent): void => {
-    if (event.type === 'welcome') {
+    if (event.type === 'creature-state') {
+      if (event.owned) {
+        this.companion.bond();
+        this.showToast('LANTERNKIN  //  Bond verified by Cloudflare.', 'success');
+      } else {
+        this.companion.retreat();
+      }
+      this.updateCompanionHud();
+      void this.coopProgress.refresh().then(() => this.updateProgressHud());
+    } else if (event.type === 'welcome') {
       if (this.roomStatus) this.roomStatus.textContent = `Room ${event.code} · connected`;
       this.showToast(`ROOM JOINED  //  ${event.code}`, 'success');
       this.remoteZombieGeneration = -1;
@@ -520,6 +531,11 @@ export class Game {
     if (this.player.getHealth() <= 0 || this.companion.isBound()) return;
     if (!this.companion.canBond(this.player.getPosition())) {
       this.showToast('GET CLOSER  //  Approach the glowing creature.', 'info');
+      return;
+    }
+    if (this.multiplayer.connected) {
+      this.multiplayer.send('bond');
+      this.showToast('BOND REQUESTED  //  Awaiting Cloudflare confirmation.', 'info');
       return;
     }
     this.companion.bond();
@@ -796,6 +812,8 @@ export class Game {
     document.querySelector('#room-join')?.removeEventListener('click', this.handleJoinRoom);
     document.querySelector('#room-leave')?.removeEventListener('click', this.handleLeaveRoom);
     this.multiplayer.disconnect();
+    if (this.progression.state.lanternkinBonded && !this.recoveringBond) this.companion.bond();
+    else this.companion.retreat();
     this.updateCraftingHud();
     this.clearRemotePlayers();
     this.inventoryButton?.removeEventListener('click', this.handleInventoryClick);

@@ -21,6 +21,8 @@ function send(id, pulse, trusted=true) {
 }
 test('server-owned reward is idempotent and protected from ordinary account requests', async () => {
   assert.equal((await send('kill:encounter-123', false, false)).status, 403);
+  const bonded = await account.fetch(new Request('https://internal/api/account/coop-creature', { method: 'POST', headers: { 'X-MM-Account': 'forestplayer', 'X-MM-Reward-Source': 'game-room-v1' }, body: JSON.stringify({ action: 'bond' }) }));
+  assert.equal(bonded.status, 200);
   const first = await (await send('kill:encounter-123', true)).json();
   assert.deepEqual(first.stats, { xp: 50, kills: 1, creatureXp: 40 });
   assert.equal(first.duplicate, false);

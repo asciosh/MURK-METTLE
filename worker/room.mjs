@@ -31,7 +31,7 @@ export class GameRoom extends DurableObject {
       if (data?.id && this.players.size < MAX_PLAYERS) this.players.set(ws, {
         id: data.id, username: data.username || '', x: data.x ?? 0, z: data.z ?? 0, yaw: data.yaw ?? 0,
         hp: data.hp ?? 100, lastMove: Date.now(), attackAt: 0, pulseAt: 0,
-        messageAt: 0, upgrades: { sharpened: false, balanced: false },
+        messageAt: 0, upgrades: { sharpened: false, balanced: false }, creatureOwned: data.creatureOwned === true,
       });
     }
     if (this.players.size) this.startTick();
@@ -58,6 +58,16 @@ export class GameRoom extends DurableObject {
     this.players.set(server, player);
     this.saveAttachment(server, player);
     this.send(server, { type: 'welcome', id: player.id, code });
+    // Load server-owned creature state before accepting combat abilities.
+    try {
+      const creature = await this.accountCreature(player);
+      player.creatureOwned = creature.owned === true;
+      this.saveAttachment(server, player);
+      this.send(server, { type: 'creature-state', owned: player.creatureOwned, xp: creature.xp });
+    } catch (error) {
+      player.creatureOwned = false;
+      this.send(server, { type: 'error', message: 'Could not load cloud creature data.' });
+    }
     this.startTick();
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -74,9 +84,19 @@ export class GameRoom extends DurableObject {
   broadcast(msg) { for (const socket of this.players.keys()) this.send(socket, msg); }
   saveAttachment(socket, player) {
     socket.serializeAttachment({ id: player.id, username: player.username, x: player.x, z: player.z,
-      yaw: player.yaw, hp: player.hp });
+      yaw: player.yaw, hp: player.hp, creatureOwned: player.creatureOwned === true });
   }
 
+  async accountCreature(player, action = null) {
+    const account = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
+    const response = await account.fetch(new Request('https://internal/api/account/coop-creature', {
+      method: action ? 'POST' : 'GET',
+      headers: { 'X-MM-Account': player.username, 'X-MM-Reward-Source': 'game-room-v1', ...(action ? { 'Content-Type': 'application/json' } : {}) },
+      ...(action ? { body: JSON.stringify({ action }) } : {}),
+    }));
+    if (!response.ok) throw new Error(`Creature account returned ${response.status}`);
+    return (await response.json()).creature;
+  }
   async webSocketMessage(socket, raw) {
     const player = this.players.get(socket);
     if (!player || typeof raw !== 'string' || raw.length > 2048) return;
@@ -95,6 +115,22 @@ export class GameRoom extends DurableObject {
       if (player.hp <= 0) return;
       player.x = msg.x; player.z = msg.z; player.yaw = msg.yaw; player.lastMove = now;
       this.saveAttachment(socket, player);
+      return;
+    }
+    if (msg.type === 'bond') {
+      // Fixed world spawn of Lanternkin; the player must be physically nearby.
+      if (player.hp <= 0 || Math.hypot(player.x - 4.2, player.z + 3.8) > 2.7) {
+        this.send(socket, { type: 'error', message: 'Move closer to Lanternkin to bond.' });
+        return;
+      }
+      try {
+        const creature = await this.accountCreature(player, 'bond');
+        player.creatureOwned = creature.owned === true;
+        this.saveAttachment(socket, player);
+        this.send(socket, { type: 'creature-state', owned: player.creatureOwned, xp: creature.xp });
+      } catch (error) {
+        this.send(socket, { type: 'error', message: 'Creature bond could not be saved.' });
+      }
       return;
     }
     if (msg.type === 'sync-equipment') {
@@ -125,6 +161,10 @@ export class GameRoom extends DurableObject {
     const zombie = this.zombie;
     if (player.hp <= 0 || zombie.hp <= 0) return;
     const pulse = msg.type === 'pulse';
+    if (pulse && !player.creatureOwned) {
+      this.send(socket, { type: 'error', message: 'Bond with Lanternkin before using Pulse.' });
+      return;
+    }
     const cooldown = pulse ? 8000 : 480;
     if (now - (pulse ? player.pulseAt : player.attackAt) < cooldown) return;
     if (pulse) player.pulseAt = now; else player.attackAt = now;

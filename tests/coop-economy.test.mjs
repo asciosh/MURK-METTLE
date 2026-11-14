@@ -33,6 +33,8 @@ async function kill(id, pulse=false) {
 }
 test('co-op salvage is server-issued exactly once; crafting spends verified materials', async () => {
   assert.equal((await request('coop-state')).status, 200);
+  const bonded = await account.fetch(new Request('https://internal/api/account/coop-creature', { method: 'POST', headers: { 'X-MM-Account': username, 'X-MM-Reward-Source': 'game-room-v1' }, body: JSON.stringify({ action: 'bond' }) }));
+  assert.equal(bonded.status, 200);
   assert.equal((await request('coop-craft','POST',{recipe:'sharpened'})).status, 409);
   const materialOrder = ['scrap','fiber','spore','scrap','fiber'];
   for (let i=0;i<5;i++) {
