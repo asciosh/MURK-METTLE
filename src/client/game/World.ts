@@ -1,3 +1,6 @@
+import { OutdoorMotion, fernGeometry, waterRipples } from './OutdoorMotion';
+import { InstanceDetail } from './InstanceDetail';
+import type { RenderProfile } from '../../../shared/render-profile.mjs';
 import { SurfaceMaterials } from './SurfaceMaterials';
 import { terrainMaterial } from './TerrainMaterial';
 import { addSettlementDetails } from './WorldDetails';
@@ -13,6 +16,9 @@ import {
 
 /** Deterministic 180m sector. Collision geometry is shared with the room server. */
 export class World {
+  private readonly outdoor: OutdoorMotion;
+  private waterBump: THREE.Texture | null = null;
+  private readonly detailMeshes: { detail: InstanceDetail; kind: 'foliage' | 'grass' | 'undergrowth' }[] = [];
   private readonly surfaces = new SurfaceMaterials();
   private readonly textures: THREE.Texture[] = [];
   private readonly windTime = { value: 0 };
@@ -26,6 +32,7 @@ export class World {
     this.createSupplies();
     this.createLandmarks();
     addSettlementDetails(this.scene, this.surfaces);
+    this.outdoor = new OutdoorMotion(this.scene);
   }
   private texture(kind: 'soil' | 'bark' | 'concrete' | 'brick' | 'leaf' | 'grass' | 'road'): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
@@ -330,6 +337,10 @@ export class World {
     branches.receiveShadow = true;
     branches.computeBoundingSphere();
     this.scene.add(trunks, foliage, branches);
+    this.detailMeshes.push(
+      { detail: new InstanceDetail(foliage, 10), kind: 'foliage' },
+      { detail: new InstanceDetail(branches, 10), kind: 'foliage' },
+    );
     // Crossing textured grass cards replace the former solid triangular plants.
     const grass = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(0.9, 0.7),
@@ -356,12 +367,13 @@ export class World {
     this.applyWind(grass);
     grass.computeBoundingSphere();
     this.scene.add(grass);
-    const undergrowth = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.7, 1.5), foliage.material, 900);
+    this.detailMeshes.push({ detail: new InstanceDetail(grass), kind: 'grass' });
+    const undergrowth = new THREE.InstancedMesh(fernGeometry(), foliage.material, 900);
     for (let i = 0; i < 900; i++) {
       const x = Math.sin(i * 531.6) * 86,
         z = Math.cos(i * 214.7) * 86;
       const clearing = Math.abs(x) < 6 || (Math.abs(x) < 30 && z < -29) || Math.hypot(x + 48, z + 28) < 13;
-      d.position.set(x, clearing ? -2 : 0.6, z);
+      d.position.set(x, clearing ? -2 : 0.015, z);
       d.rotation.set(0.12 * Math.sin(i), i * 2.4, 0);
       d.scale.setScalar(0.6 + (i % 5) * 0.2);
       d.updateMatrix();
@@ -372,9 +384,21 @@ export class World {
     undergrowth.computeBoundingSphere();
     this.applyWind(undergrowth);
     this.scene.add(undergrowth);
+    this.detailMeshes.push({ detail: new InstanceDetail(undergrowth), kind: 'undergrowth' });
   }
-  update(dt: number): void {
+  setQuality(profile: RenderProfile): void {
+    for (const { detail, kind } of this.detailMeshes) detail.setFraction(profile[kind]);
+    this.scene.traverse((o) => {
+      if (o.name === 'falling-leaves' && o instanceof THREE.Points) o.geometry.setDrawRange(0, profile.particles);
+    });
+  }
+  update(dt: number, focus?: THREE.Vector3): void {
     this.windTime.value += dt;
+    this.outdoor.update(dt, focus);
+    if (this.waterBump) {
+      this.waterBump.offset.x = (this.waterBump.offset.x + dt * 0.018) % 1;
+      this.waterBump.offset.y = (this.waterBump.offset.y + dt * 0.011) % 1;
+    }
   }
   private applyWind(mesh: THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>): void {
     const patch = (shader: Parameters<THREE.Material['onBeforeCompile']>[0]) => {
@@ -521,13 +545,26 @@ export class World {
     );
   }
   private createWetland(): void {
+    this.waterBump = waterRipples();
+    this.textures.push(this.waterBump);
+    const waterGeometry = new THREE.CircleGeometry(12, 64),
+      edge = waterGeometry.getAttribute('position');
+    for (let i = 1; i < edge.count; i++) {
+      const x = edge.getX(i),
+        y = edge.getY(i),
+        a = Math.atan2(y, x),
+        scale = 1 + Math.sin(a * 5) * 0.035 + Math.cos(a * 9) * 0.02;
+      edge.setXY(i, x * scale, y * scale);
+    }
     const water = this.mesh(
-      new THREE.CircleGeometry(12, 48),
+      waterGeometry,
       new THREE.MeshPhysicalMaterial({
         color: 0x344b48,
         metalness: 0.35,
         roughness: 0.22,
         clearcoat: 0.7,
+        bumpMap: this.waterBump,
+        bumpScale: 0.035,
         transparent: true,
         opacity: 0.9,
       }),
@@ -610,6 +647,7 @@ export class World {
     return obstacleDistance(origin, direction, distance);
   }
   dispose(): void {
+    this.outdoor.dispose();
     this.surfaces.dispose();
     for (const texture of this.textures) texture.dispose();
     for (const material of this.depthMaterials) material.dispose();

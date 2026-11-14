@@ -6,6 +6,7 @@ import type { RemotePlayer, MissionState } from './Multiplayer';
 
 /** Owns co-op-only actor and mission-sample visuals. No network or save access. */
 export class CoopVisuals {
+  lightsEnabled = true;
   private readonly remotePlayers = new Map<string, Player>();
   private readonly companions = new Map<string, Companion>();
   private readonly samples = new Map<string, THREE.Group>();
@@ -16,6 +17,10 @@ export class CoopVisuals {
     this.remotePlayers.get(id)?.triggerShot(weapon);
   }
 
+  triggerAction(id: string, action: 'pulse' | 'melee'): void {
+    if (action === 'pulse') this.companions.get(id)?.triggerPulse();
+    else this.remotePlayers.get(id)?.triggerAttack();
+  }
   updatePlayers(peers: ReadonlyMap<string, RemotePlayer>, dt: number): void {
     for (const [id, state] of peers) {
       let actor = this.remotePlayers.get(id);
@@ -24,6 +29,7 @@ export class CoopVisuals {
         actor.root.name = `ally-${id}`;
         this.remotePlayers.set(id, actor);
       }
+      const moving = Math.hypot(state.x - actor.root.position.x, state.z - actor.root.position.z) > 0.001;
       actor.updateRemote(state, dt);
       let ally = this.companions.get(id);
       if (state.creatureOwned && !ally) {
@@ -32,8 +38,9 @@ export class CoopVisuals {
       }
       if (ally) {
         ally.setForm(state.species || 'lanternkin', state.creatureXp || 0);
+        ally.setLightEnabled(this.lightsEnabled);
         ally.root.visible = !!state.creatureOwned && state.hp > 0;
-        ally.root.position.set(state.x + 0.95, 1.55 + Math.sin(performance.now() * 0.002) * 0.12, state.z + 0.5);
+        ally.updateRemote(dt, new THREE.Vector3(state.x + 0.95, 0, state.z + 0.5), state.yaw, moving);
       }
     }
     for (const [id, actor] of this.remotePlayers) {

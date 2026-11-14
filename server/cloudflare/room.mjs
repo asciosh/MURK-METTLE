@@ -286,7 +286,7 @@ export class GameRoom extends DurableObject {
         this.send(socket, { type: 'correction', x: player.x, z: player.z });
         return;
       }
-      if (distance > 0.025) {
+      if (distance > 0.001) {
         player.movingUntil = now + 220;
         cancelHealing(player.survival);
       }
@@ -485,6 +485,7 @@ export class GameRoom extends DurableObject {
       if (pulse) player.pulseAt = now;
       else player.attackAt = now;
       cancelHealing(player.survival);
+      this.broadcast({ type: 'action', by: player.id, action: pulse ? 'pulse' : 'melee' });
       if (pulse) {
         targets = pulseTargets(this.horde.enemies, player, power.range);
         damage = power.damage;

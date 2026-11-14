@@ -2,18 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#101914" />
     <meta
       name="description"
       content="Murk & Mettle — a cooperative creature-collection action-survival RPG."
     />
-    <title>Murk &amp; Mettle — v0.25</title>
+    <title>Murk &amp; Mettle — v0.26</title>
   </head>
   <body>
     <div id="app">
       <section class="co-op-bar" aria-label="Session status and field menu">
-        <span class="co-op-title">V0.25 · PRIVATE BETA</span>
+        <span class="co-op-title">V0.26 · PRIVATE BETA</span>
         <span id="room-status" role="status" aria-live="polite">Solo · Cloud account</span>
         <span id="account-state" role="status" aria-live="polite">Sign in</span>
         <button id="field-menu-toggle" type="button" aria-controls="field-menu" aria-expanded="false">☰ FIELD MENU</button>
@@ -31,9 +31,10 @@
             <button id="coop-craft-balanced" type="button" disabled>CO-OP GRIP</button>
             <button id="coop-craft-restorative" type="button" disabled>CO-OP ANTIDOTE</button>
           </div>
-          <label class="graphics-label">GRAPHICS <select id="graphics-quality" aria-label="Graphics quality"><option value="balanced">Balanced · shadows</option><option value="cinematic">Cinematic · contact shading</option><option value="low">Performance · no shadows</option></select></label>
+          <label class="graphics-label">GRAPHICS <select id="graphics-quality" aria-label="Graphics quality"><option value="mobile">Mobile · reduced detail</option><option value="balanced">Balanced · shadows</option><option value="cinematic">Cinematic · contact shading</option><option value="low">Performance · no shadows</option></select></label>
           <label class="graphics-label"><input id="photo-materials" type="checkbox" checked> Photographic surfaces · online (11 MB)</label>
           <small id="photo-materials-status" role="status">Offline fallback ready</small>
+          <label class="graphics-label">CONTROLS <select id="control-mode"><option value="auto">Auto · detect device</option><option value="touch">Touch controls</option><option value="keyboard">Mouse &amp; keyboard</option></select></label>
           <strong>PLAYER PROGRESS</strong>
           <div class="field-menu-row"><button id="account-toggle" type="button">PLAYER ACCOUNT</button></div>
         </div>
@@ -60,7 +61,7 @@
         <div class="build-tag">
           <span class="status-dot"></span>
           <span>THE WILDLANDS</span>
-          <b>0.25</b>
+          <b>0.26</b>
         </div>
       </header>
 
@@ -141,7 +142,7 @@
           <p class="eyebrow">FIELD TEST 009 · FAILED</p>
           <h2>YOU'RE<br /><em>DOWN.</em></h2>
           <p>The infected overpowered you. Regroup and try again.</p>
-          <div class="retry-hint"><kbd>R</kbd> RESTART ENCOUNTER</div>
+          <div class="retry-hint"><kbd>R</kbd> / TOUCH RELOAD · RESTART</div>
         </section>
 
         <section class="minimap-panel" aria-label="Field navigation map">
@@ -175,9 +176,9 @@
           <div class="title-rule"></div>
           <p class="title-description">An abandoned settlement. A forest reclaiming its dead. Explore the expanded Wildlands, survive the infected, and evolve the creatures that choose to trust you.</p>
           <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
-          <p class="title-hint">WASD MOVE · RMB AIM · LMB FIRE · R RELOAD · 1/2 WEAPON · SPACE MELEE · E INTERACT · Q PULSE · H BANDAGE · C COMPANION</p>
+          <p class="touch-title-hint">Thumb stick to move · Drag the view or FIRE to look · AIM and RUN toggle · Landscape gives more room.</p><p class="title-hint">WASD MOVE · RMB AIM · LMB FIRE · R RELOAD · 1/2 WEAPON · SPACE MELEE · E INTERACT · Q PULSE · H BANDAGE · C COMPANION</p>
         </div>
-        <p class="title-build">MURK &amp; METTLE / v0.25 · ORIGINAL INDIE PROTOTYPE</p>
+        <p class="title-build">MURK &amp; METTLE / v0.26 · ORIGINAL INDIE PROTOTYPE</p>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>

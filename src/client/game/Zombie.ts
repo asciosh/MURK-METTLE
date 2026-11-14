@@ -1,3 +1,4 @@
+import { solveLeg, footCycle } from '../../../shared/actor-motion.mjs';
 import * as THREE from 'three';
 import type { World } from './World';
 import { ActorAnimator, type ModelEntry } from './AnimationController';
@@ -91,6 +92,10 @@ export class Zombie {
   private readonly animator = new ActorAnimator(this.root);
   private leftLeg!: THREE.Group;
   private rightLeg!: THREE.Group;
+  private readonly knees: THREE.Group[] = [];
+  private readonly feet: THREE.Group[] = [];
+  private visualMove = 0;
+  private strikeBlend = 0;
   private readonly leftArm = new THREE.Group();
   private readonly rightArm = new THREE.Group();
   readonly strain: InfectedStrain;
@@ -243,9 +248,16 @@ export class Zombie {
     for (const [i, pivot] of [this.leftLeg, this.rightLeg].entries()) {
       pivot.position.set(i === 0 ? -0.125 : 0.125, 0.81, 0.025);
       add(new THREE.CapsuleGeometry(0.105, 0.21, 6, 12), this.darkMaterial, 0, -0.18, 0, pivot);
-      const shin = add(new THREE.CapsuleGeometry(0.079, 0.23, 6, 12), this.darkMaterial, 0, -0.52, 0.035, pivot);
-      shin.rotation.x = -0.08;
-      add(new RoundedBoxGeometry(0.17, 0.15, 0.29, 2, 0.025), this.darkMaterial, 0, -0.71, -0.06, pivot);
+      const knee = new THREE.Group();
+      knee.position.y = -0.34;
+      pivot.add(knee);
+      this.knees.push(knee);
+      add(new THREE.CapsuleGeometry(0.079, 0.2, 6, 12), this.darkMaterial, 0, -0.17, 0.015, knee);
+      const foot = new THREE.Group();
+      foot.position.set(0, -0.33, 0);
+      knee.add(foot);
+      this.feet.push(foot);
+      add(new RoundedBoxGeometry(0.17, 0.15, 0.29, 2, 0.025), this.darkMaterial, 0, -0.055, -0.06, foot);
       this.modelVisual.add(pivot);
     }
     // Shirt collar, torn hem and worn buttons retain a recognizable human outline.
@@ -358,12 +370,53 @@ export class Zombie {
     this.warningRing.visible = encounterState === 'windup';
     (this.warningRing.material as THREE.MeshBasicMaterial).opacity = 0.35 + Math.sin(this.animationClock * 16) * 0.15;
     if (moving) this.faceDirection(direction);
-    const gait = moving ? Math.sin(this.animationClock * 8.5) * 0.5 : 0;
-    this.leftLeg.rotation.x = gait;
-    this.rightLeg.rotation.x = -gait;
-    this.leftArm.rotation.x = encounterState === 'windup' ? -1.25 : -0.5 + gait * 0.4;
-    this.rightArm.rotation.x = encounterState === 'windup' ? -1.25 : -0.5 - gait * 0.4;
+    this.visualMove = THREE.MathUtils.damp(this.visualMove, moving ? 1 : 0, 8, dt);
+    this.strikeBlend = THREE.MathUtils.damp(this.strikeBlend, encounterState === 'windup' ? 1 : 0, 13, dt);
+    const phase = this.animationClock * (this.strain === 'runner' ? 12 : 8),
+      bob = Math.abs(Math.sin(phase)) * 0.018 * this.visualMove;
+    this.modelVisual.position.y = bob - this.strikeBlend * 0.045;
+    this.modelVisual.rotation.x = 0.05 + this.visualMove * 0.06 + this.strikeBlend * 0.11;
+    this.modelVisual.rotation.z =
+      Math.sin(phase) * 0.025 * this.visualMove + Math.sin(this.animationClock * 1.3) * 0.012;
+    for (const [i, leg] of [this.leftLeg, this.rightLeg].entries()) {
+      const cycle = footCycle(phase + i * Math.PI, 0.2);
+      leg.position.y = 0.81 - this.visualMove * 0.07;
+      const pose = solveLeg(0.15 - leg.position.y - bob + cycle.lift * this.visualMove, cycle.z * this.visualMove);
+      leg.rotation.x = pose.hip * this.visualMove;
+      this.knees[i].rotation.x = pose.knee * this.visualMove;
+      this.feet[i].rotation.x = pose.foot * this.visualMove;
+    }
+    const reach = this.strikeBlend;
+    this.leftArm.rotation.x = -0.35 - reach * 1.15 + Math.sin(phase + 0.4) * 0.18 * this.visualMove;
+    this.rightArm.rotation.x = -0.45 - reach * 0.9 - Math.sin(phase) * 0.2 * this.visualMove;
+    this.leftArm.rotation.z = -0.08 - reach * 0.12;
+    this.rightArm.rotation.z = 0.08 + reach * 0.12;
   }
+  renderDeath(dt: number, progress: number): void {
+    this.root.visible = true;
+    this.warningRing.visible = false;
+    this.animator.setState('death');
+    this.animator.update(dt);
+    const fall = THREE.MathUtils.smoothstep(progress, 0, 0.8);
+    this.modelVisual.rotation.z = -fall * 1.38;
+    this.modelVisual.rotation.x = fall * 0.14;
+    this.modelVisual.position.y = -fall * 0.04;
+    this.modelVisual.position.x = fall * 0.38;
+    const opacity = 1 - THREE.MathUtils.smoothstep(progress, 0.72, 1);
+    this.root.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        for (const m of materials) {
+          if (!m.transparent) {
+            m.transparent = true;
+            m.needsUpdate = true;
+          }
+          m.opacity = opacity;
+        }
+      }
+    });
+  }
+
   private faceDirection(direction: THREE.Vector3): void {
     const targetYaw = Math.atan2(-direction.x, -direction.z);
     const difference =
@@ -379,7 +432,7 @@ export class Zombie {
     if (this.health <= 0) {
       this.state = 'dead';
       this.animator.setState('death');
-      this.root.visible = false;
+      this.root.visible = true;
       return true;
     }
     return false;

@@ -123,3 +123,36 @@ test('room rejects exhausted speed bypass and resupply at a distant cache', asyn
   assert.equal(p.survival.bandages, 0);
   room.stopTick();
 });
+
+test('room broadcasts cosmetic pulse and melee only for accepted living-player actions', async () => {
+  const { room, p, packets, send } = make();
+  await send({ type: 'pulse' });
+  assert.equal(packets.filter((e) => e.type === 'action').length, 0);
+  p.creatureOwned = true;
+  await send({ type: 'pulse' });
+  await send({ type: 'pulse' });
+  assert.equal(packets.filter((e) => e.type === 'action' && e.action === 'pulse').length, 1);
+  await send({ type: 'attack' });
+  await send({ type: 'attack' });
+  assert.equal(packets.filter((e) => e.type === 'action' && e.action === 'melee').length, 1);
+  p.hp = 0;
+  p.attackAt = 0;
+  await send({ type: 'attack' });
+  assert.equal(packets.filter((e) => e.type === 'action').length, 2);
+  room.stopTick();
+});
+
+test('slow analog movement interrupts bandaging just like a full keyboard step', async () => {
+  const { room, p, send } = make();
+  p.hp = 50;
+  await send({ type: 'heal' });
+  assert.ok(p.survival.healEndsAt > 0);
+  p.moveBudget = 0.2;
+  p.messageAt = 0;
+  await send({ type: 'move', x: 0.01, z: 0, yaw: 0 });
+  assert.equal(p.x, 0.01);
+  assert.equal(p.survival.healEndsAt, 0);
+  assert.equal(p.survival.bandages, 1);
+  assert.equal(p.hp, 50);
+  room.stopTick();
+});

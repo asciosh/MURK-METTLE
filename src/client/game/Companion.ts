@@ -13,6 +13,10 @@ export class Companion {
   private elapsed = 0;
   private pulseTime = 0;
   private stage = -1;
+  private readonly wings: { pivot: THREE.Group; side: number }[] = [];
+  private readonly tails: { mesh: THREE.Mesh; rest: number }[] = [];
+  private readonly legs: { mesh: THREE.Mesh; phase: number }[] = [];
+  private gaitBlend = 0;
   speciesId: SpeciesId = 'lanternkin';
   constructor(
     private readonly scene: THREE.Scene,
@@ -39,6 +43,9 @@ export class Companion {
     this.scene.add(this.root);
   }
   private clearVisual(): void {
+    this.wings.length = 0;
+    this.tails.length = 0;
+    this.legs.length = 0;
     this.visual.traverse((o) => {
       if (o instanceof THREE.Mesh) {
         o.geometry.dispose();
@@ -115,7 +122,10 @@ export class Companion {
       for (const s of [-1, 1]) {
         const ear = add(new THREE.ConeGeometry(0.1, 0.36 + stage * 0.15, 14), body, s * 0.15, 0.53, -0.34);
         ear.rotation.z = s * 0.25;
-        for (const z of [-0.25, 0.28]) add(new THREE.CapsuleGeometry(0.07, 0.22, 5, 8), dark, s * 0.21, -0.3, z);
+        for (const z of [-0.25, 0.28]) {
+          const leg = add(new THREE.CapsuleGeometry(0.07, 0.22, 5, 8), dark, s * 0.21, -0.3, z);
+          this.legs.push({ mesh: leg, phase: (z > 0 ? Math.PI : 0) + (s > 0 ? Math.PI : 0) });
+        }
         add(new THREE.SphereGeometry(0.035, 12, 8), glow, s * 0.16, 0.27, -0.57);
         if (stage > 0) {
           const horn = add(new THREE.ConeGeometry(0.065, 0.4 + stage * 0.15, 12), glow, s * 0.22, 0.62, -0.15);
@@ -124,13 +134,17 @@ export class Companion {
       }
       const tail = add(new THREE.CapsuleGeometry(0.11, 0.55, 6, 12), body, 0, 0.18, 0.66);
       tail.rotation.x = 1.1;
+      this.tails.push({ mesh: tail, rest: tail.rotation.y });
       add(new THREE.SphereGeometry(0.13, 16, 12), glow, 0, 0.45, 0.92);
     } else if (species === 'mossback') {
       add(new THREE.SphereGeometry(0.4, 24, 16), body, 0, -0.05, 0, 1.2, 0.7, 1.4);
       add(new THREE.SphereGeometry(0.4, 24, 16), dark, 0, 0.12, 0.08, 1.25, 0.72, 1.35);
       add(new THREE.SphereGeometry(0.19, 18, 12), body, 0, -0.04, -0.55, 0.9, 0.85, 1.2);
       for (const side of [-1, 1]) {
-        for (const z of [-0.29, 0.34]) add(new THREE.CapsuleGeometry(0.095, 0.12, 5, 10), body, side * 0.34, -0.28, z);
+        for (const z of [-0.29, 0.34]) {
+          const leg = add(new THREE.CapsuleGeometry(0.095, 0.12, 5, 10), body, side * 0.34, -0.28, z);
+          this.legs.push({ mesh: leg, phase: (z > 0 ? Math.PI : 0) + (side > 0 ? Math.PI : 0) });
+        }
         add(new THREE.SphereGeometry(0.03, 12, 8), glow, side * 0.13, 0.01, -0.69);
         for (let i = 0; i < 2 + stage; i++) {
           const branch = add(
@@ -161,6 +175,10 @@ export class Companion {
       beak.rotation.x = -Math.PI / 2;
       for (const side of [-1, 1]) {
         add(new THREE.SphereGeometry(0.03, 12, 8), glow, side * 0.13, 0.36, -0.25);
+        const wing = new THREE.Group();
+        wing.position.x = side * 0.22;
+        this.visual.add(wing);
+        this.wings.push({ pivot: wing, side });
         for (let i = 0; i < 4 + stage; i++) {
           const feather = add(
             new THREE.SphereGeometry(0.2, 14, 10),
@@ -173,6 +191,8 @@ export class Companion {
             2.1 + stage * 0.3,
           );
           feather.rotation.y = side * (0.2 + i * 0.1);
+          feather.position.x -= side * 0.22;
+          wing.add(feather);
         }
         for (let i = 0; i <= stage; i++) {
           const crest = add(
@@ -188,6 +208,7 @@ export class Companion {
       for (const x of [-0.1, 0, 0.1]) {
         const tail = add(new THREE.SphereGeometry(0.18, 14, 10), dark, x, -0.03, 0.4, 0.35, 0.2, 1.7 + stage * 0.3);
         tail.rotation.y = -x;
+        this.tails.push({ mesh: tail, rest: tail.rotation.y });
       }
     } else {
       add(new THREE.SphereGeometry(0.35, 24, 16), body, 0, 0, 0, 1, 0.4, 1.5);
@@ -203,6 +224,12 @@ export class Companion {
           1.1 + stage * 0.3,
         );
         wing.rotation.z = s * 0.2;
+        const pivot = new THREE.Group();
+        pivot.position.x = s * 0.2;
+        this.visual.add(pivot);
+        wing.position.x -= s * 0.2;
+        pivot.add(wing);
+        this.wings.push({ pivot, side: s });
         add(new THREE.SphereGeometry(0.04, 12, 8), glow, s * 0.16, 0.1, -0.38);
       }
       const tail = add(new THREE.CapsuleGeometry(0.035, 0.8 + stage * 0.25, 5, 10), body, 0, -0.04, 0.7);
@@ -219,6 +246,9 @@ export class Companion {
     this.light.color.setHex(def.glow);
     (this.aura.material as THREE.MeshBasicMaterial).color.setHex(def.glow);
     if (changed) this.triggerPulse();
+  }
+  setLightEnabled(value: boolean): void {
+    this.light.visible = value;
   }
   isBound(): boolean {
     return this.bound;
@@ -242,8 +272,6 @@ export class Companion {
     this.pulseTime = 0.65;
   }
   update(dt: number, position: THREE.Vector3, yaw: number, world: World): void {
-    this.elapsed += dt;
-    this.pulseTime = Math.max(0, this.pulseTime - dt);
     const d = CREATURES[this.speciesId],
       height = this.speciesId === 'mossback' ? 0.43 : this.speciesId === 'emberling' ? 0.58 : 1.25;
     const target = this.bound
@@ -257,18 +285,44 @@ export class Companion {
             ),
           )
       : new THREE.Vector3(d.x, height, d.z);
+    const walking = this.bound && Math.hypot(target.x - this.root.position.x, target.z - this.root.position.z) > 0.2;
+    this.animateParts(dt, walking);
     this.root.position.lerp(target, 1 - Math.exp(-4 * dt));
     const y = this.root.position.y;
     world.constrainActorPosition(this.root.position, 0.3);
     this.root.position.y = y;
     this.root.position.y = height + Math.sin(this.elapsed * 2.3) * 0.055;
     this.root.rotation.y = this.bound ? yaw : Math.sin(this.elapsed * 0.4) * 0.25;
+    this.animateAura(height);
+  }
+  private animateParts(dt: number, walking: boolean): void {
+    this.elapsed += dt;
+    this.pulseTime = Math.max(0, this.pulseTime - dt);
+    this.gaitBlend = THREE.MathUtils.damp(this.gaitBlend, walking ? 1 : 0, 7, dt);
+    for (const wing of this.wings)
+      wing.pivot.rotation.z =
+        wing.side *
+        (0.08 +
+          Math.sin(this.elapsed * (this.speciesId === 'stormrook' ? 8 : 3.5)) *
+            (this.speciesId === 'stormrook' ? 0.32 : 0.12));
+    for (const [i, tail] of this.tails.entries())
+      tail.mesh.rotation.y = tail.rest + Math.sin(this.elapsed * 3.5 + i * 0.3) * 0.15;
+    for (const leg of this.legs) leg.mesh.rotation.x = Math.sin(this.elapsed * 9 + leg.phase) * 0.34 * this.gaitBlend;
+  }
+  private animateAura(height: number): void {
     this.visual.rotation.z = Math.sin(this.elapsed * 2) * 0.035;
     const progress = this.pulseTime > 0 ? 1 - this.pulseTime / 0.65 : 0;
     this.aura.scale.setScalar(this.pulseTime > 0 ? 1 + progress * 18 : 1);
     this.aura.position.y = -height + 0.035;
     (this.aura.material as THREE.MeshBasicMaterial).opacity = this.pulseTime > 0 ? (1 - progress) * 0.7 : 0.12;
     this.light.intensity = this.pulseTime > 0 ? 5 : 1.2;
+  }
+  updateRemote(dt: number, position: THREE.Vector3, yaw: number, moving: boolean): void {
+    this.animateParts(dt, moving);
+    const height = this.speciesId === 'mossback' ? 0.43 : this.speciesId === 'emberling' ? 0.58 : 1.25;
+    this.root.position.set(position.x, height + Math.sin(this.elapsed * 2.3) * 0.055, position.z);
+    this.root.rotation.y = yaw;
+    this.animateAura(height);
   }
   async installModel(_entry: ModelEntry): Promise<void> {
     /* Species growth currently uses original procedural meshes. */

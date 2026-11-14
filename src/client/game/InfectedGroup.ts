@@ -16,6 +16,7 @@ export class InfectedGroup {
   wave = 0;
   nextWaveAt = 0;
   private readonly actors = new Map<string, Zombie>();
+  private readonly fallen: { actor: Zombie; age: number }[] = [];
   private model: ModelEntry | undefined;
   constructor(private readonly scene: THREE.Scene) {}
   resetSolo(player: Combatant): void {
@@ -41,9 +42,19 @@ export class InfectedGroup {
     const living = new Set(this.states.filter((s) => s.hp > 0).map((s) => s.id));
     for (const [id, actor] of this.actors)
       if (!living.has(id)) {
-        actor.dispose();
+        if (this.states.some((s) => s.id === id && s.hp <= 0)) this.fallen.push({ actor, age: 0 });
+        else actor.dispose();
         this.actors.delete(id);
       }
+    for (let i = this.fallen.length - 1; i >= 0; i--) {
+      const body = this.fallen[i];
+      body.age += dt;
+      body.actor.renderDeath(dt, body.age / 0.9);
+      if (body.age >= 0.9) {
+        body.actor.dispose();
+        this.fallen.splice(i, 1);
+      }
+    }
     for (const state of this.states) {
       if (state.hp <= 0) continue;
       let actor = this.actors.get(state.id);
@@ -90,6 +101,8 @@ export class InfectedGroup {
   clear(): void {
     for (const actor of this.actors.values()) actor.dispose();
     this.actors.clear();
+    for (const body of this.fallen) body.actor.dispose();
+    this.fallen.length = 0;
     this.states = [];
   }
   dispose(): void {
