@@ -1,3 +1,4 @@
+import { setText } from '../ui/ChangedValue';
 import * as THREE from 'three';
 import type { CombatFeedback } from './CombatFeedback';
 import type { Player } from './Player';
@@ -109,21 +110,23 @@ export class Firearms {
     const panel = document.querySelector<HTMLElement>('.weapon-panel');
     panel?.classList.toggle('reloading', reloading);
     panel?.classList.toggle('empty', state.magazine === 0 && !reloading);
-    panel?.style.setProperty(
-      '--reload-progress',
-      `${reloading ? Math.max(0, Math.min(100, 100 * (1 - (state.reloadAt - Date.now()) / def.reload))) : 0}%`,
-    );
+    const reloadWidth = `${reloading ? Math.max(0, Math.min(100, 100 * (1 - (state.reloadAt - Date.now()) / def.reload))) : 0}%`;
+    if (panel && panel.style.getPropertyValue('--reload-progress') !== reloadWidth)
+      panel.style.setProperty('--reload-progress', reloadWidth);
     const status = document.querySelector('#weapon-state');
     const statusText = reloading ? 'RELOADING' : state.magazine === 0 ? 'EMPTY · RELOAD' : 'READY';
-    if (status && status.textContent !== statusText) status.textContent = statusText;
-    if (label) label.textContent = def.name;
-    if (ammo) ammo.textContent = `${state.magazine.toString().padStart(2, '0')} / ${state.reserve}`;
+    if (status && status.textContent !== statusText) setText(status, statusText);
+    if (label) setText(label, def.name);
+    if (ammo) setText(ammo, `${state.magazine.toString().padStart(2, '0')} / ${state.reserve}`);
     if (hint)
-      hint.textContent = state.reloadAt
-        ? 'RELOADING…'
-        : state.magazine === 0
-          ? 'R · RELOAD  /  E · SUPPLY CACHE'
-          : 'R · RELOAD   1 / 2 · SWITCH';
+      setText(
+        hint,
+        state.reloadAt
+          ? 'RELOADING…'
+          : state.magazine === 0
+            ? 'R · RELOAD  /  E · SUPPLY CACHE'
+            : 'R · RELOAD   1 / 2 · SWITCH',
+      );
     document.body.classList.toggle('is-aiming', this.aiming);
     document.body.classList.toggle('hit-confirmed', this.hitTime > 0);
   }

@@ -1,0 +1,84 @@
+{
+  "hardware": {
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "viewport": [
+      960,
+      540
+    ],
+    "pixelRatio": 1
+  },
+  "scenario": "actual Game stationary camp/haven, no simulation/network, photo off; 2 warmups + 5 gl.finish samples",
+  "cases": [
+    {
+      "preset": "mobile",
+      "scene": "camp",
+      "timesMs": [
+        8.899999998509884,
+        17.899999998509884,
+        7.899999998509884,
+        42.20000000298023,
+        5.099999997764826
+      ],
+      "medianMs": 8.899999998509884,
+      "calls": 247,
+      "triangles": 207980,
+      "geometries": 148,
+      "textures": 36
+    },
+    {
+      "preset": "mobile",
+      "scene": "haven",
+      "timesMs": [
+        4.900000002235174,
+        7.899999998509884,
+        1.6000000014901161,
+        1.5999999977648258,
+        6.5
+      ],
+      "medianMs": 4.900000002235174,
+      "calls": 150,
+      "triangles": 134276,
+      "geometries": 148,
+      "textures": 36
+    },
+    {
+      "preset": "balanced",
+      "scene": "camp",
+      "timesMs": [
+        4.199999999254942,
+        5.300000000745058,
+        4.800000000745058,
+        5.5,
+        5.900000002235174
+      ],
+      "medianMs": 5.300000000745058,
+      "calls": 397,
+      "triangles": 427922,
+      "geometries": 150,
+      "textures": 38
+    },
+    {
+      "preset": "balanced",
+      "scene": "haven",
+      "timesMs": [
+        7,
+        4.199999999254942,
+        3.5,
+        2.900000002235174,
+        3.699999999254942
+      ],
+      "medianMs": 3.699999999254942,
+      "calls": 318,
+      "triangles": 318446,
+      "geometries": 157,
+      "textures": 38
+    }
+  ],
+  "hud": {
+    "iterations": 120,
+    "mutations": 3121,
+    "ms": 7.100000001490116
+  },
+  "errors": []
+}
