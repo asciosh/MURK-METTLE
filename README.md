@@ -1,8 +1,10 @@
-# Murk & Mettle · v0.21
+# Murk & Mettle · v0.22
 
 A third-person browser zombie-survival and creature-collection RPG. Built with Three.js, TypeScript, Vite and Cloudflare Durable Objects.
 
-v0.21 adds an expanded 180m sector, abandoned settlement and wetland, shoulder-camera firearms, and three collectible species with three evolution stages each. See [Codespaces upgrade guide](CODESPACES-UPGRADE.md) and [feature notes](docs/changelog/CHANGELOG-v0.21.md).
+v0.22 adds articulated survivor/gun animations, shared co-op poses, natural foliage motion and an optional Cinematic graphics mode. See [v0.22 notes](docs/changelog/CHANGELOG-v0.22.md) and [testing steps](docs/V0.22-TESTING.md).
+
+v0.21 added an expanded 180m sector, abandoned settlement and wetland, shoulder-camera firearms, and three collectible species with three evolution stages each. See [Codespaces upgrade guide](CODESPACES-UPGRADE.md) and [feature notes](docs/changelog/CHANGELOG-v0.21.md).
 
 ## Requirements
 

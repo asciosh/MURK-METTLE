@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Player } from './Player';
 import {
   WEAPONS,
   SUPPLIES,
@@ -15,48 +16,15 @@ export class Firearms {
   selected: WeaponId = 'pistol';
   arsenal = newArsenal();
   aiming = false;
-  private readonly model = new THREE.Group();
-  private readonly flash: THREE.Mesh;
-  private readonly light = new THREE.PointLight(0xffbb70, 0, 5);
   private readonly tracers: { line: THREE.Line; life: number }[] = [];
-  private flashTime = 0;
   private hitTime = 0;
   private audio: AudioContext | null = null;
   private readonly supplyAt = new Map<string, number>();
   constructor(
     private readonly scene: THREE.Scene,
-    private readonly player: THREE.Group,
-  ) {
-    this.player.add(this.model);
-    this.model.position.set(0.28, 1.25, -0.52);
-    const steel = new THREE.MeshStandardMaterial({ color: 0x363b3c, metalness: 0.8, roughness: 0.35 });
-    const grip = new THREE.MeshStandardMaterial({ color: 0x343c32, roughness: 0.9 });
-    const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set(x, y, z);
-      m.castShadow = true;
-      this.model.add(m);
-      return m;
-    };
-    add(new THREE.BoxGeometry(0.12, 0.15, 0.38), steel, 0, 0, -0.13);
-    const handle = add(new THREE.BoxGeometry(0.1, 0.24, 0.11), grip, 0, -0.16, 0);
-    handle.rotation.x = -0.2;
-    const barrel = add(new THREE.CylinderGeometry(0.035, 0.035, 0.24, 10), steel, 0, 0.015, -0.4);
-    barrel.rotation.x = Math.PI / 2;
-    const rifle = add(new THREE.BoxGeometry(0.085, 0.08, 0.52), grip, 0, -0.025, -0.53);
-    rifle.name = 'rifle-extension';
-    this.flash = add(
-      new THREE.ConeGeometry(0.11, 0.3, 6),
-      new THREE.MeshBasicMaterial({ color: 0xffdf94, transparent: true, opacity: 0.9 }),
-      0,
-      0,
-      -0.94,
-    );
-    this.flash.rotation.x = -Math.PI / 2;
-    this.flash.visible = false;
-    this.model.add(this.light);
-    this.light.position.z = -0.8;
-  }
+    private readonly player: Player,
+  ) {}
+
   switchWeapon(id: WeaponId): void {
     this.selected = id;
   }
@@ -72,13 +40,13 @@ export class Firearms {
   tryFire(): boolean {
     const ok = fireWeapon(this.arsenal, this.selected, Date.now());
     if (ok) {
-      this.flashTime = 0.055;
+      this.player.triggerShot(this.selected);
       this.sound('shot');
     }
     return ok;
   }
   muzzle(): THREE.Vector3 {
-    return this.player.localToWorld(new THREE.Vector3(0.28, 1.32, -0.7));
+    return this.player.muzzlePosition();
   }
   effect(origin: THREE.Vector3, direction: THREE.Vector3, distance: number, hit = false): void {
     const end = origin.clone().addScaledVector(direction, Math.max(0.1, obstacleDistance(origin, direction, distance)));
@@ -107,14 +75,7 @@ export class Firearms {
   }
   update(dt: number): void {
     for (const id of ['pistol', 'rifle'] as WeaponId[]) settleReload(this.arsenal, id, Date.now());
-    this.flashTime = Math.max(0, this.flashTime - dt);
     this.hitTime = Math.max(0, this.hitTime - dt);
-    this.flash.visible = this.flashTime > 0;
-    this.flash.position.z = this.selected === 'rifle' ? -0.94 : -0.55;
-    this.light.intensity = this.flashTime > 0 ? 8 : 0;
-    this.model.getObjectByName('rifle-extension')!.visible = this.selected === 'rifle';
-    this.model.position.y = 1.25 - (this.arsenal[this.selected].reloadAt ? 0.25 : 0);
-    this.model.rotation.z = THREE.MathUtils.damp(this.model.rotation.z, this.flashTime > 0 ? 0.12 : 0, 20, dt);
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const t = this.tracers[i];
       t.life -= dt;
@@ -169,14 +130,6 @@ export class Firearms {
     }
   }
   dispose(): void {
-    this.player.remove(this.model);
-    this.model.traverse((o) => {
-      if (o instanceof THREE.Mesh) {
-        o.geometry.dispose();
-        (o.material as THREE.Material).dispose();
-      }
-    });
-    this.light.dispose();
     for (const t of this.tracers) {
       this.scene.remove(t.line);
       t.line.geometry.dispose();

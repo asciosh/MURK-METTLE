@@ -125,7 +125,11 @@ test('real room validates firearm direction, ammo, cooldown, range, cover and bo
   const roomSource = (await readFile(new URL('../server/cloudflare/room.mjs', import.meta.url), 'utf8'))
     .replace("import { DurableObject } from 'cloudflare:workers';", shim)
     .replaceAll("'../../shared/expansion.mjs'", JSON.stringify(expansionURL))
-    .replaceAll("'../../shared/coop-rules.mjs'", JSON.stringify(coopURL));
+    .replaceAll("'../../shared/coop-rules.mjs'", JSON.stringify(coopURL))
+    .replaceAll(
+      "'../../shared/actor-pose.mjs'",
+      JSON.stringify(new URL('../shared/actor-pose.mjs', import.meta.url).href),
+    );
   const { GameRoom } = await import(`data:text/javascript,${encodeURIComponent(roomSource)}`);
   const ctx = {
     storage: new Storage(),
@@ -185,5 +189,20 @@ test('real room validates firearm direction, ammo, cooldown, range, cover and bo
   await msg({ type: 'shoot', weapon: 'pistol', direction: { x: 0, y: 0, z: -1 } });
   assert.equal(room.zombie.hp, 66);
   assert.ok(packets.some((e) => e.type === 'shot' && e.hit === false));
+  p.messageAt = 0;
+  p.lastMove = Date.now();
+  const beforeAmmo = p.arsenal.pistol.magazine;
+  await msg({ type: 'move', x: p.x, z: p.z, yaw: p.yaw, weapon: 'rifle', aiming: true, pitch: 12, sprinting: true });
+  assert.equal(p.pose.weapon, 'rifle');
+  assert.equal(p.pose.pitch, 0.95);
+  assert.equal(p.arsenal.pistol.magazine, beforeAmmo);
+  room.tick();
+  const actor = packets
+    .filter((e) => e.type === 'snapshot')
+    .at(-1)
+    .players.find((a) => a.id === p.id);
+  assert.equal(actor.weapon, 'rifle');
+  assert.equal(actor.aiming, true);
+  assert.equal(actor.pitch, 0.95);
   room.stopTick();
 });
