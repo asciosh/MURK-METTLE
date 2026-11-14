@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "launch-field"
+description = "Open or focus the compiled trusted game origin; accepts no URL or credentials."
+commands.allow = ["start_game"]
