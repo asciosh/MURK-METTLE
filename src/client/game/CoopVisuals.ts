@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Player } from './Player';
 import { Companion } from './Companion';
+import type { WeaponId } from '../../../shared/expansion.mjs';
 import type { RemotePlayer, MissionState } from './Multiplayer';
 
 /** Owns co-op-only actor and mission-sample visuals. No network or save access. */
@@ -11,7 +12,11 @@ export class CoopVisuals {
 
   constructor(private readonly scene: THREE.Scene) {}
 
-  updatePlayers(peers: ReadonlyMap<string, RemotePlayer>): void {
+  triggerShot(id: string, weapon: WeaponId): void {
+    this.remotePlayers.get(id)?.triggerShot(weapon);
+  }
+
+  updatePlayers(peers: ReadonlyMap<string, RemotePlayer>, dt: number): void {
     for (const [id, state] of peers) {
       let actor = this.remotePlayers.get(id);
       if (!actor) {
@@ -19,9 +24,7 @@ export class CoopVisuals {
         actor.root.name = `ally-${id}`;
         this.remotePlayers.set(id, actor);
       }
-      actor.root.position.set(state.x, 0, state.z);
-      actor.root.rotation.y = state.yaw;
-      actor.root.visible = state.hp > 0;
+      actor.updateRemote(state, dt);
       let ally = this.companions.get(id);
       if (state.creatureOwned && !ally) {
         ally = new Companion(this.scene, state.species || 'lanternkin');

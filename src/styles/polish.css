@@ -62,3 +62,7 @@ body.hit-confirmed .reticle::before,body.hit-confirmed .reticle::after {backgrou
 .graphics-label select {background:#25312a;color:#d2d6c7;border:1px solid #a9b09a45;padding:8px;}
 @media(max-width:900px){.weapon-panel{bottom:190px;right:16px;width:170px;}}
 @media(max-width:680px){.weapon-panel{bottom:24px;right:12px;width:150px;}.region-name{max-width:70%;top:12px;}}
+
+.collection-details {margin-block:8px;color:var(--muted);font:9px 'DM Mono',monospace;}
+.collection-details summary {padding-block:5px;color:#bdc4ac;cursor:pointer;line-height:1.6;}
+.collection-details[open] summary {color:#e0e5cf;}

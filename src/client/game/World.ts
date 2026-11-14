@@ -11,6 +11,8 @@ import {
 /** Deterministic 180m sector. Collision geometry is shared with the room server. */
 export class World {
   private readonly textures: THREE.Texture[] = [];
+  private readonly windTime = { value: 0 };
+  private readonly depthMaterials: THREE.Material[] = [];
   private readonly crates = new Map<string, THREE.Group>();
   constructor(private readonly scene: THREE.Scene) {
     this.createTerrain();
@@ -20,7 +22,7 @@ export class World {
     this.createSupplies();
     this.createLandmarks();
   }
-  private texture(kind: 'soil' | 'bark' | 'concrete' | 'brick' | 'leaf'): THREE.CanvasTexture {
+  private texture(kind: 'soil' | 'bark' | 'concrete' | 'brick' | 'leaf' | 'grass' | 'road'): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
@@ -29,24 +31,65 @@ export class World {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
       return seed / 4294967296;
     };
-    if (kind === 'leaf') {
-      for (let i = 0; i < 45; i++) {
-        const x = 30 + rand() * 196,
-          y = 15 + rand() * 220;
-        ctx.fillStyle = `rgb(${55 + rand() * 35},${70 + rand() * 40},${42 + rand() * 25})`;
+    if (kind === 'grass') {
+      for (let i = 0; i < 40; i++) {
+        const base = 12 + rand() * 232,
+          tip = base + (rand() - 0.5) * 62,
+          height = 50 + rand() * 180;
+        ctx.fillStyle = `rgb(${68 + rand() * 40},${80 + rand() * 42},${39 + rand() * 25})`;
         ctx.beginPath();
-        ctx.ellipse(x, y, 9 + rand() * 13, 3 + rand() * 6, rand() * 6.28, 0, Math.PI * 2);
+        ctx.moveTo(base, 256);
+        ctx.quadraticCurveTo(base - 7, 256 - height * 0.55, tip, 256 - height);
+        ctx.quadraticCurveTo(base + 8, 256 - height * 0.35, base + 3, 256);
         ctx.fill();
-        ctx.strokeStyle = '#79805b';
-        ctx.lineWidth = 0.6;
+      }
+    } else if (kind === 'leaf') {
+      // Branches connect the leaves, replacing the earlier floating-ellipse pattern.
+      ctx.strokeStyle = '#615c42';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(128, 256);
+      ctx.quadraticCurveTo(120, 130, 127, 12);
+      ctx.stroke();
+      for (let branch = 0; branch < 13; branch++) {
+        const side = branch % 2 ? 1 : -1,
+          startY = 235 - branch * 15,
+          endX = 128 + side * (40 + rand() * 63),
+          endY = startY - 42 - rand() * 25;
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.moveTo(x - 9, y);
-        ctx.lineTo(x + 9, y);
+        ctx.moveTo(125, startY);
+        ctx.quadraticCurveTo((125 + endX) / 2, startY - 10, endX, endY);
         ctx.stroke();
+        for (let k = 0; k < 12; k++) {
+          const t = 0.13 + k * 0.075,
+            x = 125 + (endX - 125) * t + (rand() - 0.5) * 22,
+            y = startY + (endY - startY) * t + (rand() - 0.5) * 19;
+          const angle = side * 0.65 + (rand() - 0.5) * 1.1;
+          ctx.fillStyle = `rgb(${60 + rand() * 38},${82 + rand() * 46},${35 + rand() * 27})`;
+          ctx.beginPath();
+          ctx.ellipse(x, y, 5 + rand() * 5, 2 + rand() * 2, angle, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#7c8957';
+          ctx.lineWidth = 0.4;
+          ctx.beginPath();
+          ctx.moveTo(x - 5 * Math.cos(angle), y - 5 * Math.sin(angle));
+          ctx.lineTo(x + 5 * Math.cos(angle), y + 5 * Math.sin(angle));
+          ctx.stroke();
+          ctx.strokeStyle = '#615c42';
+        }
       }
     } else {
       ctx.fillStyle =
-        kind === 'soil' ? '#a6a18c' : kind === 'bark' ? '#60574b' : kind === 'brick' ? '#796759' : '#9b9a8e';
+        kind === 'road'
+          ? '#75766b'
+          : kind === 'soil'
+            ? '#b4ae96'
+            : kind === 'bark'
+              ? '#60574b'
+              : kind === 'brick'
+                ? '#796759'
+                : '#9b9a8e';
       ctx.fillRect(0, 0, 256, 256);
       for (let i = 0; i < 18000; i++) {
         const n = rand() * 100;
@@ -60,6 +103,15 @@ export class World {
           kind === 'bark' ? rand() * 60 : 1 + rand() * 3,
         );
       }
+      if (kind === 'soil')
+        for (let i = 0; i < 100; i++) {
+          const x = rand() * 256,
+            y = rand() * 256;
+          ctx.fillStyle = `rgba(${65 + rand() * 45},${55 + rand() * 30},${28 + rand() * 20},.45)`;
+          ctx.beginPath();
+          ctx.ellipse(x, y, 2 + rand() * 5, 1 + rand() * 2, rand() * 6.28, 0, Math.PI * 2);
+          ctx.fill();
+        }
       if (kind === 'brick') {
         ctx.strokeStyle = '#4b4b43';
         ctx.lineWidth = 3;
@@ -135,19 +187,62 @@ export class World {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     const ground = this.mesh(
       geometry,
-      new THREE.MeshStandardMaterial({ map, bumpMap: map, bumpScale: 0.12, roughness: 0.96, vertexColors: true }),
+      new THREE.MeshStandardMaterial({ map, bumpMap: map, bumpScale: 0.025, roughness: 0.96, vertexColors: true }),
       0,
       -0.025,
       0,
     );
     ground.castShadow = false;
-    // Soft relief beyond the navigable sector, leaving gameplay on a predictable plane.
-    const hillMat = new THREE.MeshStandardMaterial({ color: 0x4d5d51, roughness: 1 });
-    for (let i = 0; i < 18; i++) {
-      const a = (i / 18) * Math.PI * 2;
-      const hill = this.mesh(new THREE.SphereGeometry(1, 20, 12), hillMat, Math.cos(a) * 133, 0, Math.sin(a) * 133);
-      hill.scale.set(27, 12 + Math.sin(i * 4) * 7, 24);
-      hill.castShadow = false;
+    // A continuous ridgeline replaces the obvious sphere-shaped background hills.
+    const mountains = new THREE.PlaneGeometry(430, 430, 90, 90);
+    mountains.rotateX(-Math.PI / 2);
+    const points = mountains.getAttribute('position'),
+      tints = [];
+    const tint = new THREE.Color();
+    for (let i = 0; i < points.count; i++) {
+      const x = points.getX(i),
+        z = points.getZ(i),
+        r = Math.max(Math.abs(x), Math.abs(z));
+      const ramp = THREE.MathUtils.smoothstep(r, 94, 142);
+      const ridge = 9 + Math.abs(Math.sin(x * 0.024 + z * 0.017)) * 18 + Math.sin(x * 0.057) * Math.cos(z * 0.046) * 7;
+      const height = ramp * ridge;
+      points.setY(i, height - 0.12);
+      tint.setHSL(0.22, 0.13, 0.29 + height * 0.002);
+      tints.push(tint.r, tint.g, tint.b);
+    }
+    mountains.setAttribute('color', new THREE.Float32BufferAttribute(tints, 3));
+    mountains.computeVertexNormals();
+    const mountain = this.mesh(
+      mountains,
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }),
+      0,
+      -0.12,
+      0,
+    );
+    mountain.castShadow = false;
+    // The settlement's worn asphalt is distinct from the forest's dirt path.
+    const roadMap = this.texture('road');
+    roadMap.repeat.set(3, 22);
+    const road = this.mesh(
+      new THREE.PlaneGeometry(7.5, 56),
+      new THREE.MeshStandardMaterial({
+        map: roadMap,
+        bumpMap: roadMap,
+        bumpScale: 0.018,
+        roughness: 0.94,
+        color: 0x909183,
+      }),
+      0,
+      0.003,
+      -56,
+    );
+    road.rotation.x = -Math.PI / 2;
+    road.castShadow = false;
+    const paint = new THREE.MeshStandardMaterial({ color: 0xaca47a, roughness: 1, transparent: true, opacity: 0.45 });
+    for (let z = -32; z > -80; z -= 6) {
+      const dash = this.mesh(new THREE.PlaneGeometry(0.1, 1.7), paint, 0, 0.008, z);
+      dash.rotation.x = -Math.PI / 2;
+      dash.castShadow = false;
     }
     const pebbleGeo = new THREE.IcosahedronGeometry(0.13, 1);
     const mat = new THREE.MeshStandardMaterial({ color: 0x77786c, roughness: 1 });
@@ -170,7 +265,11 @@ export class World {
     const bark = this.texture('bark');
     bark.repeat.set(1, 3);
     const leaf = this.texture('leaf');
-    const branches=new THREE.InstancedMesh(new THREE.CylinderGeometry(.035,.10,2.8,6),new THREE.MeshStandardMaterial({map:bark,roughness:1}),TREES.length*5);
+    const branches = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.035, 0.1, 2.8, 6),
+      new THREE.MeshStandardMaterial({ map: bark, roughness: 1 }),
+      TREES.length * 5,
+    );
     const trunks = new THREE.InstancedMesh(
       new THREE.CylinderGeometry(0.18, 0.34, 7.5, 9),
       new THREE.MeshStandardMaterial({ map: bark, bumpMap: bark, bumpScale: 0.08, roughness: 1 }),
@@ -178,7 +277,13 @@ export class World {
     );
     const foliage = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(5.3, 6),
-      new THREE.MeshStandardMaterial({ map: leaf, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }),
+      new THREE.MeshStandardMaterial({
+        map: leaf,
+        alphaTest: 0.4,
+        alphaToCoverage: true,
+        side: THREE.DoubleSide,
+        roughness: 1,
+      }),
       TREES.length * 5,
     );
     const d = new THREE.Object3D();
@@ -190,9 +295,16 @@ export class World {
       d.updateMatrix();
       trunks.setMatrixAt(i, d.matrix);
       for (let j = 0; j < 5; j++) {
-        const angle=j*2.4+i;
-        d.position.set(t.x+Math.sin(angle)*.7*t.size,(4.8+j*.55)*t.size,t.z+Math.cos(angle)*.7*t.size);
-        d.rotation.set(Math.cos(angle)*1.05,0,-Math.sin(angle)*1.05);d.scale.setScalar(t.size);d.updateMatrix();branches.setMatrixAt(i*5+j,d.matrix);
+        const angle = j * 2.4 + i;
+        d.position.set(
+          t.x + Math.sin(angle) * 0.7 * t.size,
+          (4.8 + j * 0.55) * t.size,
+          t.z + Math.cos(angle) * 0.7 * t.size,
+        );
+        d.rotation.set(Math.cos(angle) * 1.05, 0, -Math.sin(angle) * 1.05);
+        d.scale.setScalar(t.size);
+        d.updateMatrix();
+        branches.setMatrixAt(i * 5 + j, d.matrix);
         d.position.set(t.x + Math.sin(j * 2.3) * t.size, (5 + j * 0.55) * t.size, t.z + Math.cos(j * 2.3) * t.size);
         d.rotation.set(j * 0.32, j * 2.4 + i, j * 0.11);
         d.scale.set(1.1 * t.size, (0.7 + (j % 2) * 0.2) * t.size, t.size);
@@ -206,16 +318,20 @@ export class World {
     trunks.receiveShadow = true;
     foliage.castShadow = true;
     foliage.receiveShadow = true;
+    this.applyWind(foliage);
     trunks.computeBoundingSphere();
     foliage.computeBoundingSphere();
-    branches.castShadow=true;branches.receiveShadow=true;branches.computeBoundingSphere();
+    branches.castShadow = true;
+    branches.receiveShadow = true;
+    branches.computeBoundingSphere();
     this.scene.add(trunks, foliage, branches);
     // Crossing textured grass cards replace the former solid triangular plants.
     const grass = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(0.9, 0.7),
       new THREE.MeshStandardMaterial({
-        map: leaf,
-        alphaTest: 0.5,
+        map: this.texture('grass'),
+        alphaTest: 0.4,
+        alphaToCoverage: true,
         side: THREE.DoubleSide,
         color: 0x81865c,
         roughness: 1,
@@ -232,8 +348,56 @@ export class World {
       grass.setMatrixAt(i, d.matrix);
     }
     grass.receiveShadow = true;
+    this.applyWind(grass);
     grass.computeBoundingSphere();
     this.scene.add(grass);
+    const undergrowth = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.7, 1.5), foliage.material, 900);
+    for (let i = 0; i < 900; i++) {
+      const x = Math.sin(i * 531.6) * 86,
+        z = Math.cos(i * 214.7) * 86;
+      const clearing = Math.abs(x) < 6 || (Math.abs(x) < 30 && z < -29) || Math.hypot(x + 48, z + 28) < 13;
+      d.position.set(x, clearing ? -2 : 0.6, z);
+      d.rotation.set(0.12 * Math.sin(i), i * 2.4, 0);
+      d.scale.setScalar(0.6 + (i % 5) * 0.2);
+      d.updateMatrix();
+      undergrowth.setMatrixAt(i, d.matrix);
+    }
+    undergrowth.receiveShadow = true;
+    undergrowth.castShadow = true;
+    undergrowth.computeBoundingSphere();
+    this.applyWind(undergrowth);
+    this.scene.add(undergrowth);
+  }
+  update(dt: number): void {
+    this.windTime.value += dt;
+  }
+  private applyWind(mesh: THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>): void {
+    const patch = (shader: Parameters<THREE.Material['onBeforeCompile']>[0]) => {
+      shader.uniforms.fieldWindTime = this.windTime;
+      shader.vertexShader = 'uniform float fieldWindTime;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+        float breeze = fieldWindTime * 1.45 + instanceMatrix[3].x * 0.075 + instanceMatrix[3].z * 0.052;
+        transformed.x += sin(breeze + uv.y * 1.3) * uv.y * uv.y * 0.10;
+        transformed.z += cos(breeze * 0.8) * uv.y * uv.y * 0.055;
+        #endif
+      `,
+      );
+    };
+    mesh.material.onBeforeCompile = patch;
+    mesh.material.customProgramCacheKey = () => 'field-wind-v1';
+    const depth = new THREE.MeshDepthMaterial({
+      map: mesh.material.map,
+      alphaTest: mesh.material.alphaTest,
+      side: THREE.DoubleSide,
+      depthPacking: THREE.RGBADepthPacking,
+    });
+    depth.onBeforeCompile = patch;
+    depth.customProgramCacheKey = () => 'field-depth-wind-v1';
+    mesh.customDepthMaterial = depth;
+    this.depthMaterials.push(depth);
   }
   private createTown(): void {
     const brick = this.texture('brick');
@@ -263,6 +427,21 @@ export class World {
           const board = this.mesh(new THREE.BoxGeometry(1.65, 0.18, 0.12), timber, x, 2.3, z + side * 0.08);
           board.rotation.z = k % 2 ? 0.24 : -0.3;
         }
+      const front = b.z + b.d / 2 + 0.08;
+      this.mesh(new THREE.BoxGeometry(1.1, 2.15, 0.08), timber, b.x, 1.075, front);
+      this.mesh(new THREE.BoxGeometry(1.35, 0.18, 0.35), plaster, b.x, 2.28, front + 0.1);
+      this.mesh(new THREE.BoxGeometry(1.45, 0.16, 0.65), plaster, b.x, 0.08, front + 0.24);
+      this.mesh(new THREE.BoxGeometry(0.045, 0.045, 0.05), roof, b.x + 0.35, 1.05, front + 0.055);
+      for (const side of [-1, 1]) {
+        const gutter = this.mesh(
+          new THREE.CylinderGeometry(0.06, 0.06, b.h, 8),
+          roof,
+          b.x + side * (b.w / 2 - 0.15),
+          b.h / 2,
+          front,
+        );
+        gutter.castShadow = false;
+      }
       for (let k = 0; k < 8; k++) {
         const vine = this.mesh(
           new THREE.SphereGeometry(0.6, 7, 5),
@@ -419,5 +598,6 @@ export class World {
   }
   dispose(): void {
     for (const texture of this.textures) texture.dispose();
+    for (const material of this.depthMaterials) material.dispose();
   }
 }

@@ -2,6 +2,7 @@ import { progressStore } from './ProgressStore';
 import { Firearms } from './Firearms';
 import { Collection, type CollectionState } from './Collection';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { SceneEffects } from './SceneEffects';
 import {
   CREATURES,
   SPECIES_IDS,
@@ -45,6 +46,8 @@ import {
 
 export class Game {
   private readonly scene = new THREE.Scene();
+  private effects: SceneEffects | null = null;
+  private cinematic = false;
   private environmentMap: THREE.Texture | null = null;
   private readonly sun = new THREE.DirectionalLight(0xffead2, 3.1);
   private readonly firearms: Firearms;
@@ -54,6 +57,7 @@ export class Game {
   private readonly aimRay = new THREE.Raycaster();
   private collectionSignature = '';
   private aiming = false;
+  private recoilOffset = 0;
   private evolutionTime = 0;
   private encounterRelocateTime = 0;
   private readonly camera = new THREE.PerspectiveCamera(58, 1, 0.1, 350);
@@ -181,7 +185,7 @@ export class Game {
     this.player = new Player(this.scene);
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
     this.companion = new Companion(this.scene);
-    this.firearms = new Firearms(this.scene, this.player.root);
+    this.firearms = new Firearms(this.scene, this.player);
     this.collection = new Collection(this.progression.state);
     this.recoveringBond = progressStore.getItem(this.bondRetreatKey) === '1';
     for (const id of SPECIES_IDS) {
@@ -286,7 +290,7 @@ export class Game {
     this.scene.environment = this.environmentMap;
     this.scene.environmentIntensity = 0.35;
     pmrem.dispose();
-    this.scene.add(new THREE.HemisphereLight(0xc9d8df, 0x545044, 1.25));
+    this.scene.add(new THREE.HemisphereLight(0xc4d0dc, 0x494739, 0.78));
     const sun = this.sun;
     sun.position.set(-25, 35, 18);
     sun.castShadow = true;
@@ -321,7 +325,7 @@ export class Game {
     if (!this.running) return;
     if (!this.fieldEntered) {
       this.clock.getDelta(); // Do not accumulate a large first gameplay frame.
-      this.renderer.render(this.scene, this.camera);
+      this.renderScene();
       return;
     }
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
@@ -339,10 +343,11 @@ export class Game {
     // Low-strain resting is a deliberate choice, not an unlimited damage-free pulse.
     if (this.companion.isBound()) this.bondStrain = Math.max(0, this.bondStrain - deltaSeconds * 2.5);
     this.damageFlashTimer = Math.max(0, this.damageFlashTimer - deltaSeconds);
+    this.recoilOffset *= Math.exp(-9 * deltaSeconds);
 
     const mouse = this.input.consumeMouseDelta();
     this.cameraYaw -= mouse.x * 0.0024;
-    this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + mouse.y * 0.0018, -0.18, 0.72);
+    this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + mouse.y * 0.0018, -0.65, 0.95);
 
     const axes = this.input.getMovementAxes();
     const forward = new THREE.Vector3(-Math.sin(this.cameraYaw), 0, -Math.cos(this.cameraYaw));
@@ -353,6 +358,13 @@ export class Game {
 
     this.aiming = this.input.isAiming() && this.player.getHealth() > 0;
     this.player.aiming = this.aiming;
+    this.player.aimPitch = this.cameraPitch;
+    this.player.weapon = this.firearms.selected;
+    const gunState = this.firearms.arsenal[this.firearms.selected];
+    this.player.reloading = gunState.reloadAt > Date.now();
+    this.player.reloadProgress = this.player.reloading
+      ? THREE.MathUtils.clamp(1 - (gunState.reloadAt - Date.now()) / WEAPONS[this.firearms.selected].reload, 0, 1)
+      : 0;
     this.player.aimYaw = this.cameraYaw;
     this.firearms.aiming = this.aiming;
     this.player.update(movement, deltaSeconds, !this.aiming && this.input.isSprinting(), this.world);
@@ -362,6 +374,7 @@ export class Game {
     const pressed = this.input.consumeFirePressed();
     if (pressed || (WEAPONS[this.firearms.selected].automatic && this.input.isFiring())) this.handleShooting();
     this.firearms.update(deltaSeconds);
+    this.world.update(deltaSeconds);
     this.updateWildCreatures(deltaSeconds);
     this.syncCollectionVisuals();
     if (this.multiplayer.connected) {
@@ -369,10 +382,18 @@ export class Game {
       if (this.networkTimer >= 0.065) {
         this.networkTimer = 0;
         const pos = this.player.getPosition();
-        this.multiplayer.send('move', { x: pos.x, z: pos.z, yaw: this.player.root.rotation.y });
+        this.multiplayer.send('move', {
+          x: pos.x,
+          z: pos.z,
+          yaw: this.player.root.rotation.y,
+          aiming: this.aiming,
+          pitch: this.cameraPitch,
+          weapon: this.firearms.selected,
+          sprinting: this.input.isSprinting() && !this.aiming,
+        });
       }
       this.multiplayer.updateVisuals();
-      this.coopVisuals.updatePlayers(this.multiplayer.peers);
+      this.coopVisuals.updatePlayers(this.multiplayer.peers, deltaSeconds);
       if (this.roomStatus && this.multiplayer.code)
         this.roomStatus.textContent = `Room ${this.multiplayer.code} · ${this.multiplayer.peers.size + 1}/4 players`;
       this.syncRoomZombie(deltaSeconds);
@@ -431,7 +452,7 @@ export class Game {
       this.zombie.isDead() ? null : this.zombie.getPosition(),
       this.player.root.rotation.y,
     );
-    this.renderer.render(this.scene, this.camera);
+    this.renderScene();
   };
 
   private readonly handleAbilityClick = (): void => {
@@ -480,6 +501,7 @@ export class Game {
     if (event.type === 'arsenal') {
       this.firearms.arsenal = event.arsenal;
     } else if (event.type === 'shot') {
+      if (event.by !== this.multiplayer.id) this.coopVisuals.triggerShot(event.by, event.weapon || 'pistol');
       if (event.by !== this.multiplayer.id)
         this.firearms.effect(
           new THREE.Vector3(event.origin.x, event.origin.y, event.origin.z),
@@ -592,7 +614,10 @@ export class Game {
   }
 
   private readonly handleGraphicsQuality = (event: Event): void => {
-    const low = (event.target as HTMLSelectElement).value === 'low';
+    const quality = (event.target as HTMLSelectElement).value;
+    const low = quality === 'low';
+    this.cinematic = quality === 'cinematic';
+    if (this.cinematic && !this.effects) this.effects = new SceneEffects(this.renderer, this.scene, this.camera);
     this.renderer.shadowMap.enabled = !low;
     this.renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
     this.resize();
@@ -718,8 +743,14 @@ export class Game {
     origin.y = 1.32;
     const direction = aimPoint.sub(origin).normalize();
     if (!this.firearms.tryFire()) return;
+    this.recoilOffset += this.firearms.selected === 'rifle' ? 0.009 : 0.022;
     const hit = !this.zombie.isDead() ? shotDistance(origin, direction, this.zombie.getPosition(), weapon.range) : null;
-    this.firearms.effect(origin, direction, hit ?? weapon.range);
+    const visualOrigin = this.firearms.muzzle();
+    const visualTarget = origin
+      .clone()
+      .addScaledVector(direction, hit ?? obstacleDistance(origin, direction, weapon.range));
+    const visualDirection = visualTarget.sub(visualOrigin);
+    this.firearms.effect(visualOrigin, visualDirection.clone().normalize(), visualDirection.length());
     if (this.multiplayer.connected)
       this.multiplayer.send('shoot', {
         weapon: this.firearms.selected,
@@ -1034,10 +1065,11 @@ export class Game {
   private updateCamera(deltaSeconds: number): void {
     const playerPosition = this.player.getPosition();
     const distance = this.aiming ? 3.0 : 5.8;
+    const pitch = this.cameraPitch - this.recoilOffset;
     const forward = new THREE.Vector3(
-      -Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch),
-      -Math.sin(this.cameraPitch),
-      -Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch),
+      -Math.sin(this.cameraYaw) * Math.cos(pitch),
+      -Math.sin(pitch),
+      -Math.cos(this.cameraYaw) * Math.cos(pitch),
     );
     const right = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
     const anchor = playerPosition.clone().add(new THREE.Vector3(0, 1.65, 0));
@@ -1048,6 +1080,13 @@ export class Game {
     const safe = this.world.cameraDistance(anchor, offset.clone().normalize(), offset.length());
     const desired = anchor.clone().addScaledVector(offset.normalize(), Math.max(0.25, safe - 0.25));
     this.camera.position.lerp(desired, 1 - Math.exp(-14 * Math.max(deltaSeconds, 0)));
+    const smoothedOffset = this.camera.position.clone().sub(anchor),
+      smoothedDistance = smoothedOffset.length();
+    if (smoothedDistance > 0.001) {
+      const allowed = this.world.cameraDistance(anchor, smoothedOffset.clone().normalize(), smoothedDistance);
+      if (allowed < smoothedDistance)
+        this.camera.position.copy(anchor).addScaledVector(smoothedOffset.normalize(), Math.max(0.08, allowed - 0.18));
+    }
     this.camera.lookAt(this.camera.position.clone().addScaledVector(forward, 50));
     const fov = this.aiming ? 43 : 62;
     this.camera.fov = THREE.MathUtils.damp(this.camera.fov, fov, 10, deltaSeconds);
@@ -1202,12 +1241,18 @@ export class Game {
     this.extractionBeacon.visible = !coOp || !!this.roomMission?.ready;
   }
 
+  private renderScene(): void {
+    if (this.cinematic && this.effects) this.effects.render();
+    else this.renderer.render(this.scene, this.camera);
+  }
+
   private resize(): void {
     const width = Math.max(1, this.viewport.clientWidth);
     const height = Math.max(1, this.viewport.clientHeight);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
+    this.effects?.resize(width, height, this.renderer.getPixelRatio());
   }
 
   dispose(): void {
@@ -1246,6 +1291,7 @@ export class Game {
     for (const wild of this.wildCreatures.values()) wild.dispose();
     document.querySelector('#creature-roster')?.removeEventListener('click', this.handleRosterClick);
     document.querySelector('#graphics-quality')?.removeEventListener('change', this.handleGraphicsQuality);
+    this.effects?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
     document.body.classList.remove('is-pointer-locked');

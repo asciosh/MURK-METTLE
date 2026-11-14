@@ -1,6 +1,7 @@
 // Cloudflare Durable Object — shared four-player session state.
 // This is an authoritative combat prototype, not yet an account/inventory server.
 import { DurableObject } from 'cloudflare:workers';
+import { sanitizeActorPose } from '../../shared/actor-pose.mjs';
 import {
   WORLD_BOUNDARY,
   CREATURES,
@@ -81,6 +82,7 @@ export class GameRoom extends DurableObject {
           messageAt: 0,
           arsenal: data.arsenal || newArsenal(),
           supplies: data.supplies || {},
+          pose: sanitizeActorPose(data.pose),
           collection: data.collection || null,
           upgrades: { sharpened: false, balanced: false },
           creatureOwned: data.creatureOwned === true,
@@ -117,6 +119,7 @@ export class GameRoom extends DurableObject {
       messageAt: 0,
       arsenal: newArsenal(),
       supplies: {},
+      pose: sanitizeActorPose(),
     };
     this.players.set(server, player);
     this.saveAttachment(server, player);
@@ -167,6 +170,7 @@ export class GameRoom extends DurableObject {
       collection: player.collection,
       arsenal: player.arsenal,
       supplies: player.supplies,
+      pose: player.pose,
     });
   }
 
@@ -279,6 +283,7 @@ export class GameRoom extends DurableObject {
       player.z = msg.z;
       player.yaw = msg.yaw;
       player.lastMove = now;
+      player.pose = sanitizeActorPose(msg);
       this.saveAttachment(socket, player);
       return;
     }
@@ -415,11 +420,13 @@ export class GameRoom extends DurableObject {
         this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
         return;
       }
+      player.pose = { ...sanitizeActorPose(player.pose), weapon: msg.weapon };
       const hit = zombie.hp > 0 ? shotDistance(origin, d, zombie, weapon.range) : null;
       this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
       this.saveAttachment(socket, player);
       this.broadcast({
         type: 'shot',
+        weapon: msg.weapon,
         by: player.id,
         origin,
         direction: d,
@@ -574,6 +581,12 @@ export class GameRoom extends DurableObject {
         z: p.z,
         yaw: p.yaw,
         hp: p.hp,
+        ...sanitizeActorPose(p.pose),
+        reloadProgress: (() => {
+          const weapon = p.pose?.weapon || 'pistol';
+          const end = p.arsenal[weapon].reloadAt;
+          return end > now ? Math.max(0.001, Math.min(1, 1 - (end - now) / WEAPONS[weapon].reload)) : 0;
+        })(),
         creatureOwned: p.creatureOwned === true,
         species: p.collection?.active || 'lanternkin',
         creatureXp: p.collection?.creatures[p.collection.active]?.xp || 0,
