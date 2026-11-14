@@ -17,6 +17,8 @@ export class Companion {
   private readonly tails: { mesh: THREE.Mesh; rest: number }[] = [];
   private readonly legs: { mesh: THREE.Mesh; phase: number }[] = [];
   private gaitBlend = 0;
+  private readonly petals: { mesh: THREE.Mesh; x: number; z: number }[] = [];
+  private readonly luminous = new Set<THREE.MeshStandardMaterial>();
   speciesId: SpeciesId = 'lanternkin';
   constructor(
     private readonly scene: THREE.Scene,
@@ -44,6 +46,8 @@ export class Companion {
   }
   private clearVisual(): void {
     this.wings.length = 0;
+    this.petals.length = 0;
+    this.luminous.clear();
     this.tails.length = 0;
     this.legs.length = 0;
     this.visual.traverse((o) => {
@@ -62,7 +66,11 @@ export class Companion {
     this.stage = stage;
     this.clearVisual();
     const def = CREATURES[species];
-    const body = new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.82, metalness: 0.04 });
+    const body = new THREE.MeshStandardMaterial({
+      color: def.color,
+      roughness: 0.82,
+      metalness: 0.04,
+    });
     const dark = new THREE.MeshStandardMaterial({
       color: species === 'emberling' ? 0x3e342e : 0x344d43,
       roughness: 0.95,
@@ -83,7 +91,9 @@ export class Companion {
       sy = 1,
       sz = 1,
     ) => {
-      const m = new THREE.Mesh(geo, mat.clone());
+      const material = mat.clone();
+      if (mat === glow) this.luminous.add(material as THREE.MeshStandardMaterial);
+      const m = new THREE.Mesh(geo, material);
       m.position.set(x, y, z);
       m.scale.set(sx, sy, sz);
       m.castShadow = true;
@@ -95,6 +105,11 @@ export class Companion {
     if (species === 'lanternkin') {
       add(new THREE.SphereGeometry(0.35, 24, 16), body, 0, 0, 0, 0.85, 1.2, 0.8);
       add(new THREE.SphereGeometry(0.21, 20, 14), glow, 0, -0.01, -0.18, 0.8, 1, 0.5);
+      // Dark eyes keep the face legible against its luminous chest.
+      for (const side of [-1, 1]) {
+        add(new THREE.SphereGeometry(0.046, 10, 8), dark, side * 0.1, 0.29, -0.34, 0.75, 1, 0.45);
+        add(new THREE.SphereGeometry(0.013, 8, 6), glow, side * 0.1 - 0.01, 0.305, -0.361);
+      }
       for (let i = 0; i < 6 + stage * 3; i++) {
         const a = (i / (6 + stage * 3)) * Math.PI * 2;
         const leaf = add(
@@ -109,6 +124,11 @@ export class Companion {
         );
         leaf.rotation.z = -Math.cos(a) * 0.6;
         leaf.rotation.x = Math.sin(a) * 0.6;
+        this.petals.push({
+          mesh: leaf,
+          x: leaf.rotation.x,
+          z: leaf.rotation.z,
+        });
       }
       for (const s of [-1, 1]) {
         const antler = add(new THREE.CylinderGeometry(0.012, 0.035, 0.5 + stage * 0.18, 7), dark, s * 0.18, 0.55, 0);
@@ -124,7 +144,10 @@ export class Companion {
         ear.rotation.z = s * 0.25;
         for (const z of [-0.25, 0.28]) {
           const leg = add(new THREE.CapsuleGeometry(0.07, 0.22, 5, 8), dark, s * 0.21, -0.3, z);
-          this.legs.push({ mesh: leg, phase: (z > 0 ? Math.PI : 0) + (s > 0 ? Math.PI : 0) });
+          this.legs.push({
+            mesh: leg,
+            phase: (z > 0 ? Math.PI : 0) + (s > 0 ? Math.PI : 0),
+          });
         }
         add(new THREE.SphereGeometry(0.035, 12, 8), glow, s * 0.16, 0.27, -0.57);
         if (stage > 0) {
@@ -143,7 +166,10 @@ export class Companion {
       for (const side of [-1, 1]) {
         for (const z of [-0.29, 0.34]) {
           const leg = add(new THREE.CapsuleGeometry(0.095, 0.12, 5, 10), body, side * 0.34, -0.28, z);
-          this.legs.push({ mesh: leg, phase: (z > 0 ? Math.PI : 0) + (side > 0 ? Math.PI : 0) });
+          this.legs.push({
+            mesh: leg,
+            phase: (z > 0 ? Math.PI : 0) + (side > 0 ? Math.PI : 0),
+          });
         }
         add(new THREE.SphereGeometry(0.03, 12, 8), glow, side * 0.13, 0.01, -0.69);
         for (let i = 0; i < 2 + stage; i++) {
@@ -298,6 +324,16 @@ export class Companion {
   private animateParts(dt: number, walking: boolean): void {
     this.elapsed += dt;
     this.pulseTime = Math.max(0, this.pulseTime - dt);
+    const pulse = this.pulseTime > 0 ? Math.sin((1 - this.pulseTime / 0.65) * Math.PI) : 0;
+    for (const [i, petal] of this.petals.entries()) {
+      const breath = Math.sin(this.elapsed * 2.3 + i * 0.35) * 0.04 + pulse * 0.3;
+      petal.mesh.rotation.x = petal.x * (1 + breath);
+      petal.mesh.rotation.z = petal.z * (1 + breath);
+    }
+    for (const material of this.luminous)
+      material.emissiveIntensity = 0.65 + Math.sin(this.elapsed * 2.3) * 0.1 + pulse * 1.2;
+    const size = (1 + this.stage * 0.28) * (1 + pulse * 0.09);
+    this.visual.scale.set(size * (1 + pulse * 0.04), size, size * (1 + pulse * 0.04));
     this.gaitBlend = THREE.MathUtils.damp(this.gaitBlend, walking ? 1 : 0, 7, dt);
     for (const wing of this.wings)
       wing.pivot.rotation.z =

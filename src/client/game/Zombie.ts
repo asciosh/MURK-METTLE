@@ -1,3 +1,4 @@
+import { batchRigidParts } from './ActorGeometry';
 import { solveLeg, footCycle } from '../../../shared/actor-motion.mjs';
 import * as THREE from 'three';
 import type { World } from './World';
@@ -87,11 +88,15 @@ export class Zombie {
   private readonly bodyMaterial = this.surfaces.material('skin');
   private readonly shirtMaterial = this.surfaces.material('fabric', 0x85877e, 3);
   private readonly darkMaterial = this.surfaces.material('fabric', 0x62635d, 3);
-  private readonly eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x9a9b83, roughness: 0.35 });
+  private readonly eyeMaterial = new THREE.MeshStandardMaterial({
+    color: 0x9a9b83,
+    roughness: 0.35,
+  });
   private readonly modelVisual = new THREE.Group();
   private readonly animator = new ActorAnimator(this.root);
   private leftLeg!: THREE.Group;
   private rightLeg!: THREE.Group;
+  private readonly elbows: THREE.Group[] = [];
   private readonly knees: THREE.Group[] = [];
   private readonly feet: THREE.Group[] = [];
   private visualMove = 0;
@@ -108,6 +113,7 @@ export class Zombie {
   private attackCooldown = 0.6;
   private animationClock = 0;
   private hitFlashTime = 0;
+  private appearance = 0;
   private readonly warningRing: THREE.Mesh;
 
   constructor(
@@ -130,8 +136,13 @@ export class Zombie {
     this.root.scale.set(...profile.scale);
     this.root.position.copy(position);
     this.root.add(this.modelVisual);
+    this.appearance = Math.abs(Math.floor((mutationSeed ?? 0) * 13 + position.x * 7 + position.z * 11)) % 4;
+    this.animationClock = this.appearance * 1.37;
+    this.shirtMaterial.color.setHex([0x67776c, 0x8a7563, 0x5f6c7b, 0x7e7a66][this.appearance]);
+    this.bodyMaterial.color.offsetHSL(0, -this.appearance * 0.025, -this.appearance * 0.018);
     this.createModel();
     this.addMutationDetails(mutationSeed);
+    batchRigidParts(this.modelVisual, new Set());
 
     this.warningRing = new THREE.Mesh(
       new THREE.RingGeometry(0.68, 0.76, 32),
@@ -221,6 +232,9 @@ export class Zombie {
     );
     hair.scale.set(0.81, 1.12, 0.85);
     hair.rotation.z = -0.13;
+    hair.visible = this.appearance !== 1;
+    head.scale.x *= 1 + this.appearance * 0.035;
+    jaw.rotation.z = (this.appearance - 1.5) * 0.07;
     for (const [side, pivot] of [
       [-1, this.leftArm],
       [1, this.rightArm],
@@ -229,17 +243,21 @@ export class Zombie {
       pivot.rotation.z = side * 0.09;
       const sleeve = add(new THREE.CapsuleGeometry(0.084, 0.2, 6, 12), this.shirtMaterial, 0, -0.16, 0, pivot);
       sleeve.rotation.x = -0.13;
-      const arm = add(new THREE.CapsuleGeometry(0.062, 0.23, 6, 12), this.bodyMaterial, 0, -0.43, -0.05, pivot);
+      const elbow = new THREE.Group();
+      elbow.position.set(0, -0.31, -0.025);
+      pivot.add(elbow);
+      this.elbows.push(elbow);
+      const arm = add(new THREE.CapsuleGeometry(0.062, 0.23, 6, 12), this.bodyMaterial, 0, -0.12, -0.025, elbow);
       arm.rotation.x = 0.1;
-      add(new RoundedBoxGeometry(0.09, 0.14, 0.065, 2, 0.018), this.bodyMaterial, 0, -0.63, -0.055, pivot);
+      add(new RoundedBoxGeometry(0.09, 0.14, 0.065, 2, 0.018), this.bodyMaterial, 0, -0.32, -0.03, elbow);
       for (let finger = 0; finger < 3; finger++)
         add(
           new THREE.CapsuleGeometry(0.01, 0.06, 3, 6),
           this.bodyMaterial,
           -0.028 + finger * 0.024,
-          -0.73,
-          -0.065,
-          pivot,
+          -0.42,
+          -0.04,
+          elbow,
         );
       this.modelVisual.add(pivot);
     }
@@ -281,7 +299,10 @@ export class Zombie {
 
   private addMutationDetails(seed = 0): void {
     if (this.strain !== 'barkhide' && this.strain !== 'sporeling') return;
-    const growth = new THREE.MeshStandardMaterial({ color: STRAINS[this.strain].spores, roughness: 0.98 });
+    const growth = new THREE.MeshStandardMaterial({
+      color: STRAINS[this.strain].spores,
+      roughness: 0.98,
+    });
     for (let i = 0; i < 4; i++) {
       const plate = new THREE.Mesh(new THREE.SphereGeometry(0.055 + (i % 2) * 0.025, 12, 8), growth);
       plate.position.set((i % 2 ? 1 : -1) * 0.23, 1.24 + i * 0.075, 0.03 + Math.sin(seed + i) * 0.09);
@@ -375,7 +396,8 @@ export class Zombie {
     const phase = this.animationClock * (this.strain === 'runner' ? 12 : 8),
       bob = Math.abs(Math.sin(phase)) * 0.018 * this.visualMove;
     this.modelVisual.position.y = bob - this.strikeBlend * 0.045;
-    this.modelVisual.rotation.x = 0.05 + this.visualMove * 0.06 + this.strikeBlend * 0.11;
+    this.modelVisual.rotation.x =
+      0.05 + this.visualMove * 0.06 + this.strikeBlend * 0.11 - Math.sin((this.hitFlashTime / 0.16) * Math.PI) * 0.23;
     this.modelVisual.rotation.z =
       Math.sin(phase) * 0.025 * this.visualMove + Math.sin(this.animationClock * 1.3) * 0.012;
     for (const [i, leg] of [this.leftLeg, this.rightLeg].entries()) {
@@ -387,6 +409,9 @@ export class Zombie {
       this.feet[i].rotation.x = pose.foot * this.visualMove;
     }
     const reach = this.strikeBlend;
+    this.elbows.forEach((elbow, i) => {
+      elbow.rotation.x = -0.15 - reach * (i ? 0.7 : 0.45) - Math.sin((this.hitFlashTime / 0.16) * Math.PI) * 0.5;
+    });
     this.leftArm.rotation.x = -0.35 - reach * 1.15 + Math.sin(phase + 0.4) * 0.18 * this.visualMove;
     this.rightArm.rotation.x = -0.45 - reach * 0.9 - Math.sin(phase) * 0.2 * this.visualMove;
     this.leftArm.rotation.z = -0.08 - reach * 0.12;
@@ -398,10 +423,14 @@ export class Zombie {
     this.animator.setState('death');
     this.animator.update(dt);
     const fall = THREE.MathUtils.smoothstep(progress, 0, 0.8);
-    this.modelVisual.rotation.z = -fall * 1.38;
+    this.modelVisual.rotation.z = (this.appearance % 2 ? 1 : -1) * fall * 1.38;
     this.modelVisual.rotation.x = fall * 0.14;
     this.modelVisual.position.y = -fall * 0.04;
-    this.modelVisual.position.x = fall * 0.38;
+    this.modelVisual.position.x = (this.appearance % 2 ? -1 : 1) * fall * 0.38;
+    this.leftArm.rotation.x = -0.4 - fall * 0.65;
+    this.rightArm.rotation.z = 0.1 + fall * 0.6;
+    this.knees[0].rotation.x = fall * 0.7;
+    this.knees[1].rotation.x = fall * 0.35;
     const opacity = 1 - THREE.MathUtils.smoothstep(progress, 0.72, 1);
     this.root.traverse((node) => {
       if (node instanceof THREE.Mesh) {

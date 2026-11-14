@@ -1,3 +1,7 @@
+## v0.27 compatible equipment presentation
+
+The default manifest now loads the original survivor GLB as equipment only. The pack, panel, beacon and pouch receive rounded geometry and field colors at runtime. Procedural joints retain weapon aiming, reloads, bandaging and articulated locomotion. Full-body model playback remains available for compatible assets by omitting `presentation`. See [character inspection and validation](../../docs/V0.27-CHARACTERS.md).
+
 ## v0.21 default presentation
 
 The original survivor GLB remains in this folder for compatibility and reference. Its manifest entry is disabled in v0.21 so the revised procedural survivor is visible by default. The loader still supports your own animated survivor/zombie GLBs. Companion evolution currently uses original procedural species meshes.
