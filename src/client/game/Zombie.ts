@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { World } from './World';
 import { ActorAnimator, type ModelEntry } from './AnimationController';
-import { decorateInfected } from './VisualDetail';
+import { acquireActorSurfaces, releaseActorSurfaces } from './SurfaceMaterials';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 type ZombieState = 'idle' | 'chase' | 'attack' | 'dead';
 
@@ -81,15 +82,11 @@ function randomStrain(): InfectedStrain {
 export class Zombie {
   readonly root = new THREE.Group();
 
-  private readonly bodyMaterial = new THREE.MeshStandardMaterial({
-    color: 0x64745a,
-    roughness: 0.96,
-  });
-  private readonly darkMaterial = new THREE.MeshStandardMaterial({
-    color: 0x29372c,
-    roughness: 1,
-  });
-  private readonly eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff8b58 });
+  private readonly surfaces = acquireActorSurfaces();
+  private readonly bodyMaterial = this.surfaces.material('skin');
+  private readonly shirtMaterial = this.surfaces.material('fabric', 0x85877e, 3);
+  private readonly darkMaterial = this.surfaces.material('fabric', 0x62635d, 3);
+  private readonly eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x9a9b83, roughness: 0.35 });
   private readonly modelVisual = new THREE.Group();
   private readonly animator = new ActorAnimator(this.root);
   private leftLeg!: THREE.Group;
@@ -121,16 +118,16 @@ export class Zombie {
     this.health = profile.health;
     this.movementSpeed = profile.speed;
     this.damage = profile.damage;
-    this.bodyMaterial.color.setHex(profile.skin);
+    this.bodyMaterial.color.setHex(profile.skin).lerp(new THREE.Color(0xddd2ba), 0.8);
     this.darkMaterial.color.setHex(profile.dark);
-    this.eyeMaterial.color.setHex(profile.eyes);
+    this.eyeMaterial.color.setHex(0x999784);
     this.root.name = `infected-${this.strain}`;
     this.root.scale.set(...profile.scale);
     this.root.position.copy(position);
     this.root.add(this.modelVisual);
     this.createModel();
     this.addMutationDetails(mutationSeed);
-    decorateInfected(this.modelVisual, profile.spores);
+
     this.warningRing = new THREE.Mesh(
       new THREE.RingGeometry(0.68, 0.76, 32),
       new THREE.MeshBasicMaterial({
@@ -149,103 +146,136 @@ export class Zombie {
   }
 
   private createModel(): void {
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.39, 0.76, 5, 10), this.bodyMaterial);
-    torso.position.y = 1.02;
-    torso.rotation.z = -0.11;
-    torso.castShadow = true;
-    torso.receiveShadow = true;
-    this.modelVisual.add(torso);
-
-    const chestPatch = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), this.darkMaterial);
-    chestPatch.position.set(0.18, 1.19, -0.29);
-    chestPatch.scale.set(1.1, 0.75, 0.35);
-    chestPatch.castShadow = true;
-    this.modelVisual.add(chestPatch);
-
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), this.bodyMaterial);
-    head.position.set(0.04, 1.91, -0.11);
-    head.rotation.z = -0.18;
-    head.castShadow = true;
-    this.modelVisual.add(head);
-
-    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.13, 0.22), this.darkMaterial);
-    jaw.position.set(0.04, 1.72, -0.35);
-    jaw.rotation.x = -0.16;
-    this.modelVisual.add(jaw);
-
-    for (const x of [-0.105, 0.105]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), this.eyeMaterial);
-      eye.position.set(x + 0.04, 1.94, -0.39);
-      this.modelVisual.add(eye);
+    const add = (
+      geo: THREE.BufferGeometry,
+      mat: THREE.Material,
+      x: number,
+      y: number,
+      z: number,
+      parent: THREE.Object3D = this.modelVisual,
+    ) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.castShadow = m.receiveShadow = true;
+      parent.add(m);
+      return m;
+    };
+    const profile = [
+      new THREE.Vector2(0.18, -0.34),
+      new THREE.Vector2(0.21, -0.25),
+      new THREE.Vector2(0.22, 0.0),
+      new THREE.Vector2(0.26, 0.22),
+      new THREE.Vector2(0.19, 0.34),
+      new THREE.Vector2(0.09, 0.36),
+    ];
+    const torso = add(new THREE.LatheGeometry(profile, 20), this.shirtMaterial, 0, 1.15, 0.035);
+    torso.scale.z = 0.72;
+    torso.rotation.x = 0.16;
+    torso.rotation.z = -0.07;
+    add(new THREE.CylinderGeometry(0.075, 0.09, 0.2, 12), this.bodyMaterial, 0.02, 1.57, -0.045);
+    const head = add(new THREE.SphereGeometry(0.2, 24, 18), this.bodyMaterial, 0.035, 1.82, -0.14);
+    head.scale.set(0.8, 1.12, 0.86);
+    head.rotation.z = -0.13;
+    const jaw = add(new RoundedBoxGeometry(0.23, 0.18, 0.19, 2, 0.04), this.bodyMaterial, 0.035, 1.69, -0.2);
+    jaw.rotation.x = 0.12;
+    const nose = add(new THREE.ConeGeometry(0.044, 0.12, 12), this.bodyMaterial, 0.035, 1.81, -0.321);
+    nose.rotation.x = -Math.PI / 2;
+    const mouth = add(new THREE.SphereGeometry(0.065, 14, 10), this.darkMaterial, 0.035, 1.685, -0.3);
+    mouth.scale.set(1, 0.2, 0.17);
+    for (const side of [-1, 1]) {
+      const socket = add(
+        new THREE.SphereGeometry(0.046, 14, 10),
+        this.darkMaterial,
+        0.035 + side * 0.069,
+        1.85,
+        -0.286,
+      );
+      socket.scale.set(1, 0.63, 0.42);
+      const eye = add(new THREE.SphereGeometry(0.019, 12, 8), this.eyeMaterial, 0.035 + side * 0.069, 1.85, -0.303);
+      eye.scale.z = 0.4;
+      const brow = add(
+        new THREE.CapsuleGeometry(0.023, 0.055, 4, 10),
+        this.bodyMaterial,
+        0.035 + side * 0.07,
+        1.89,
+        -0.277,
+      );
+      brow.rotation.z = side * 0.9;
+      brow.rotation.x = -0.2;
+      const ear = add(new THREE.SphereGeometry(0.043, 12, 10), this.bodyMaterial, 0.035 + side * 0.16, 1.81, -0.12);
+      ear.scale.set(0.45, 1.1, 0.7);
+      const cheek = add(new THREE.SphereGeometry(0.063, 14, 10), this.bodyMaterial, 0.035 + side * 0.09, 1.77, -0.267);
+      cheek.scale.set(0.75, 0.6, 0.45);
     }
-
-    this.leftArm.position.set(-0.43, 1.38, -0.08);
-    this.rightArm.position.set(0.43, 1.38, -0.08);
-    this.leftArm.rotation.z = -0.22;
-    this.rightArm.rotation.z = 0.22;
-    const armGeometry = new THREE.CapsuleGeometry(0.13, 0.57, 4, 8);
-    const leftArmMesh = new THREE.Mesh(armGeometry, this.bodyMaterial);
-    const rightArmMesh = new THREE.Mesh(armGeometry, this.bodyMaterial);
-    leftArmMesh.position.y = -0.31;
-    rightArmMesh.position.y = -0.31;
-    leftArmMesh.rotation.x = -0.6;
-    rightArmMesh.rotation.x = -0.6;
-    leftArmMesh.castShadow = true;
-    rightArmMesh.castShadow = true;
-    this.leftArm.add(leftArmMesh);
-    this.rightArm.add(rightArmMesh);
-    this.modelVisual.add(this.leftArm, this.rightArm);
-
-    const legGeometry = new THREE.CapsuleGeometry(0.145, 0.46, 4, 8);
+    const hair = add(
+      new THREE.SphereGeometry(0.202, 22, 16, 0, Math.PI * 2, 0, Math.PI * 0.39),
+      this.darkMaterial,
+      0.035,
+      1.83,
+      -0.13,
+    );
+    hair.scale.set(0.81, 1.12, 0.85);
+    hair.rotation.z = -0.13;
+    for (const [side, pivot] of [
+      [-1, this.leftArm],
+      [1, this.rightArm],
+    ] as const) {
+      pivot.position.set(side * 0.265, 1.42, -0.025);
+      pivot.rotation.z = side * 0.09;
+      const sleeve = add(new THREE.CapsuleGeometry(0.084, 0.2, 6, 12), this.shirtMaterial, 0, -0.16, 0, pivot);
+      sleeve.rotation.x = -0.13;
+      const arm = add(new THREE.CapsuleGeometry(0.062, 0.23, 6, 12), this.bodyMaterial, 0, -0.43, -0.05, pivot);
+      arm.rotation.x = 0.1;
+      add(new RoundedBoxGeometry(0.09, 0.14, 0.065, 2, 0.018), this.bodyMaterial, 0, -0.63, -0.055, pivot);
+      for (let finger = 0; finger < 3; finger++)
+        add(
+          new THREE.CapsuleGeometry(0.01, 0.06, 3, 6),
+          this.bodyMaterial,
+          -0.028 + finger * 0.024,
+          -0.73,
+          -0.065,
+          pivot,
+        );
+      this.modelVisual.add(pivot);
+    }
     this.leftLeg = new THREE.Group();
     this.rightLeg = new THREE.Group();
     for (const [i, pivot] of [this.leftLeg, this.rightLeg].entries()) {
-      pivot.position.set(i === 0 ? -0.19 : 0.19, 0.76, 0.025);
-      const leg = new THREE.Mesh(legGeometry, this.darkMaterial);
-      leg.position.y = -0.38;
-      leg.castShadow = true;
-      pivot.add(leg);
+      pivot.position.set(i === 0 ? -0.125 : 0.125, 0.81, 0.025);
+      add(new THREE.CapsuleGeometry(0.105, 0.21, 6, 12), this.darkMaterial, 0, -0.18, 0, pivot);
+      const shin = add(new THREE.CapsuleGeometry(0.079, 0.23, 6, 12), this.darkMaterial, 0, -0.52, 0.035, pivot);
+      shin.rotation.x = -0.08;
+      add(new RoundedBoxGeometry(0.17, 0.15, 0.29, 2, 0.025), this.darkMaterial, 0, -0.71, -0.06, pivot);
       this.modelVisual.add(pivot);
     }
-
-    const spore = new THREE.Mesh(
-      new THREE.SphereGeometry(0.16, 10, 8),
-      new THREE.MeshStandardMaterial({
-        color: STRAINS[this.strain].spores,
-        emissive: 0x3c5520,
-        emissiveIntensity: 0.7,
-      }),
-    );
-    spore.position.set(-0.26, 1.52, 0.25);
-    spore.scale.set(1, 0.75, 1);
-    spore.castShadow = true;
-    this.modelVisual.add(spore);
+    // Shirt collar, torn hem and worn buttons retain a recognizable human outline.
+    for (const side of [-1, 1]) {
+      const collar = add(new THREE.BoxGeometry(0.09, 0.13, 0.035), this.shirtMaterial, side * 0.065, 1.45, -0.16);
+      collar.rotation.z = side * 0.36;
+      for (let k = 0; k < 3; k++) {
+        const tear = add(
+          new THREE.BoxGeometry(0.045, 0.13 + (k % 2) * 0.06, 0.025),
+          this.shirtMaterial,
+          side * (0.065 + k * 0.05),
+          0.82,
+          -0.09,
+        );
+        tear.rotation.z = side * 0.15;
+      }
+    }
+    for (let k = 0; k < 4; k++)
+      add(new THREE.SphereGeometry(0.012, 8, 6), this.darkMaterial, 0, 1.32 - k * 0.12, -0.128);
   }
 
-  private addMutationDetails(seed?: number): void {
-    const variant = seed === undefined ? Math.floor(Math.random() * 2) : seed % 2;
-    const color = STRAINS[this.strain].spores;
-    if (variant === 0) {
-      // Fungal crown: an asymmetrical silhouette, without copied creature artwork.
-      for (let i = 0; i < 3; i++) {
-        const stalk = new THREE.Mesh(
-          new THREE.ConeGeometry(0.14, 0.52 + i * 0.09, 6),
-          new THREE.MeshStandardMaterial({ color, roughness: 0.92 }),
-        );
-        stalk.position.set(-0.19 + i * 0.17, 2.2 + i * 0.07, 0.02);
-        stalk.rotation.z = (i - 1) * 0.35;
-        this.root.add(stalk);
-      }
-    } else {
-      // Spore armor: crystal-like fungal colonies over the shoulders.
-      for (let i = 0; i < 4; i++) {
-        const colony = new THREE.Mesh(
-          new THREE.OctahedronGeometry(0.19 + i * 0.035, 0),
-          new THREE.MeshStandardMaterial({ color, roughness: 0.5, emissive: color, emissiveIntensity: 0.16 }),
-        );
-        colony.position.set(i % 2 ? 0.35 : -0.35, 1.05 + i * 0.21, i % 2 ? 0.04 : 0.2);
-        this.root.add(colony);
-      }
+  private addMutationDetails(seed = 0): void {
+    if (this.strain !== 'barkhide' && this.strain !== 'sporeling') return;
+    const growth = new THREE.MeshStandardMaterial({ color: STRAINS[this.strain].spores, roughness: 0.98 });
+    for (let i = 0; i < 4; i++) {
+      const plate = new THREE.Mesh(new THREE.SphereGeometry(0.055 + (i % 2) * 0.025, 12, 8), growth);
+      plate.position.set((i % 2 ? 1 : -1) * 0.23, 1.24 + i * 0.075, 0.03 + Math.sin(seed + i) * 0.09);
+      plate.scale.set(1, 0.55, 0.7);
+      plate.castShadow = true;
+      this.modelVisual.add(plate);
     }
   }
 
@@ -377,6 +407,7 @@ export class Zombie {
 
   dispose(): void {
     this.animator.dispose();
+    releaseActorSurfaces();
     this.scene.remove(this.root);
     this.root.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;

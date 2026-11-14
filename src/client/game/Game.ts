@@ -2,7 +2,7 @@ import { journalEntry } from '../../../shared/collection.mjs';
 import { progressStore } from './ProgressStore';
 import { Firearms } from './Firearms';
 import { Collection, emptyCollection, type CollectionState } from './Collection';
-import { Sky } from 'three/addons/objects/Sky.js';
+import { createAtmosphere } from './Atmosphere';
 import { SceneEffects } from './SceneEffects';
 import {
   CREATURES,
@@ -62,8 +62,8 @@ export class Game {
   private readonly scene = new THREE.Scene();
   private effects: SceneEffects | null = null;
   private cinematic = false;
-  private environmentMap: THREE.Texture | null = null;
-  private readonly sun = new THREE.DirectionalLight(0xffead2, 3.1);
+  private environmentTarget: THREE.WebGLRenderTarget | null = null;
+  private readonly sun = new THREE.DirectionalLight(0xffdfb5, 2.65);
   private readonly firearms: Firearms;
   private readonly collection: Collection;
   private coopCollection: CollectionState | null = null;
@@ -187,7 +187,7 @@ export class Game {
     this.renderer.setSize(viewport.clientWidth, viewport.clientHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.95;
+    this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.domElement.className = 'game-canvas';
@@ -195,8 +195,8 @@ export class Game {
     this.renderer.domElement.tabIndex = 0;
     this.viewport.prepend(this.renderer.domElement);
 
-    this.scene.background = new THREE.Color(0x9ba9a5);
-    this.scene.fog = new THREE.FogExp2(0x9ba9a5, 0.008);
+    this.scene.background = new THREE.Color(0xa6aea7);
+    this.scene.fog = new THREE.FogExp2(0xa6aea7, 0.0065);
     this.createLighting();
 
     this.world = new World(this.scene);
@@ -213,6 +213,8 @@ export class Game {
     }
     document.querySelector('#creature-roster')?.addEventListener('click', this.handleRosterClick);
     document.querySelector('#graphics-quality')?.addEventListener('change', this.handleGraphicsQuality);
+    document.querySelector('#photo-materials')?.addEventListener('change', this.handlePhotoMaterials);
+    this.updatePhotoMaterials(true);
     this.syncCollectionVisuals();
     void this.loadOptionalModels();
     if (this.progression.state.lanternkinBonded) {
@@ -288,29 +290,17 @@ export class Game {
   }
 
   private createLighting(): void {
-    const sky = new Sky();
-    sky.scale.setScalar(1000);
-    const uniforms = sky.material.uniforms;
-    uniforms.turbidity.value = 5;
-    uniforms.rayleigh.value = 1.7;
-    uniforms.mieCoefficient.value = 0.006;
-    uniforms.mieDirectionalG.value = 0.78;
-    const sunPosition = new THREE.Vector3().setFromSphericalCoords(
-      1,
-      THREE.MathUtils.degToRad(67),
-      THREE.MathUtils.degToRad(235),
-    );
-    uniforms.sunPosition.value.copy(sunPosition);
+    const sky = createAtmosphere();
     this.scene.add(sky);
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     const environment = new THREE.Scene();
     const environmentSky = sky.clone();
     environment.add(environmentSky);
-    this.environmentMap = pmrem.fromScene(environment, 0.06).texture;
-    this.scene.environment = this.environmentMap;
-    this.scene.environmentIntensity = 0.35;
+    this.environmentTarget = pmrem.fromScene(environment, 0.06);
+    this.scene.environment = this.environmentTarget.texture;
+    this.scene.environmentIntensity = 1.0;
     pmrem.dispose();
-    this.scene.add(new THREE.HemisphereLight(0xc4d0dc, 0x494739, 0.78));
+    this.scene.add(new THREE.HemisphereLight(0xb8c7d1, 0x66604e, 2.15));
     const sun = this.sun;
     sun.position.set(-25, 35, 18);
     sun.castShadow = true;
@@ -322,7 +312,7 @@ export class Game {
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 100;
     sun.shadow.bias = -0.00015;
-    sun.shadow.normalBias = 0.04;
+    sun.shadow.normalBias = 0.025;
     this.scene.add(sun, sun.target);
   }
 
@@ -640,6 +630,24 @@ export class Game {
   }
   private refreshRoomPickups(): void {
     this.coopVisuals.updateSamples(this.roomMission);
+  }
+  private photoRequest = 0;
+  private readonly handlePhotoMaterials = (event: Event): void => {
+    this.updatePhotoMaterials((event.target as HTMLInputElement).checked);
+  };
+  private updatePhotoMaterials(enabled: boolean): void {
+    const request = ++this.photoRequest;
+    const status = document.querySelector('#photo-materials-status');
+    if (status) status.textContent = enabled ? 'Loading photo surfaces…' : 'Offline surfaces';
+    void this.world
+      .photographic(enabled, (loaded, total) => {
+        if (status) status.textContent = `Photo surfaces ${loaded}/${total}`;
+      })
+      .then(() => {
+        if (request !== this.photoRequest) return;
+        if (enabled && status && status.textContent !== 'Photo surfaces 4/4')
+          status.textContent = 'Photo surfaces partly unavailable · offline fallback active';
+      });
   }
   private readonly handleGraphicsQuality = (event: Event): void => {
     const quality = (event.target as HTMLSelectElement).value;
@@ -1381,10 +1389,11 @@ export class Game {
     });
     this.firearms.dispose();
     this.world.dispose();
-    this.environmentMap?.dispose();
+    this.environmentTarget?.dispose();
     for (const wild of this.wildCreatures.values()) wild.dispose();
     document.querySelector('#creature-roster')?.removeEventListener('click', this.handleRosterClick);
     document.querySelector('#graphics-quality')?.removeEventListener('change', this.handleGraphicsQuality);
+    document.querySelector('#photo-materials')?.removeEventListener('change', this.handlePhotoMaterials);
     this.effects?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
