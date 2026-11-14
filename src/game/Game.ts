@@ -51,6 +51,9 @@ export class Game {
     this.multiplayer.send('sync-equipment');
   });
   private readonly remotePlayers = new Map<string, Player>();
+  private readonly remoteCompanions = new Map<string, THREE.Group>();
+  private roomMission: import('./Multiplayer').MissionState | null = null;
+  private readonly roomPickups = new Map<string, THREE.Group>();
   private readonly roomStatus: HTMLElement | null;
   private readonly roomCode: HTMLInputElement | null;
   private readonly craftingList: HTMLElement | null;
@@ -411,6 +414,16 @@ export class Game {
       this.updateMissionHud();
       this.updateCraftingHud();
       void this.coopProgress.refresh().then(() => this.updateProgressHud());
+    } else if (event.type === 'mission-state') {
+      this.roomMission = event;
+      this.refreshRoomPickups();
+      this.updateMissionHud();
+    } else if (event.type === 'mission-extracted') {
+      this.showToast(`TEAM EXTRACTION  //  Expedition ${event.completed} complete!`, 'success');
+      this.sayMissionComplete();
+    } else if (event.type === 'mission-reward') {
+      this.showToast(`PARTY REWARD  //  +${event.xp} trusted XP`, 'success');
+      void this.coopProgress.refresh().then(() => this.updateProgressHud());
     } else if (event.type === 'error') {
       if (this.roomStatus) this.roomStatus.textContent = event.message;
       this.showToast(event.message, 'warning');
@@ -442,15 +455,62 @@ export class Game {
       actor.root.position.set(state.x, 0, state.z);
       actor.root.rotation.y = state.yaw;
       actor.root.visible = state.hp > 0;
+      let ally = this.remoteCompanions.get(id);
+      if (state.creatureOwned && !ally) {
+        ally = new THREE.Group();
+        const glow = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 1),
+          new THREE.MeshStandardMaterial({color: 0xa3edb2, emissive: 0x45a876, emissiveIntensity: 1.1}));
+        ally.add(glow);
+        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.43, 5),
+          new THREE.MeshStandardMaterial({color: 0x387a51}));
+        leaf.position.y = 0.38;
+        ally.add(leaf);
+        this.scene.add(ally);
+        this.remoteCompanions.set(id, ally);
+      }
+      if (ally) {
+        ally.visible = !!state.creatureOwned && state.hp > 0;
+        ally.position.set(state.x + 0.95, 1.55 + Math.sin(performance.now() * 0.002) * 0.12, state.z + 0.5);
+      }
     }
     for (const [id, actor] of this.remotePlayers) {
-      if (!this.multiplayer.peers.has(id)) { actor.dispose(); this.remotePlayers.delete(id); }
+      if (!this.multiplayer.peers.has(id)) {
+        actor.dispose(); this.remotePlayers.delete(id);
+        const companion = this.remoteCompanions.get(id);
+        if (companion) { this.scene.remove(companion); this.remoteCompanions.delete(id); }
+      }
     }
     if (this.roomStatus && this.multiplayer.code) this.roomStatus.textContent = `Room ${this.multiplayer.code} · ${this.multiplayer.peers.size + 1}/4 players`;
   }
   private clearRemotePlayers(): void {
     for (const actor of this.remotePlayers.values()) actor.dispose();
     this.remotePlayers.clear();
+    for (const companion of this.remoteCompanions.values()) this.scene.remove(companion);
+    this.remoteCompanions.clear();
+    for (const pickup of this.roomPickups.values()) this.scene.remove(pickup);
+    this.roomPickups.clear();
+    this.roomMission = null;
+  }
+  private refreshRoomPickups(): void {
+    const active = new Set(this.roomMission?.pickups.map(p => p.id) || []);
+    for (const [id, object] of this.roomPickups) {
+      if (!active.has(id)) { this.scene.remove(object); this.roomPickups.delete(id); }
+    }
+    for (const sample of this.roomMission?.pickups || []) {
+      if (this.roomPickups.has(sample.id)) continue;
+      const object = new THREE.Group();
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.43),
+        new THREE.MeshStandardMaterial({color: 0x8be4e1, emissive: 0x237c86, emissiveIntensity: 1.6}));
+      crystal.position.y = 0.95;
+      object.add(crystal);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.05, 6, 24),
+        new THREE.MeshBasicMaterial({color: 0x82f1e4}));
+      ring.position.y = 0.12; ring.rotation.x = Math.PI / 2;
+      object.add(ring);
+      object.position.set(sample.x, 0, sample.z);
+      this.scene.add(object);
+      this.roomPickups.set(sample.id, object);
+    }
   }
   private syncRoomZombie(): void {
     const state = this.multiplayer.zombie;
@@ -493,6 +553,13 @@ export class Game {
         this.updateMissionHud();
       }
       return;
+    }
+    if (this.multiplayer.connected) {
+      if (this.roomMission?.ready && this.isNearExtraction(playerPos)) {
+        this.multiplayer.send('extract'); return;
+      }
+      const sample = this.roomMission?.pickups.find(p => Math.hypot(p.x - playerPos.x, p.z - playerPos.z) < 2.7);
+      if (sample) { this.multiplayer.send('pickup', { id: sample.id }); return; }
     }
     // Co-op item economy is wholly server-owned; local pickup is solo-only.
     const candidate = this.multiplayer.connected ? undefined : this.drops.find(drop => drop.canPickUp(playerPos));
@@ -725,15 +792,16 @@ export class Game {
     }
 
     this.updateCompanionHud();
-    const nearestDrop = this.drops.find(drop => drop.canPickUp(position));
+    const nearestDrop = this.multiplayer.connected ? undefined : this.drops.find(drop => drop.canPickUp(position));
     if (this.missionHint) {
-      const extractionPossible = !this.multiplayer.connected && this.expedition.ready && this.isNearExtraction(position) && health > 0;
+      const extractionPossible = (this.multiplayer.connected ? !!this.roomMission?.ready : this.expedition.ready) && this.isNearExtraction(position) && health > 0;
       this.missionHint.textContent = extractionPossible ? 'PRESS E · EXTRACT · +150 XP' : '';
       this.missionHint.classList.toggle('visible', extractionPossible);
     }
     if (this.lootHint) {
-      this.lootHint.textContent = nearestDrop ? `PRESS E · COLLECT ${ITEM_DEFINITIONS[nearestDrop.id].name.toUpperCase()}` : '';
-      this.lootHint.classList.toggle('visible', Boolean(nearestDrop) && health > 0);
+      const sample = this.multiplayer.connected ? this.roomMission?.pickups.find(p => Math.hypot(position.x-p.x, position.z-p.z) < 2.7) : undefined;
+      this.lootHint.textContent = sample ? 'PRESS E · COLLECT TEAM SAMPLE' : nearestDrop ? `PRESS E · COLLECT ${ITEM_DEFINITIONS[nearestDrop.id].name.toUpperCase()}` : '';
+      this.lootHint.classList.toggle('visible', Boolean(nearestDrop || (this.multiplayer.connected && this.roomMission?.pickups.some(p => Math.hypot(position.x-p.x, position.z-p.z) < 2.7))) && health > 0);
     }
     this.updateProgressHud();
     this.updateMissionHud();
@@ -788,11 +856,11 @@ export class Game {
 
   private updateMissionHud(): void {
     const coOp = this.multiplayer.connected;
-    if (this.missionStatus) this.missionStatus.textContent = coOp ? 'CO-OP MISSIONS · COMING LATER' : this.expedition.ready ? 'OBJECTIVES COMPLETE · REACH BEACON' : 'SOLO EXPEDITION · ACTIVE';
-    if (this.missionKills) this.missionKills.textContent = `${this.expedition.kills}/${KILLS_REQUIRED} infected eliminated`;
-    if (this.missionSalvage) this.missionSalvage.textContent = `${this.expedition.salvage}/${SALVAGE_REQUIRED} salvage collected`;
-    if (this.missionTotal) this.missionTotal.textContent = `${this.expedition.completed} successful extractions`;
-    this.extractionBeacon.visible = !coOp;
+    if (this.missionStatus) this.missionStatus.textContent = coOp ? (this.roomMission?.ready ? 'TEAM OBJECTIVES COMPLETE · EXTRACT' : 'CO-OP EXPEDITION · ACTIVE') : this.expedition.ready ? 'OBJECTIVES COMPLETE · REACH BEACON' : 'SOLO EXPEDITION · ACTIVE';
+    if (this.missionKills) this.missionKills.textContent = `${coOp ? (this.roomMission?.kills ?? 0) : this.expedition.kills}/${KILLS_REQUIRED} infected eliminated`;
+    if (this.missionSalvage) this.missionSalvage.textContent = `${coOp ? (this.roomMission?.salvage ?? 0) : this.expedition.salvage}/${SALVAGE_REQUIRED} salvage collected`;
+    if (this.missionTotal) this.missionTotal.textContent = `${coOp ? (this.roomMission?.completed ?? 0) : this.expedition.completed} successful extractions`;
+    this.extractionBeacon.visible = !coOp || !!this.roomMission?.ready;
   }
 
   private resize(): void {

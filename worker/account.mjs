@@ -80,7 +80,7 @@ export class PlayerAccount extends DurableObject {
         // A pulse kill is eligible for creature XP only if ownership was verified.
         if (event.pulse && !creature.owned) return { error: 'Creature not bonded' };
         if (event.pulse) { creature.xp = Math.min(250000, Math.max(creature.xp, stats.creatureXp) + 40); await txn.put('coop-creature', creature); }
-        stats = { xp: stats.xp + 50, kills: stats.kills + 1,
+        stats = { ...stats, xp: stats.xp + 50, kills: stats.kills + 1,
           creatureXp: Math.max(stats.creatureXp, creature.xp) };
         // Deterministic server loot: one material awarded per unique confirmed kill.
         const material = COOP_MATERIALS[(stats.kills - 1) % COOP_MATERIALS.length];
@@ -91,6 +91,27 @@ export class PlayerAccount extends DurableObject {
         return { ok: true, duplicate: false, material, ...coopState(stats, inventory, upgrades) };
       });
       return result.error ? json(result, 409) : json(result);
+    }
+
+    // Internal party extraction reward. Granted to each authenticated participant once.
+    if (op === 'coop-expedition') {
+      if (request.method !== 'POST' || request.headers.get('X-MM-Reward-Source') !== 'game-room-v1')
+        return json({ error: 'Forbidden' }, 403);
+      let event;
+      try { event = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+      if (typeof event?.id !== 'string' || !/^mission:[a-zA-Z0-9:_-]{6,110}$/.test(event.id))
+        return json({ error: 'Invalid mission identifier' }, 400);
+      const result = await storage.transaction(async txn => {
+        const key = `coop-expedition:${event.id}`;
+        const stats = await txn.get('coop-stats') || { xp: 0, kills: 0, creatureXp: 0 };
+        if (await txn.get(key)) return { ok: true, duplicate: true, stats };
+        stats.xp = Math.min(100000000, stats.xp + 150);
+        stats.extractions = (stats.extractions || 0) + 1;
+        await txn.put('coop-stats', stats);
+        await txn.put(key, true);
+        return { ok: true, duplicate: false, stats };
+      });
+      return json(result);
     }
 
     // Internal-only persistent ownership and creature progression.

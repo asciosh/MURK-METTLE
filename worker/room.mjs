@@ -8,6 +8,10 @@ const TYPES = [
   { id: 'sporeling', hp: 65, speed: 2.75, damage: 8 },
   { id: 'ashwalker', hp: 110, speed: 2.08, damage: 13 },
 ];
+const MISSION_KILLS = 3;
+const MISSION_SALVAGE = 2;
+const PICKUPS = [{ id: 'sample-a', x: -5, z: -7 }, { id: 'sample-b', x: 6, z: -13 }];
+const EXTRACTION = { x: 0, z: -18, radius: 3.3 };
 const MAX_PLAYERS = 4;
 const SNAPSHOT_MS = 100; // 10 Hz snapshots; client renders between buffered samples.
 const isNumber = value => typeof value === 'number' && Number.isFinite(value);
@@ -25,6 +29,15 @@ export class GameRoom extends DurableObject {
     this.zombie = selectZombie();
     this.lastTick = Date.now();
     this.timer = null;
+    this.mission = { kills: 0, salvage: [], completed: 0, sequence: 0, phase: 'active' };
+    this.ctx.blockConcurrencyWhile(async () => {
+      const saved = await this.ctx.storage.get('shared-mission');
+      if (saved && typeof saved === 'object' && Array.isArray(saved.salvage)) this.mission = saved;
+      if (this.mission.phase === 'extracting') {
+        this.mission.phase = 'active'; // Last extraction already consumed before award attempt.
+        await this.persistMission();
+      }
+    });
     // Socket attachments recover player positions when a Durable Object wakes.
     for (const ws of this.ctx.getWebSockets()) {
       const data = ws.deserializeAttachment();
@@ -58,6 +71,7 @@ export class GameRoom extends DurableObject {
     this.players.set(server, player);
     this.saveAttachment(server, player);
     this.send(server, { type: 'welcome', id: player.id, code });
+    this.send(server, this.missionPacket());
     // Load server-owned creature state before accepting combat abilities.
     try {
       const creature = await this.accountCreature(player);
@@ -87,6 +101,37 @@ export class GameRoom extends DurableObject {
       yaw: player.yaw, hp: player.hp, creatureOwned: player.creatureOwned === true });
   }
 
+  missionPacket() {
+    return { type: 'mission-state', kills: this.mission.kills, salvage: this.mission.salvage.length,
+      completed: this.mission.completed, ready: this.mission.kills >= MISSION_KILLS &&
+      this.mission.salvage.length >= MISSION_SALVAGE,
+      pickups: PICKUPS.filter(item => !this.mission.salvage.includes(item.id)),
+      phase: this.mission.phase };
+  }
+  async persistMission() {
+    await this.ctx.storage.put('shared-mission', this.mission);
+  }
+  async rewardExpedition(participants, eventId) {
+    await Promise.all(participants.map(async player => {
+      try {
+        const account = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
+        const response = await account.fetch(new Request('https://internal/api/account/coop-expedition', {
+          method: 'POST', headers: { 'Content-Type': 'application/json',
+            'X-MM-Account': player.username, 'X-MM-Reward-Source': 'game-room-v1' },
+          body: JSON.stringify({ id: eventId }),
+        }));
+        if (!response.ok) throw new Error(`Party reward HTTP ${response.status}`);
+        const result = await response.json();
+        const socket = [...this.players].find(([, p]) => p.id === player.id)?.[0];
+        if (socket) this.send(socket, { type: 'mission-reward', xp: result.duplicate ? 0 : 150,
+          totals: result.stats, completed: result.stats.extractions });
+      } catch (error) {
+        console.error('Party reward failed', error);
+        const socket = [...this.players].find(([, p]) => p.id === player.id)?.[0];
+        if (socket) this.send(socket, { type: 'error', message: 'Party reward could not be credited; report this mission.' });
+      }
+    }));
+  }
   async accountCreature(player, action = null) {
     const account = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
     const response = await account.fetch(new Request('https://internal/api/account/coop-creature', {
@@ -148,6 +193,37 @@ export class GameRoom extends DurableObject {
       } catch (error) { console.warn('Unable to verify equipment', error); }
       return;
     }
+    if (msg.type === 'pickup') {
+      if (player.hp <= 0 || this.mission.phase !== 'active') return;
+      const item = PICKUPS.find(item => item.id === msg.id);
+      if (!item || this.mission.salvage.includes(item.id)) return;
+      if (Math.hypot(item.x - player.x, item.z - player.z) > 2.7) return;
+      this.mission.salvage.push(item.id);
+      await this.persistMission();
+      this.broadcast(this.missionPacket());
+      return;
+    }
+    if (msg.type === 'extract') {
+      if (player.hp <= 0 || this.mission.phase !== 'active' ||
+        this.mission.kills < MISSION_KILLS || this.mission.salvage.length < MISSION_SALVAGE ||
+        Math.hypot(player.x - EXTRACTION.x, player.z - EXTRACTION.z) > EXTRACTION.radius) return;
+      const participants = [...this.players.values()].filter(p => p.hp > 0)
+        .map(p => ({ id: p.id, username: p.username }));
+      if (!participants.length) return;
+      this.mission.phase = 'extracting';
+      this.mission.sequence++;
+      this.mission.completed++;
+      const eventId = `mission:${this.ctx.id.toString()}:${this.mission.sequence}`;
+      this.mission.kills = 0;
+      this.mission.salvage = [];
+      await this.persistMission();
+      this.broadcast({ type: 'mission-extracted', by: player.id, completed: this.mission.completed });
+      await this.rewardExpedition(participants, eventId);
+      this.mission.phase = 'active';
+      await this.persistMission();
+      this.broadcast(this.missionPacket());
+      return;
+    }
     if (msg.type === 'restart') {
       if (player.hp <= 0) {
         player.hp = 100; player.x = 0; player.z = 0;
@@ -199,6 +275,9 @@ export class GameRoom extends DurableObject {
         this.send(socket, { type: 'error', message: 'Cloud reward could not be saved. Please report this match.' });
         console.error('Co-op reward failed', error);
       }
+      this.mission.kills = Math.min(MISSION_KILLS, this.mission.kills + 1);
+      await this.persistMission();
+      this.broadcast(this.missionPacket());
       this.broadcast({ type: 'kill', by: player.id, pulse, x: zombie.x, z: zombie.z });
     }
   }
@@ -237,7 +316,7 @@ export class GameRoom extends DurableObject {
       }
     }
     this.broadcast({ type: 'snapshot',
-      players: [...this.players.values()].map(({ id, x, z, yaw, hp }) => ({ id, x, z, yaw, hp })),
+      players: [...this.players.values()].map(({ id, x, z, yaw, hp, creatureOwned }) => ({ id, x, z, yaw, hp, creatureOwned: creatureOwned === true })),
       zombie: { x: this.zombie.x, z: this.zombie.z, hp: this.zombie.hp,
         max: this.zombie.max, strain: this.zombie.strain, generation: this.zombie.generation },
     });

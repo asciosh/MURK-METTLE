@@ -1,6 +1,7 @@
-export interface RemotePlayer { id: string; x: number; z: number; yaw: number; hp: number; }
+export interface RemotePlayer { id: string; x: number; z: number; yaw: number; hp: number; creatureOwned?: boolean; }
 export interface RemoteZombie { x: number; z: number; hp: number; max: number; strain: string; generation: number; }
-export type RoomEvent = { type: 'welcome'; id: string; code: string } | { type: 'snapshot'; players: RemotePlayer[]; zombie: RemoteZombie } | { type: 'damage'; hp: number } | { type: 'kill'; by: string; pulse: boolean; x: number; z: number } | { type: 'reward'; xp: number; creatureXp: number; material?: string | null; duplicate: boolean; totals: { xp: number; kills: number; creatureXp: number } } | { type: 'creature-state'; owned: boolean; xp: number } | { type: 'error'; message: string };
+export type MissionState = { type: 'mission-state'; kills: number; salvage: number; completed: number; ready: boolean; pickups: {id: string; x: number; z: number}[]; phase: string };
+export type RoomEvent = MissionState | { type: 'mission-extracted'; by: string; completed: number } | { type: 'mission-reward'; xp: number; completed: number; totals: {xp: number; kills: number; creatureXp: number} } | { type: 'welcome'; id: string; code: string } | { type: 'snapshot'; players: RemotePlayer[]; zombie: RemoteZombie } | { type: 'damage'; hp: number } | { type: 'kill'; by: string; pulse: boolean; x: number; z: number } | { type: 'reward'; xp: number; creatureXp: number; material?: string | null; duplicate: boolean; totals: { xp: number; kills: number; creatureXp: number } } | { type: 'creature-state'; owned: boolean; xp: number } | { type: 'error'; message: string };
 type Frame = { at: number; players: RemotePlayer[]; zombie: RemoteZombie };
 const INTERPOLATION_DELAY_MS = 120;
 const blend = (a: number, b: number, t: number): number => a + (b - a) * t;

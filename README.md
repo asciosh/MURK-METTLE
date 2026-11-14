@@ -37,3 +37,9 @@ For local account and Cloudflare Durable Object testing, use `npx wrangler dev` 
 - This update intentionally ignores any historical browser saves because there was no progress to preserve.
 
 See `CHANGELOG-v0.16.md` for details.
+
+## v0.19 co-op field expedition
+
+In a Cloudflare room (up to 4 authenticated players), defeat 3 infected together, collect both blue field samples (press **E** at **X -5, Z -7** and **X 6, Z -13**), and reach the extraction beacon at **X 0, Z -18**. Press **E** there to complete the mission. All alive, connected players receive **150 verified Cloudflare XP** once per completed mission. Shared objectives and pickups are room-owned; they are not client inventory items. Disconnecting before extraction means no party reward. Existing solo missions remain separate.
+
+See `CHANGELOG-v0.19.md` for limitations and testing. Run `npm test`, `npm run build`, then `npx wrangler deploy` in Codespaces.
