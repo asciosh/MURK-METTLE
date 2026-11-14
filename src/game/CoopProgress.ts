@@ -17,6 +17,14 @@ const initial = (): TrustedCoopState => ({ stats: { xp: 0, kills: 0, creatureXp:
 export class CoopProgress {
   private state = initial();
   private ready = false;
+  // The same trusted stats drive both the co-op panel and the main HUD.
+  get verified(): TrustedCoopState | null { return this.ready ? this.state : null; }
+  applyReward(totals: TrustedCoopState['stats']): void {
+    this.state = { ...this.state, stats: totals };
+    this.ready = true;
+    this.render();
+  }
+
   private busy = false;
   private readonly label = document.getElementById('coop-account-state');
   private readonly buttons: Record<RecipeId, HTMLButtonElement | null> = {

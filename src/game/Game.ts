@@ -390,6 +390,7 @@ export class Game {
     this.zombie = new Zombie(this.scene, new THREE.Vector3(0.7, 0, -9.5));
     if (this.roomStatus) this.roomStatus.textContent = 'Solo · Cloud account';
     this.updateMissionHud();
+    this.updateProgressHud();
   };
   private readonly onRoomEvent = (event: RoomEvent): void => {
     if (event.type === 'welcome') {
@@ -398,6 +399,7 @@ export class Game {
       this.remoteZombieGeneration = -1;
       this.updateMissionHud();
       this.updateCraftingHud();
+      void this.coopProgress.refresh().then(() => this.updateProgressHud());
     } else if (event.type === 'error') {
       if (this.roomStatus) this.roomStatus.textContent = event.message;
       this.showToast(event.message, 'warning');
@@ -417,7 +419,9 @@ export class Game {
       else this.showToast('TEAM KILL  //  Salvage available!', 'success');
     } else if (event.type === 'reward') {
       if (!event.duplicate) this.showToast(`CLOUD REWARD  //  +${event.xp} co-op XP · ${event.material ?? 'material'} · ${event.totals.kills} trusted kills`, 'success');
+      this.coopProgress.applyReward(event.totals);
       void this.coopProgress.refresh();
+      this.updateProgressHud();
     }
   };
   private updateRemotePlayers(_deltaSeconds: number): void {
@@ -722,15 +726,20 @@ export class Game {
 
   private updateProgressHud(): void {
     const state = this.progression.state;
-    const playerXp = xpInLevel(state.playerXp);
-    const companionXp = xpInLevel(state.lanternkinXp);
-    if (this.playerLevelText) this.playerLevelText.textContent = `LV ${levelFromXp(state.playerXp)}`;
+    // While playing co-op, the main HUD is backed by server-verified account XP.
+    // Solo kills remain browser-simulated, and are never presented as verified XP.
+    const verified = this.multiplayer.connected ? this.coopProgress.verified : null;
+    const playerXpTotal = verified?.stats.xp ?? state.playerXp;
+    const creatureXpTotal = verified?.stats.creatureXp ?? state.lanternkinXp;
+    const playerXp = xpInLevel(playerXpTotal);
+    const companionXp = xpInLevel(creatureXpTotal);
+    if (this.playerLevelText) this.playerLevelText.textContent = `LV ${levelFromXp(playerXpTotal)}${verified ? " · CLOUD" : " · SOLO"}`;
     if (this.playerXpFill) this.playerXpFill.style.width = `${playerXp.ratio * 100}%`;
     if (this.playerXpText) this.playerXpText.textContent = playerXp.required ? `${playerXp.current} / ${playerXp.required} XP` : 'MAX LEVEL';
-    if (this.creatureLevelText) this.creatureLevelText.textContent = state.lanternkinBonded ? `LV ${levelFromXp(state.lanternkinXp)}` : 'UNBONDED';
+    if (this.creatureLevelText) this.creatureLevelText.textContent = (verified ? true : state.lanternkinBonded) ? `LV ${levelFromXp(creatureXpTotal)}` : 'UNBONDED';
     if (this.creatureXpFill) this.creatureXpFill.style.width = `${state.lanternkinBonded ? companionXp.ratio * 100 : 0}%`;
     if (this.creatureXpText) this.creatureXpText.textContent = !state.lanternkinBonded ? 'BOND TO EARN XP' : companionXp.required ? `${companionXp.current} / ${companionXp.required} XP` : 'MAX LEVEL';
-    if (this.killText) this.killText.textContent = `${state.totalKills} TOTAL CLEARED`;
+    if (this.killText) this.killText.textContent = verified ? `${verified.stats.kills} VERIFIED KILLS` : `${state.totalKills} SOLO KILLS`;
   }
 
 
