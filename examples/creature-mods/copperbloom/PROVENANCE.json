@@ -1,0 +1,38 @@
+{
+  "author": "asciosh / MURK & METTLE",
+  "license": "CC0-1.0",
+  "source": "scripts/build-demo-cosmetic.mjs",
+  "tools": {
+    "node": "24.22.1",
+    "three": "187",
+    "zlib": "1.3.2.1-motley-285e94b"
+  },
+  "sourceHashes": {
+    "generator": "41f9db19ab8e5c1c6405ae21920b747a5d85018236fdf3a94ca9306fca1325f9",
+    "zipWriter": "9c67460a47e67c2efa9f640ace63037b9b552b15b167d423502f781b35cc97d5"
+  },
+  "production": "Original mathematical geometry, palette, node rotations and raster icon; no professional skeletal rig or external asset generation claimed.",
+  "triangles": 772,
+  "files": {
+    "manifest.json": {
+      "bytes": 608,
+      "sha256": "9a1233fd214f54ad10d1b0c87ac42e3fe6dcd22f555c8581fa99486896ecb5f0"
+    },
+    "LICENSE.txt": {
+      "bytes": 660,
+      "sha256": "58bc0465bda2d7181df04e5fc5cac161eb3ec286353daff53264b104858558a1"
+    },
+    "model.glb": {
+      "bytes": 62396,
+      "sha256": "0b093dbcd96b61cee6a9671e65537785cbb0f653d4b68de5e71d11d5bf9177af"
+    },
+    "icon.png": {
+      "bytes": 918,
+      "sha256": "0a52b3bb4d40957fd4ba2fd7f638609e4d90dffb5a40501ee7912a0f818e6e18"
+    }
+  },
+  "archive": {
+    "bytes": 64990,
+    "sha256": "10b4f47076cf879874e83c6a6a7c08e0d5bb5a5cea312d6e35b27ff52cc12ba6"
+  }
+}

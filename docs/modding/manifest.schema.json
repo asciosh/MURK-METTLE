@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MURK & METTLE local creature cosmetic manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatVersion",
+    "id",
+    "name",
+    "version",
+    "author",
+    "license",
+    "attribution",
+    "rights",
+    "compatibility",
+    "species",
+    "model"
+  ],
+  "properties": {
+    "formatVersion": {
+      "const": 1
+    },
+    "compatibility": {
+      "const": "creature-cosmetics-v1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[-a-z0-9]{3,64}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$"
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "license": {
+      "enum": [
+        "CC0-1.0",
+        "CC-BY-4.0",
+        "MIT",
+        "Apache-2.0"
+      ]
+    },
+    "attribution": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "rights": {
+      "enum": [
+        "original",
+        "licensed"
+      ]
+    },
+    "species": {
+      "enum": [
+        "lanternkin",
+        "emberling",
+        "mossback",
+        "stormrook",
+        "reedwisp"
+      ]
+    },
+    "model": {
+      "type": "string",
+      "maxLength": 120,
+      "pattern": "^[A-Za-z0-9_./-]+\\.glb$"
+    },
+    "textures": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "string",
+        "maxLength": 120,
+        "pattern": "^[A-Za-z0-9_./-]+\\.png$"
+      },
+      "uniqueItems": true
+    },
+    "icon": {
+      "type": "string",
+      "maxLength": 120,
+      "pattern": "^[A-Za-z0-9_./-]+\\.png$"
+    },
+    "animations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "idle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48
+        },
+        "walk": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48
+        },
+        "run": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48
+        },
+        "pulse": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48
+        },
+        "hit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48
+        }
+      }
+    },
+    "effects": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "strength"
+        ],
+        "properties": {
+          "type": {
+            "const": "pulse-glow"
+          },
+          "strength": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import type { ModRegistry } from '../mods/ModRegistry';
 import * as THREE from 'three';
 import type { ModelEntry } from './AnimationController';
 import { Player } from './Player';
@@ -17,7 +18,10 @@ export class CoopVisuals {
   private readonly companions = new Map<string, Companion>();
   private readonly samples = new Map<string, THREE.Group>();
 
-  constructor(private readonly scene: THREE.Scene) {}
+  constructor(
+    private readonly scene: THREE.Scene,
+    private readonly cosmetics?: ModRegistry,
+  ) {}
 
   triggerShot(id: string, weapon: WeaponId): void {
     this.remotePlayers.get(id)?.triggerShot(weapon);
@@ -41,7 +45,7 @@ export class CoopVisuals {
       actor.updateRemote(state, dt);
       let ally = this.companions.get(id);
       if (state.creatureOwned && !ally) {
-        ally = new Companion(this.scene, state.species || 'lanternkin');
+        ally = new Companion(this.scene, state.species || 'lanternkin', this.cosmetics);
         this.companions.set(id, ally);
       }
       if (ally) {

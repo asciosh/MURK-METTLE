@@ -1,0 +1,140 @@
+#mods-dialog {
+  --mods-pad: 24px;
+  color: var(--ink, #e0e4d7);
+  background: var(--forest, #16221c);
+  border: 1px solid var(--copper, #a77c55);
+  border-radius: 12px;
+  width: min(920px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  padding: var(--mods-pad);
+  overflow: auto;
+  box-shadow: 0 18px 80px #0009;
+}
+#mods-dialog::backdrop {
+  background: #07110bbe;
+}
+.mods-heading,
+.mods-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mods-heading h2 {
+  margin: 0;
+  font-size: 1.7rem;
+}
+.mods-heading .eyebrow {
+  margin: 0;
+}
+#mods-dialog p {
+  line-height: 1.6;
+}
+#mods-dialog .mods-note,
+#mod-preview-caption {
+  font-size: 0.8rem;
+  color: #bdc7b5;
+}
+#mods-dialog button {
+  min-height: 44px;
+  padding: 8px 12px;
+  font: inherit;
+  cursor: pointer;
+  background: #263c2e;
+  border: 1px solid #63725b;
+  color: #e6e8d7;
+  border-radius: 5px;
+}
+#mods-dialog button:focus-visible,
+#mods-dialog summary:focus-visible {
+  outline: 3px solid #d7b689;
+  outline-offset: 3px;
+}
+#mods-dialog button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.mods-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.mods-columns section {
+  min-width: 0;
+}
+#mods-list article {
+  padding: 14px;
+  border: 1px solid #3f5143;
+  border-radius: 7px;
+  margin-bottom: 12px;
+  background: #101b15;
+}
+#mods-list h3 {
+  margin: 0;
+}
+#mods-list article > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+#mods-list details {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+#mod-preview {
+  min-height: 220px;
+  border-radius: 8px;
+  background: radial-gradient(ellipse, #304b39, #0b1510);
+  overflow: hidden;
+}
+#mod-preview canvas {
+  display: block;
+  max-width: 100%;
+}
+#mods-status {
+  padding: 10px;
+  border-left: 3px solid #b59366;
+  background: #09140d;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+#creature-mod-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@media (max-width: 640px) {
+  #mods-dialog {
+    --mods-pad: 16px;
+  }
+  .mods-columns {
+    grid-template-columns: 1fr;
+  }
+  .mods-actions button {
+    flex: 1 1 140px;
+  }
+}
+
+.mods-heading {
+  position: sticky;
+  top: calc(-1 * var(--mods-pad));
+  margin: calc(-1 * var(--mods-pad)) calc(-1 * var(--mods-pad)) 0;
+  padding: var(--mods-pad);
+  z-index: 1;
+  background: var(--forest, #16221c);
+}
+#mods-list pre {
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+}
+
+#mod-preview {
+  scroll-margin-top: 112px;
+}

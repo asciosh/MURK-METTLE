@@ -1,0 +1,26 @@
+{
+  "formatVersion": 1,
+  "id": "asciosh-copperbloom",
+  "name": "Copperbloom",
+  "version": "1.0.0",
+  "author": "asciosh / MURK & METTLE",
+  "license": "CC0-1.0",
+  "attribution": "Original Copperbloom geometry, animation and icon authored in source for MURK & METTLE.",
+  "rights": "original",
+  "compatibility": "creature-cosmetics-v1",
+  "species": "lanternkin",
+  "model": "model.glb",
+  "icon": "icon.png",
+  "animations": {
+    "idle": "Breathe",
+    "walk": "Rustle",
+    "run": "Rustle",
+    "pulse": "Unfurl"
+  },
+  "effects": [
+    {
+      "type": "pulse-glow",
+      "strength": 0.7
+    }
+  ]
+}

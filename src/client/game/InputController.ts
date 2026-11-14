@@ -122,7 +122,9 @@ export class InputController {
     if (
       !this.disposed &&
       !this.touchEnabled &&
-      !document.querySelector('#field-menu:not([hidden]),#account-panel:not([hidden]),#touch-journal-sheet:not([hidden]),#inventory-panel.visible') &&
+      !document.querySelector(
+        '#mods-dialog[open],#field-menu:not([hidden]),#account-panel:not([hidden]),#touch-journal-sheet:not([hidden]),#inventory-panel.visible',
+      ) &&
       typeof this.element.requestPointerLock === 'function' &&
       document.pointerLockElement !== this.element
     ) {
@@ -202,7 +204,11 @@ export class InputController {
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (document.querySelector('#field-menu:not([hidden]),#account-panel:not([hidden]),#touch-journal-sheet:not([hidden]),#inventory-panel.visible')) {
+    if (
+      document.querySelector(
+        '#mods-dialog[open],#field-menu:not([hidden]),#account-panel:not([hidden]),#touch-journal-sheet:not([hidden]),#inventory-panel.visible',
+      )
+    ) {
       this.handleWindowBlur();
       if (event.code !== 'KeyI' || !document.querySelector('#inventory-panel.visible') || this.isEditable(event.target)) return;
     }
