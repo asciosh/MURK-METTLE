@@ -1,0 +1,169 @@
+/* === v0.9: HUD regions instead of stacked absolute pixel coordinates === */
+#app { display: flex; flex-direction: column; min-height: 0; }
+.co-op-bar { flex: 0 0 auto; min-height: 46px; height: auto; position: relative; }
+#game-viewport { position: relative; inset: auto; top: auto; bottom: auto; flex: 1 1 0; min-height: 0; }
+.topbar { top: 0; height: 64px; }
+.hud-stack { position: absolute; top: 80px; z-index: 5; display: flex; flex-direction: column; gap: 10px;
+  width: clamp(214px, 21vw, 274px); max-height: calc(100% - 160px); min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #577862 transparent;
+  pointer-events: none; padding: 2px 3px 5px; }
+.hud-stack-left { left: clamp(10px, 2vw, 26px); }
+.hud-stack-right { right: clamp(10px, 2vw, 26px); }
+.hud-stack > .player-status, .hud-stack > .progress-panel, .hud-stack > .creature-panel,
+.hud-stack > .mission-panel, .hud-stack > .enemy-panel {
+  position: relative !important; inset: auto !important; left: auto !important; right: auto !important;
+  top: auto !important; bottom: auto !important; width: 100% !important;
+  min-width: 0; flex-shrink: 0; transform: none;
+  margin: 0; padding: 11px 12px; border-radius: 11px;
+  background: linear-gradient(145deg, rgba(14,32,26,.94), rgba(10,20,17,.86));
+  box-shadow: 0 8px 22px rgba(0,0,0,.19); }
+.hud-stack > .enemy-panel:not(.visible) { display: none; }
+.hud-stack .creature-panel p { margin: 5px 0 9px; }
+.hud-stack .health-track { margin-top: 7px; }
+.hud-stack .progress-track { margin: 7px 0 5px; }
+.hud-stack .creature-panel .strain-top { margin: 7px 0 5px; }
+.hud-stack .strain-track { margin-bottom: 8px; }
+.hud-stack .mission-panel { gap: 5px; }
+.hud-stack .mission-panel small { line-height: 1.4; }
+.inventory-toggle { top: 15px; left: 50%; right: auto; transform: translateX(-50%); }
+.inventory-panel { top: 58px; }
+.minimap-panel { bottom: 16px; width: clamp(130px, 15vw, 175px); }
+.hud-bottom-right { right: 212px; bottom: 16px; }
+.hud-bottom-left { bottom: 16px; }
+.radio-panel { bottom: 96px; }
+.combat-toast { bottom: 65px; }
+.corner-note { display: none; }
+/* Depth, contrast and interaction polish */
+.player-status, .creature-panel, .mission-panel, .enemy-panel, .progress-panel { border-color: rgba(177,223,181,.25); }
+.mission-panel { border-left: 3px solid #75cbbf; }
+.creature-panel { border-left: 3px solid #b6e68f; }
+.player-status { border-left: 3px solid #e3a372; }
+.minimap-panel { box-shadow: 0 12px 30px rgba(3,10,7,.28); }
+button:focus-visible, input:focus-visible, .wordmark:focus-visible { outline: 2px solid #d4f3a2; outline-offset: 3px; }
+@media (max-width: 980px) {
+ .hud-stack { top: 72px; width: clamp(176px, 25vw, 224px); max-height: calc(100% - 150px); gap: 7px; }
+ .hud-stack > .player-status, .hud-stack > .progress-panel, .hud-stack > .creature-panel,
+ .hud-stack > .mission-panel, .hud-stack > .enemy-panel { padding: 9px; }
+ .hud-stack .creature-panel p { display: none; }
+ .hud-bottom-right { display:none; }
+}
+@media (max-width: 680px) {
+ .topbar { top: 0; height: 49px; }
+ .hud-stack { top: 57px; width: min(46vw, 192px); max-height: calc(100% - 145px); gap: 5px; padding: 1px; }
+ .hud-stack-left { left: 7px; } .hud-stack-right { right: 7px; }
+ .hud-stack > .player-status, .hud-stack > .progress-panel, .hud-stack > .creature-panel,
+ .hud-stack > .mission-panel, .hud-stack > .enemy-panel { padding: 7px; border-radius: 8px; }
+ .hud-stack .mission-panel { font-size: 8px; }
+ .hud-stack .mission-panel strong { font-size: 9px; }
+ .hud-stack .mission-panel small { font-size: 7px; }
+ .hud-stack .creature-panel .ability-button { font-size: 8px; padding: 8px 5px; }
+ .hud-stack .creature-name { font-size: 14px; }
+ .inventory-toggle { top: 11px; left: auto; right: 8px; transform: none; padding: 6px 8px; font-size: 8px; }
+ .inventory-panel { top: 52px; max-height: calc(100% - 70px); }
+ .minimap-panel { width: min(116px, 31vw); right: 7px; bottom: 7px; padding: 6px; }
+ .minimap-legend { display: none; }
+ .hud-bottom-left { bottom: 9px; left: 8px; }
+ .hud-bottom-right { display:none; }
+ .radio-panel { width: min(310px, 85vw); bottom: 115px; }
+ .combat-toast { bottom: 75px; }
+ .welcome-card { top: 56%; }
+}
+@media (max-height: 650px) {
+ .hud-stack { max-height: calc(100% - 120px); }
+ .hud-stack .creature-panel p { display:none; }
+ .hud-stack .mission-panel small:first-of-type { display:none; }
+ .minimap-panel { width: 125px; }
+}
+@media (prefers-reduced-motion: reduce) {
+ *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+/* Only functional HUD buttons capture clicks; the rest remains click-through for the game. */
+.hud-stack .ability-button { pointer-events: auto; }
+
+
+/* v0.10: a true title state; all gameplay HUD remains behind the opaque overlay. */
+.title-screen {
+  position: absolute; inset: 0; z-index: 30; isolation: isolate;
+  display: flex; align-items: center; overflow: hidden;
+  background: radial-gradient(ellipse at 73% 43%, #3a6043 0%, #1e362d 38%, #0a1614 78%);
+  transition: opacity .42s ease, visibility .42s ease;
+}
+.title-screen.is-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.title-ambient { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.title-orb { position: absolute; width: min(52vw, 670px); aspect-ratio: 1; right: 7%; top: 2%; border-radius: 50%; background: radial-gradient(circle, rgba(207,233,155,.56) 0, rgba(138,185,119,.18) 33%, transparent 68%); filter: blur(8px); }
+.title-mountain { position: absolute; bottom: 0; right: -7%; height: 88%; width: 76%; clip-path: polygon(0 100%, 9% 39%, 16% 74%, 29% 8%, 36% 52%, 44% 22%, 52% 67%, 64% 6%, 73% 58%, 86% 29%, 100% 100%); background: #152d29; }
+.mountain-one { transform: translateX(2%) scale(1.12); opacity: .82; }
+.mountain-two { background: #091b1b; height: 71%; width: 87%; transform: translateX(22%); opacity: .85; }
+.title-ground { position: absolute; inset: auto 0 0; height: 29%; background: linear-gradient(0deg,#07130f,transparent); }
+.title-screen::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg,rgba(6,16,13,.96),rgba(6,16,13,.69) 43%,transparent 88%); pointer-events:none; }
+.title-content { position: relative; z-index: 1; margin-left: clamp(24px, 8vw, 150px); max-width: 740px; padding: 32px 20px 58px 0; }
+.title-overline { font: 10px 'DM Mono',monospace; letter-spacing: .18em; color: #c5dba9; }
+.title-overline span { color:#d88b59; padding:0 10px; }
+.title-content h1 { margin: 24px 0 18px; font: 900 clamp(76px, 11.6vw, 186px)/.74 'Barlow Condensed', Impact, sans-serif; letter-spacing:-.035em; color:#f1f1e2; text-shadow:0 15px 35px #081510; }
+.title-content h1 span { color:#df9763; }
+.title-tagline { font: 700 clamp(13px,1.5vw,19px) 'Barlow Condensed',sans-serif; letter-spacing:.17em; color:#cadbaa; }
+.title-tagline strong { color:#df9568; }
+.title-rule { height:1px; width:min(440px,85vw); margin:30px 0 20px; background:linear-gradient(90deg,#97bb91,transparent); }
+.title-description { font-size: clamp(12px,1.1vw,15px); line-height:1.85; max-width:440px; color:#bfd0c1; }
+.title-enter { display:inline-flex; align-items:center; justify-content:space-between; gap:32px; margin-top:27px; padding:17px 22px; background:#d1dfa1; border:1px solid #e2ebb7; border-radius:3px; color:#13271d; font:700 12px 'DM Mono',monospace; letter-spacing:.09em; cursor:pointer; box-shadow:0 11px 40px #09170c; transition:transform .18s, background .18s; }
+.title-enter:hover { transform:translateY(-3px); background:#e8f3bb; }
+.title-enter:focus-visible { outline:3px solid #fff; outline-offset:5px; }
+.title-hint { color:#91a69a; font:9px 'DM Mono',monospace; letter-spacing:.06em; margin-top:24px; line-height:1.8; }
+.title-build { position:absolute; z-index:1; right:32px; bottom:24px; color:#9baa99; font:9px 'DM Mono',monospace; letter-spacing:.1em; }
+@media (max-width:680px) {
+ .title-screen::after { background:linear-gradient(90deg,rgba(6,16,13,.91),rgba(6,16,13,.55)); }
+ .title-content { margin-left:24px; padding-right:22px; }
+ .title-content h1 { font-size:clamp(72px,17vw,115px); }
+ .title-build { display:none; }
+ .title-hint { font-size:8px; }
+}
+@media (prefers-reduced-motion:reduce) { .title-screen,.title-enter {transition:none;} }
+
+/* v0.13 friend-only account panel: separate from the game HUD */
+.account-panel[hidden] { display: none !important; }
+.account-panel { position: fixed; top: 48px; right: 18px; z-index: 10000; width: min(380px, calc(100vw - 36px)); max-height: calc(100dvh - 60px); overflow-y: auto; padding: 20px; border: 1px solid #6e967f; border-radius: 10px; background: #10241ded; box-shadow: 0 16px 45px #000a; color: #edf2df; font: 13px system-ui,sans-serif; }
+.account-heading { display: flex; align-items: center; justify-content: space-between; letter-spacing: 0.1em; }
+.account-heading button { border: none; background: transparent; color: #fff; font-size: 25px; cursor: pointer; }
+.account-caption { font-size: 11px; line-height: 1.6; color: #bccdb8; }
+.account-panel label { display: block; margin-top: 12px; font-size: 12px; }
+.account-panel input { display: block; width: 100%; box-sizing: border-box; margin-top: 5px; padding: 10px 11px; border: 1px solid #678775; border-radius: 5px; background: #162e24; color: #fff; font-size: 14px; }
+.account-buttons { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+.account-panel .account-buttons button { flex: 1; min-width: 105px; padding: 10px 9px; border-radius: 5px; border: 1px solid #87a68a; background: #284936; color: #f1f6e2; cursor: pointer; font-size: 11px; font-weight: 700; }
+.account-panel .account-buttons button[hidden] { display: none; }
+#account-message { min-height: 28px; color: #c4e1a4; line-height: 1.5; }
+#account-state { color: #d0efae; font-size: 11px; }
+
+/* v0.13.1 compact field menu and accessible scrollable HUD */
+.co-op-bar { flex-wrap: nowrap; gap: 12px; z-index: 20; }
+.co-op-bar #room-status { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-op-bar #field-menu-toggle { margin-left: 2px; white-space: nowrap; }
+.field-menu[hidden] { display: none !important; }
+.field-menu { position: absolute; top: 100%; right: 12px; width: min(440px, calc(100vw - 24px)); max-height: min(75dvh, 590px); overflow-y: auto; padding: 15px; background: #10241df5; border: 1px solid #66846e; border-radius: 0 0 12px 12px; box-shadow: 0 15px 30px #0009; color: #eaf0e1; }
+.field-menu strong { display: block; margin: 10px 0 8px; font-size: 11px; letter-spacing: .1em; }
+.field-menu-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 5px 0 13px; align-items: center; }
+.field-menu-row input { flex: 1; min-width: 95px; width: auto; font-size: 14px; }
+.field-menu button { min-height: 36px; font-size: 11px; }
+.hud-stack { pointer-events: auto; scrollbar-width: thin; }
+.hud-stack > section { pointer-events: auto; }
+@media (max-width: 680px) {
+  .co-op-bar { min-height: 48px; flex-wrap: nowrap; gap: 6px; font-size: 11px; }
+  .co-op-title { display: none; }
+  #account-state { white-space: nowrap; }
+  .co-op-bar #room-status { flex: 1; font-size: 11px; }
+  .hud-stack { width: min(45vw, 205px); }
+  .hud-stack .mission-panel, .hud-stack .mission-panel strong, .hud-stack .mission-panel small { font-size: 10px; line-height: 1.45; }
+  .hud-stack .creature-panel .ability-button { font-size: 11px; }
+  .hud-stack > .creature-panel, .hud-stack > .mission-panel { max-height: 230px; overflow-y: auto; }
+}
+
+/* v0.14: signed-in account only, no legacy backup controls */
+.auth-gate[hidden] { display:none!important; }
+.auth-gate { position:fixed; inset:0; z-index:9900; display:grid; place-items:center; padding:28px; text-align:center; color:#d7efd3; background:rgba(6,16,13,.94); font:700 20px/1.5 system-ui,sans-serif; }
+.account-panel { z-index:10000; }
+#account-save-now { background:#427651; }
+.account-panel button[hidden] {display:none!important;}
+
+/* v0.16: authenticated co-op wallet lives in the field menu, not over the game canvas */
+.coop-trust-state { font-size: 0.78rem; color: #bce3c7; line-height: 1.5; overflow-wrap: anywhere; }
+.coop-trust-buttons { flex-wrap: wrap; }
+.coop-trust-buttons button { min-height: 34px; flex: 1 1 95px; }

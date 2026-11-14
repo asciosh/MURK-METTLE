@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const text = (await readFile(new URL('../worker/account.mjs', import.meta.url), 'utf8'))
+const text = (await readFile(new URL('../server/cloudflare/account.mjs', import.meta.url), 'utf8'))
   .replace("import { DurableObject } from 'cloudflare:workers';", 'class DurableObject { constructor(ctx) { this.ctx = ctx; } }');
 const { PlayerAccount } = await import(`data:text/javascript,${encodeURIComponent(text)}`);
 class Storage {

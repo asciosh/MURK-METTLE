@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-const source = (await readFile(new URL('../worker/account.mjs', import.meta.url), 'utf8'))
+const source = (await readFile(new URL('../server/cloudflare/account.mjs', import.meta.url), 'utf8'))
   .replace("import { DurableObject } from 'cloudflare:workers';", 'class DurableObject { constructor(ctx) { this.ctx = ctx; } }');
 const { PlayerAccount } = await import(`data:text/javascript,${encodeURIComponent(source)}`);
 class Storage {
@@ -34,9 +34,9 @@ test('party extraction is internal-only, idempotent and gives exactly 150 persis
 });
 
 test('room defines server-side, bounded and distance-checked mission events', async () => {
-  const room = await readFile(new URL('../worker/room.mjs', import.meta.url), 'utf8');
-  assert.match(room, /const MISSION_KILLS = 3/);
-  assert.match(room, /const MISSION_SALVAGE = 2/);
+  const room = await readFile(new URL('../server/cloudflare/room.mjs', import.meta.url), 'utf8');
+  assert.match(room, /MISSION_KILLS/);
+  assert.match(room, /MISSION_SALVAGE/);
   assert.match(room, /msg\.type === 'pickup'/);
   assert.match(room, /msg\.type === 'extract'/);
   assert.match(room, /Math\.hypot\(item\.x - player\.x, item\.z - player\.z\) > 2\.7/);

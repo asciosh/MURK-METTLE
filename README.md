@@ -1,45 +1,56 @@
-# MURK & METTLE — v0.16 (Verified co-op economy)
+# Murk & Mettle · v0.20
 
-A third-person co-op browser RPG, built with Three.js, TypeScript, Vite and Cloudflare Workers/Durable Objects.
+A third-person browser co-op creature-collection RPG. Built with Three.js, TypeScript, Vite and Cloudflare Durable Objects.
 
-## Version 0.16 changes
+## Requirements
 
-- Progression is loaded from the authenticated Cloudflare account **before** starting the game.
-- No guest gameplay, legacy recovery-key UI, or `localStorage` persistence for XP, creatures, inventory, crafting or expeditions.
-- Progress is held in memory, uploaded every 12 seconds while visible, and can be uploaded manually via **Field Menu → Player Account → SAVE NOW**.
-- Save requests use revision checking; a conflict pauses sync rather than overwriting another session.
-- Multiplayer rooms require an authenticated account session. Shared combat state still lives in the room Durable Object.
-- Co-op kills grant **one verified material per unique kill** to the finishing player’s account. Co-op loot is never awarded by local pickups.
-- Verified co-op crafting checks account inventory, deducts resources atomically, and stores crafted equipment in the account.
-- The room validates equipped co-op melee upgrades by querying account storage (`sync-equipment`), rather than trusting the browser.
-- Open **Field Menu → VERIFIED CO-OP PROGRESSION** for XP, materials and upgrade crafting. Solo backpack and crafting remain separate.
-- No database migration is required: the account Durable Object stores new inventory and equipment keys lazily.
+- Node.js 22.12+ (or an explicitly compatible newer version)
+- Cloudflare account and Wrangler for deployed multiplayer/account features
 
-## Run and deploy
+## Run
 
-```bash
-npm install
-npm run build
+```sh
+npm ci
 npm test
-npm install -D wrangler
-npx wrangler deploy
+npm run build
+npm run dev
 ```
 
-For local account and Cloudflare Durable Object testing, use `npx wrangler dev` after building. The normal Vite development server does **not** provide the account endpoints.
+`npm run dev` runs the **local WebSocket server** and the Vite frontend. Account login and persistent cloud progression require Cloudflare; use `npx wrangler dev` after building, or deploy.
 
-## Cautions
+### Deploy to Cloudflare
 
-- **This is a private beta**, not production-grade authentication. PINs have only 6–8 digits.
-- **Solo progression remains client-computed and can still be modified before upload.** Only co-op kill rewards, co-op loot and co-op crafting are server-validated. Do not enable trading, rankings or competitive rewards.
-- Closing a tab can lose up to 12 seconds of unsynchronized changes. Use SAVE NOW before leaving.
-- Logging in as the same account in multiple tabs can result in a revision conflict; one session must reload.
-- Historical Durable Object classes and migration tags are retained for Cloudflare migration compatibility. The old recovery-key endpoint is disabled.
-- This update intentionally ignores any historical browser saves because there was no progress to preserve.
+```sh
+npm install --save-dev wrangler
+npm test
+npm run build
+npx wrangler deploy --config wrangler.jsonc
+```
 
-See `CHANGELOG-v0.16.md` for details.
+Wrangler is **not pinned in the bundled lockfile**: install it as shown and commit the resulting `package.json` and `package-lock.json` updates after verification. GitHub-integrated deploys must use the Cloudflare Worker configuration (`server/cloudflare/index.mjs`), not a Pages-only static deployment.
 
-## v0.19 co-op field expedition
+**Do not delete or recreate existing Durable Objects, migration tags, or account data.** v0.20 changes source paths, not stored data formats or object class names.
 
-In a Cloudflare room (up to 4 authenticated players), defeat 3 infected together, collect both blue field samples (press **E** at **X -5, Z -7** and **X 6, Z -13**), and reach the extraction beacon at **X 0, Z -18**. Press **E** there to complete the mission. All alive, connected players receive **150 verified Cloudflare XP** once per completed mission. Shared objectives and pickups are room-owned; they are not client inventory items. Disconnecting before extraction means no party reward. Existing solo missions remain separate.
+## Project layout
 
-See `CHANGELOG-v0.19.md` for limitations and testing. Run `npm test`, `npm run build`, then `npx wrangler deploy` in Codespaces.
+- `src/client/game/`: browser gameplay, rendering, networking client, account screen
+- `src/client/ui/`: layout helpers
+- `src/styles/`: ordered CSS split (foundation → components → screens → polish)
+- `src/main.ts`: boot and screen/menu wiring
+- `server/cloudflare/`: Worker router and persistent Durable Objects
+- `server/local/`: local WebSocket development server (not for Cloudflare)
+- `shared/`: pure server game-rule constants and validation helpers
+- `public/models/`: original survivor GLB and asset manifest
+- `tests/`: Node regression and architecture tests
+- `docs/`: migration guide, audit, archived changelogs
+
+## Current limitations
+
+- Co-op kills, salvage, crafting and creature ownership have server validation. **Solo progression is still computed by the browser**, then revision-saved to a Cloudflare account.
+- PIN-only login (6–8 digits) is private-beta quality, not recommended for a public game without stronger authentication and rate limiting.
+- Mission XP currently credits connected participants only; partial award failures require operator intervention.
+- Cloud account save requests can conflict if the same account is open on multiple devices. The newer save is not overwritten.
+- WebSocket movement updates and Cloudflare CPU usage need real multiplayer performance testing.
+
+See `docs/V0.20-REFACTOR.md` and `docs/V0.20-TESTING.md` before deployment.
+Historical changelogs are in `docs/changelog/`.

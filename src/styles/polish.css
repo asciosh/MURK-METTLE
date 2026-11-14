@@ -1,0 +1,24 @@
+/* v0.20: mobile, keyboard and safe-area usability, without altering underlying HUD coordinates. */
+:where(button, a, input):focus-visible {
+  outline: 2px solid #d4ed9d;
+  outline-offset: 3px;
+}
+.field-menu, .account-panel, .inventory-panel { overscroll-behavior: contain; scrollbar-width: thin; }
+.field-menu button, .account-panel button { touch-action: manipulation; }
+.field-menu { max-height: min(75dvh, 640px); }
+.account-panel { top: max(12px, env(safe-area-inset-top)); max-height: calc(100dvh - 24px - env(safe-area-inset-bottom)); }
+.inventory-panel { max-height: calc(100% - 85px); }
+@media (max-width: 680px) {
+  .co-op-bar { padding-inline: 10px; min-height: 52px; }
+  #field-menu-toggle { min-height: 40px; }
+  .field-menu { right: 6px; width: min(420px, calc(100vw - 12px)); padding: 14px; max-height: min(78dvh, 640px); }
+  .field-menu-row button { min-height: 40px; }
+  .hud-stack { max-height: calc(100% - 130px); }
+  .hud-stack > section { min-width: 0; }
+  .account-panel { left: 8px; right: 8px; width: auto; padding: 16px; }
+  .hud-stack .mission-panel small { font-size: 9px; }
+}
+@media (max-height: 600px) {
+  .field-menu { max-height: 72dvh; }
+  .hud-stack { max-height: calc(100% - 76px); }
+}
