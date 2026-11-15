@@ -2,6 +2,7 @@
 
 Current guides:
 
+- **NEXTGEN 2.0 program**: [vision and pillars](nextgen/README.md), [milestone roadmap](nextgen/ROADMAP.md), [progress log](NEXTGEN-PROGRESS.md), plus [AGENTS.md](../AGENTS.md) working rules.
 - [v0.27 visual upgrade, evidence and checkpoints](VISUAL-UPGRADE-PROGRESS.md)
 - [v0.27 visual asset provenance](VISUAL-ASSETS-v0.27.md)
 
