@@ -1,76 +1,59 @@
-# Murk & Mettle · v0.26
+# MURK & METTLE
 
-A third-person browser zombie-survival and creature-collection RPG. Built with Three.js, TypeScript, Vite and Cloudflare Durable Objects.
+A cooperative third-person survival RPG for **Windows PC**, built with Three.js, TypeScript and Cloudflare Durable Objects. Play with mouse and keyboard in a current Windows Chrome/Edge browser or the [Tauri 2 Windows edition](desktop/README.md). Up to four players share a room.
 
-v0.26 adds Android touch controls, a compact phone HUD, a Mobile graphics preset, more articulated movement/attack/healing animations, creature wing/leg motion, falling leaves, curved ferns and moving water/clouds. Mouse and keyboard remain the PC default. See [v0.26 notes](docs/changelog/CHANGELOG-v0.26.md) and [mobile/PC testing](docs/V0.26-TESTING.md).
+Explore the Wildlands, collect five original creature species with fifteen evolution forms, survive infected groups and complete expeditions. Local cosmetic mods change appearance only.
 
-v0.25 makes a larger realism pass: layered PBR terrain, optional photographed CC0 materials, fuller tree crowns, weathered settlement detail, clouded daylight and more human infected silhouettes. See [v0.25 notes](docs/changelog/CHANGELOG-v0.25.md), [graphics checks](docs/V0.25-TESTING.md) and [asset credits](docs/V0.25-ASSETS.md).
+**Android/mobile support has been removed.** There are no touch controls, phone HUD or Mobile graphics option. Performance, Balanced and Cinematic remain available. Existing local Mobile preferences map to Performance; cloud accounts and progression are unchanged. Desktop layout checks cover 1920×1080, 1366×768 and a 960×540 window. Smaller windows and non-Windows player platforms are unsupported.
 
-v0.24 adds Mossback and Stormrook, bringing the collection to five species and fifteen evolution forms. The expanded journal shows evolution chains, XP progress, pulse stats and habitat tracking. See [v0.24 notes](docs/changelog/CHANGELOG-v0.24.md) and [testing steps](docs/V0.24-TESTING.md).
+## Develop and play locally
 
-v0.23 adds infected groups, gunshot investigation, dodgeable melee wind-ups, sprint stamina and interruptible bandages in solo and co-op. See [v0.23 notes](docs/changelog/CHANGELOG-v0.23.md) and [testing steps](docs/V0.23-TESTING.md).
-
-v0.22 adds articulated survivor/gun animations, shared co-op poses, natural foliage motion and an optional Cinematic graphics mode. See [v0.22 notes](docs/changelog/CHANGELOG-v0.22.md) and [testing steps](docs/V0.22-TESTING.md).
-
-v0.21 added an expanded 180m sector, abandoned settlement and wetland, shoulder-camera firearms, and three collectible species with three evolution stages each. See [Codespaces upgrade guide](CODESPACES-UPGRADE.md) and [feature notes](docs/changelog/CHANGELOG-v0.21.md).
-
-## Requirements
-
-- Node.js 22.12+ (or an explicitly compatible newer version)
-- Cloudflare account and Wrangler for deployed multiplayer/account features
-
-## Run
+Node.js **22.12+** is required. From the repository root:
 
 ```sh
 npm ci
 npm test
+npm run typecheck
 npm run build
-npx wrangler dev --local --ip 0.0.0.0 --port 8787
+npm run dev:cloudflare
 ```
 
-Use the Wrangler command above for complete local gameplay, accounts and co-op. Its local storage is independent of production. `npm run dev` builds the client, watches it for changes and starts the same complete Wrangler development Worker on port 8787. The standalone `npm run server` is a historical simplified Node WebSocket prototype; it does not implement the expansion protocol or account API.
+Open the local Wrangler address (normally `http://localhost:8787`). Local accounts and rooms are separate from production. `npm run dev` builds, watches and runs the complete Worker; `npm run server` is an alias for the complete local Worker. The obsolete unauthenticated Node server has been removed.
 
-### Deploy to Cloudflare
+See [developer setup](docs/development/SETUP.md), [testing and manual checks](docs/development/TESTING.md) and [Cloudflare deployment](docs/development/CLOUDFLARE.md). Production deployment is a separate operator action.
 
-```sh
-npm install --save-dev wrangler
-npm test
-npm run build
-npx wrangler deploy --config wrangler.jsonc
-```
+## Project map
 
-Wrangler is included in the package lock; `npm ci` installs it reproducibly. GitHub-integrated deploys must use the Cloudflare Worker configuration (`server/cloudflare/index.mjs`), not a Pages-only static deployment.
+- `src/main.ts`: authenticated boot and menu wiring; the game loads lazily.
+- `src/client/game/`: client orchestration, actors, world, camera, input, combat presentation and networking.
+- `src/client/rendering/`: field lighting, graphics presets and optional render-target lifecycle.
+- `src/client/ui/`: HUD arrangement, journal and keyboard/focus behavior.
+- `src/client/mods/`: isolated local cosmetic validation, storage, loading and manager UI.
+- `src/client/debug/`: development-only performance telemetry.
+- `src/styles/`: ordered stylesheets and reusable botanical tokens.
+- `server/cloudflare/`: production/local Worker, accounts and Durable Objects.
+- `shared/`: cross-runtime game contracts and pure presentation helpers.
+- `desktop/`: independent Windows launcher, Rust host, security policy and NSIS packaging.
+- `public/`, `examples/`, `scripts/`: runtime assets, original mod sources and reproducible tooling.
+- `tests/`: automated security/game-rule/structure tests and real browser fixtures.
+- `docs/`: [current guide index](docs/README.md), historical records and changelogs.
 
-**Do not delete or recreate existing Durable Objects, migration tags, or account data.** v0.20 changes source paths, not stored data formats or object class names.
+[Architecture](docs/ARCHITECTURE.md) explains the boundaries. [Cleanup audit](docs/audit/CLEANUP.md) records evidence for removals and retained compatibility code.
 
-## Project layout
+## Creatures, assets and mods
 
-- `src/client/game/`: browser gameplay, rendering, networking client, account screen
-- `src/client/ui/`: layout helpers
-- `src/styles/`: ordered CSS split (foundation → components → screens → polish)
-- `src/main.ts`: boot and screen/menu wiring
-- `server/cloudflare/`: Worker router and persistent Durable Objects
-- `server/local/`: local WebSocket development server (not for Cloudflare)
-- `shared/`: pure server game-rule constants and validation helpers
-- `public/models/`: original survivor GLB and asset manifest
-- `tests/`: Node regression and architecture tests
-- `docs/`: migration guide, audit, archived changelogs
+Use **Field Menu → Creature Mods** to import, preview, enable or remove original/properly licensed cosmetic packages. See the [format, limits and licensing guide](docs/modding/README.md). The original CC0 Copperbloom example includes model, animations, icon, provenance and reproducible source. [Official model provenance](public/models/README.md) and optional [photo-material attribution](docs/archive/V0.25-ASSETS.md) are preserved.
 
-## Windows desktop edition
+## Windows desktop
 
-The separate [Tauri 2 Windows host](desktop/README.md) preserves the hosted browser game and existing Cloudflare accounts. See [build, security and compatibility notes](docs/WINDOWS-DESKTOP.md). Browser/Android build and deployment commands above are unchanged.
+See [Windows build, security and installation notes](docs/WINDOWS-DESKTOP.md). The host loads the trusted HTTPS game and existing Cloudflare services without granting native permissions to remote content. It requires internet access. Tauri packaging does not inherently increase FPS. The Windows workflow produces unsigned test installers; see its actual job result before claiming an installer exists.
 
-## Local creature cosmetics
+## Existing limitations
 
-Use **Field Menu → Creature Mods** to import and preview original or properly licensed cosmetic packs. The [v1 authoring and security guide](docs/modding/README.md) documents limits and the original CC0 Copperbloom demo. Cosmetics are device-local and do not change official creature rules or cloud saves.
+- Solo progress is still computed by the client, then saved with account revision checks; co-op combat/rewards use server validation.
+- Username/PIN login is private-beta quality. Stronger authentication and abuse protection need separate work before a public release.
+- A cloud-save conflict pauses saving instead of overwriting another session. Use **Account → SAVE NOW** before closing.
+- Failed multi-account rewards require operator reconciliation; this cleanup does not introduce a new persistence policy.
+- Sustained hardware performance, native Windows acceptance and full four-player playtests remain release checks.
 
-## Current limitations
-
-- Co-op kills, salvage, crafting and creature ownership have server validation. **Solo progression is still computed by the browser**, then revision-saved to a Cloudflare account.
-- PIN-only login (6–8 digits) is private-beta quality, not recommended for a public game without stronger authentication and rate limiting.
-- Mission XP currently credits connected participants only; partial award failures require operator intervention.
-- Cloud account save requests can conflict if the same account is open on multiple devices. The newer save is not overwritten.
-- WebSocket movement updates and Cloudflare CPU usage need real multiplayer performance testing.
-
-See `docs/V0.20-REFACTOR.md` and `docs/V0.20-TESTING.md` before deployment.
-Historical changelogs are in `docs/changelog/`.
+Historical version notes live in [docs/archive](docs/archive/README.md); all changelogs remain in [docs/changelog](docs/changelog).

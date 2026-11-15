@@ -1,11 +1,7 @@
 // Run against the built Worker or Vite preview, not the source development server.
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./support.cjs');
 (async () => {
-  const browser = await chromium.launch({
-    executablePath: '/usr/bin/chromium',
-    headless: true,
-    args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
-  });
+  const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
   const requests = [],
     errors = [];
@@ -13,7 +9,7 @@ const { chromium } = require('playwright');
   page.on('request', (r) => requests.push(r.url()));
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.addInitScript(() =>
-    localStorage.setItem('murk-mettle-graphics', JSON.stringify({ quality: 'mobile', photo: false })),
+    localStorage.setItem('murk-mettle-graphics', JSON.stringify({ quality: 'low', photo: false })),
   );
   await page.route('**/api/account/**', (r) =>
     r.fulfill({ json: authenticated ? { username: 'benchmark', revision: 0, data: null } : {} }),
@@ -31,7 +27,7 @@ const { chromium } = require('playwright');
   );
   if (!requests.some((u) => /\/Game-.*\.js/.test(u)) || !requests.some((u) => /\/three-core-.*\.js/.test(u)))
     throw Error('Game chunks missing');
-  if (requests.some((u) => /\/SceneEffects-.*\.js/.test(u))) throw Error('Cinematic downloaded on Mobile');
+  if (requests.some((u) => /\/SceneEffects-.*\.js/.test(u))) throw Error('Cinematic downloaded on Performance');
   if (await page.locator('[aria-label="Development performance statistics"]').count())
     throw Error('Profiler shipped in production');
   const cinematicResponse = page.waitForResponse((r) => /\/SceneEffects-.*\.js/.test(r.url()));

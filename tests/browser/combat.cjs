@@ -1,14 +1,10 @@
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./support.cjs');
 const path = require('node:path'),
   fs = require('node:fs');
 const output = process.env.ARTIFACT_DIR || path.join(require('node:os').tmpdir(), 'murk-combat-check');
 fs.mkdirSync(output, { recursive: true });
 (async () => {
-  const b = await chromium.launch({
-    executablePath: '/usr/bin/chromium',
-    headless: true,
-    args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
-  });
+  const b = await launchBrowser();
   const p = await b.newPage({ viewport: { width: 1366, height: 768 } });
   const errors = [];
   p.on('pageerror', (e) => errors.push(String(e)));
@@ -60,10 +56,10 @@ fs.mkdirSync(output, { recursive: true });
       !recoilMoved
     )
       throw Error('Cosmetic recoil crossed gameplay boundary');
-    feedback.setQuality('mobile');
+    feedback.setQuality('balanced');
     for (let i = 0; i < 30; i++) feedback.impact(new T.Vector3(0, 1, 0));
     feedback.update(0.01);
-    if (feedback.geometry.drawRange.count !== 12) throw Error('Mobile particle budget');
+    if (feedback.geometry.drawRange.count !== 40) throw Error('Balanced particle budget');
     feedback.setQuality('low');
     feedback.update(0.01);
     if (feedback.geometry.drawRange.count !== 0) throw Error('Performance particles');

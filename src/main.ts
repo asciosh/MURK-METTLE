@@ -21,8 +21,8 @@ menuToggle?.addEventListener('click', () => {
   if (fieldMenu.hidden) {
     if (document.querySelector('#inventory-panel.visible'))
       document.querySelector<HTMLButtonElement>('#inventory-close')?.click();
-    if (document.querySelector('#touch-journal-sheet:not([hidden])'))
-      document.querySelector<HTMLButtonElement>('#touch-journal-close')?.click();
+    if (document.querySelector('#journal-sheet:not([hidden])'))
+      document.querySelector<HTMLButtonElement>('#journal-close')?.click();
   }
   fieldMenu.hidden = !fieldMenu.hidden;
   menuToggle.setAttribute('aria-expanded', String(!fieldMenu.hidden));

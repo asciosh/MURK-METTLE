@@ -4,7 +4,12 @@ on:
   pull_request:
     paths:
       - 'desktop/**'
-      - 'tests/desktop-*.test.mjs'
+      - 'src/**'
+      - 'shared/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package*.json'
+      - 'tests/*.test.mjs'
       - '.github/workflows/desktop-windows.yml'
 permissions:
   contents: read

@@ -1,13 +1,9 @@
 // Browser-only launcher UX and cosmetic disconnect checks. Does not validate native WebView2.
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./support.cjs');
 const fs = require('node:fs'),
   path = require('node:path');
 (async () => {
-  const browser = await chromium.launch({
-    executablePath: '/usr/bin/chromium',
-    headless: true,
-    args: ['--no-sandbox'],
-  });
+  const browser = await launchBrowser();
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));

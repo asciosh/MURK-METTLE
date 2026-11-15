@@ -27,9 +27,9 @@ test('camera spring retains position/velocity continuity and bounds suspension t
   assert.ok(Number.isFinite(reversed.position) && Number.isFinite(reversed.velocity));
   assert.ok(Math.abs(reversed.position - moving.position) < 0.1);
 });
-test('cosmetic budgets disable Performance particles and bound Android and Cinematic effects', () => {
+test('cosmetic budgets disable Performance particles and bound Balanced and Cinematic effects', () => {
   assert.equal(impactBudget('low'), 0);
-  assert.equal(impactBudget('mobile'), 12);
+  assert.equal(impactBudget('balanced'), 40);
   assert.equal(impactBudget('balanced'), 40);
   assert.equal(impactBudget('cinematic'), 64);
 });

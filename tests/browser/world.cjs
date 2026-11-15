@@ -1,14 +1,10 @@
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./support.cjs');
 const path = require('node:path'),
   fs = require('node:fs');
 const output = process.env.ARTIFACT_DIR || path.join(require('node:os').tmpdir(), 'murk-world-check');
 fs.mkdirSync(output, { recursive: true });
 (async () => {
-  const b = await chromium.launch({
-    executablePath: '/usr/bin/chromium',
-    headless: true,
-    args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
-  });
+  const b = await launchBrowser();
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = [];
   p.on('pageerror', (e) => errors.push(String(e)));
@@ -47,7 +43,7 @@ fs.mkdirSync(output, { recursive: true });
       const before = crowns.map((m) => new Float32Array(m.instanceMatrix.array));
       const full = crowns.reduce((a, m) => a + m.count, 0);
       if (full !== TREES.length * 10) throw Error('Tree crowns do not match collision tree list');
-      world.setQuality(renderProfile('mobile'));
+      world.setQuality(renderProfile('low'));
       if (crowns.reduce((a, m) => a + m.count, 0) !== TREES.length * 5) throw Error('Mobile crown distribution');
       world.setQuality(renderProfile('balanced'));
       crowns.forEach((m, i) => {
@@ -81,7 +77,7 @@ fs.mkdirSync(output, { recursive: true });
       };
     }),
   );
-  for (const quality of ['mobile', 'low', 'cinematic']) {
+  for (const quality of ['low', 'balanced', 'cinematic']) {
     console.log(quality, await p.evaluate((q) => worldView.capture('wetland', q), quality));
     await p.screenshot({ path: path.join(output, `wetland-${quality}.png`) });
   }

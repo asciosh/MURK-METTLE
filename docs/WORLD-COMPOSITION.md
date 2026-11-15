@@ -1,5 +1,7 @@
 # World composition and habitat art pass
 
+> Historical engineering report. Original measurements/results are retained, including retired Android/Mobile cases. Current support is Windows PC with Performance/Balanced/Cinematic; see the [current test guide](development/TESTING.md). Current fixtures exercise desktop Performance instead of Mobile; reproducing an old Mobile benchmark requires that release's script and source together.
+
 Based on `109b867` (merged combat-feel PR #9). The playable sector remains a flat 180m gameplay/collision map.
 
 ## Visual changes

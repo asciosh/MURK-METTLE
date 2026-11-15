@@ -1,5 +1,7 @@
 # Performance engineering report
 
+> Historical engineering report. Original measurements/results are retained, including retired Android/Mobile cases. Current support is Windows PC with Performance/Balanced/Cinematic; see the [current test guide](development/TESTING.md). Current fixtures exercise desktop Performance instead of Mobile; reproducing an old Mobile benchmark requires that release's script and source together.
+
 Baseline: merged world improvements at `ad1e488`. Candidate: this change. No combat, progression, account, navigation, collision or packet rules changed.
 
 ## Reproducible measurements

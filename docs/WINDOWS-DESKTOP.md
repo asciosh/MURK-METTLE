@@ -1,6 +1,6 @@
 # Windows desktop edition · Tauri 2 proof of concept
 
-The browser/Android game remains the primary frontend. `desktop/` is a separate Windows host with its own npm and Cargo locks. It does not replace Vite, Three.js, the Cloudflare Worker or any Durable Object. The desktop shell version is `0.1.0`; game content continues to follow the deployed browser release.
+The Windows PC browser game remains the hosted frontend; Android/mobile support is retired. `desktop/` is a separate Windows host with its own npm and Cargo locks. It does not replace Vite, Three.js, the Cloudflare Worker or any Durable Object. The desktop shell version is `0.1.0`; game content continues to follow the deployed browser release.
 
 ## Architecture and authentication decision
 
@@ -15,7 +15,7 @@ The bundled local launcher opens **https://murk-mettle.asciosh.workers.dev/** in
 | Session | WebView2 owns the existing `HttpOnly; Secure; SameSite=Strict; Path=/` cookie in its application profile. The Rust host never reads it. |
 | CSRF | Existing POST/PUT exact-Origin checks remain unchanged. No new CORS allowlist, cookie flag exception or native authentication proxy. |
 | Account database | Same Worker and existing account Durable Objects; no migrations, cloning or account conversion. |
-| Browser interoperability | Rooms use the existing protocol, including mixed Windows/browser/Android parties. |
+| Browser interoperability | Rooms use the existing protocol, including Windows browser/desktop parties. |
 
 A local `tauri://`/`http://tauri.localhost` copy of the game would make requests to the Worker cross-origin and can prevent Strict cookies from accompanying cross-site fetches/WebSockets. Relaxing SameSite, spoofing Origin, copying session tokens into configuration or bypassing WebView certificate/CORS checks would be the wrong integration. Loading the existing site as the top-level game document retains its browser authentication model. Initial cross-site navigation and subsequent same-origin requests still need real WebView2 login verification.
 
@@ -65,13 +65,13 @@ npm run build -- -- --locked
 
 The last command runs the pinned Tauri CLI, builds the small launcher, compiles the host and produces the configured **NSIS** package under `desktop/src-tauri/target/release/bundle/nsis/*-setup.exe`. This path is an expected output, not evidence an installer has been built. Do not upload `target/`, npm caches or `dist/` to the source PR. Original icon source/provenance is in `desktop/art/`; installer metadata and the current-user install mode are in `src-tauri/tauri.conf.json`.
 
-For native development, run `npm run dev` from `desktop/` on Windows. This serves only the local launcher on `http://127.0.0.1:1420`; the game still uses the compiled HTTPS deployment. For regular browser development/build/deployment, continue using the existing root commands. No desktop install is required on Android or browser PCs, and Wrangler continues to deploy root `dist/` only.
+For native development, run `npm run dev` from `desktop/` on Windows. This serves only the local launcher on `http://127.0.0.1:1420`; the game still uses the compiled HTTPS deployment. For regular browser development/build/deployment, continue using the existing root commands. No desktop install is required for Windows browser players, and Wrangler continues to deploy root `dist/` only.
 
 MSI is optional and has not been configured or produced. If an enterprise deployment needs it, add WiX/MSI as a separately validated target rather than assuming NSIS and MSI install behavior is identical.
 
 ## Windows test-build workflow
 
-`.github/workflows/desktop-windows.yml` runs on desktop-related PRs and supports manual dispatch once present on the default branch. It uses a Windows 2022 x64 runner with read-only repository permissions. It runs the existing game tests/typecheck/build, builds the launcher, runs Rust release policy tests, builds an unsigned NSIS installer, then executes `desktop/tests/install-smoke.ps1`.
+`.github/workflows/desktop-windows.yml` runs on desktop or shared game source/asset/test PRs and supports manual dispatch once present on the default branch. It uses a Windows 2022 x64 runner with read-only repository permissions. It runs the existing game tests/typecheck/build, builds the launcher, runs Rust release policy tests, builds an unsigned NSIS installer, then executes `desktop/tests/install-smoke.ps1`.
 
 The smoke test silently installs the **actual generated installer** into the runner's temporary directory, launches the installed host, finds its branded window and launcher button through Windows UI Automation, clicks the real scoped launcher command, requires a game window and its hosted HTTPS login page, and runs the uninstaller. It does not authenticate, verify gameplay/WebGL rendering or write production account data. It force-stops only its test process rather than attempting to automate the normal quit confirmation. Artifacts retain the real setup executable for 14 days; upload is attempted even if a later smoke test fails, so always inspect the job result before treating an artifact as validated. This workflow never publishes a release or deploys Cloudflare.
 
@@ -102,7 +102,7 @@ Before calling the Windows edition ready:
 - Install, launch, resize, fullscreen, cancel/confirm quit and uninstall on Windows 10 and 11; test WebView2 installation on a clean machine.
 - Check 100%, 150% and 200% DPI, display changes, 1366×768 and 1920×1080, pointer lock release/recapture, Alt+Tab, keyboard layout, audio startup/mute and GPU rendering/presets.
 - Use a staging test account to verify login, cookie persistence after app restart, logout, save/reload/revision-conflict behavior, failed login and session expiry. Confirm normal secure cookies and exact request Origin in WebView2 developer tools in a debug build.
-- Join the same staging room with three PC clients and one Android client, including the Windows edition. Verify WebSocket authentication, combat/extraction, disconnect/rejoin and cloud progression. Browser/Android clients require no changes.
+- Join the same staging room with four Windows PC clients, including both browser and Windows desktop editions. Verify WebSocket authentication, combat/extraction, disconnect/rejoin and cloud progression. Use separate staging accounts.
 - Turn Wi-Fi off/on; test a server outage and a blank initial page. Confirm the native help/reload menu remains usable and there is no misleading save success.
 - In a debug build, verify remote attempts to invoke `start_game`, filesystem, shell and dialog/opener commands are rejected. Check external HTTPS popups open the browser, cross-origin redirects stay blocked, and `file:`, `javascript:`, `data:`, `ms-settings:` and credential-bearing links cannot launch native handlers. Verify downloads/file drops are rejected.
 - Verify installer/app signatures for a signed release and document any remaining SmartScreen/antivirus behavior. Measure performance on actual Windows hardware; do not infer an FPS gain from Tauri packaging.

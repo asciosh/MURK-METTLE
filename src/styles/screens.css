@@ -47,27 +47,6 @@ button:focus-visible, input:focus-visible, .wordmark:focus-visible { outline: 2p
  .hud-stack .creature-panel p { display: none; }
  .hud-bottom-right { display:none; }
 }
-@media (max-width: 680px) {
- .topbar { top: 0; height: 49px; }
- .hud-stack { top: 57px; width: min(46vw, 192px); max-height: calc(100% - 145px); gap: 5px; padding: 1px; }
- .hud-stack-left { left: 7px; } .hud-stack-right { right: 7px; }
- .hud-stack > .player-status, .hud-stack > .progress-panel, .hud-stack > .creature-panel,
- .hud-stack > .mission-panel, .hud-stack > .enemy-panel { padding: 7px; border-radius: 8px; }
- .hud-stack .mission-panel { font-size: 8px; }
- .hud-stack .mission-panel strong { font-size: 9px; }
- .hud-stack .mission-panel small { font-size: 7px; }
- .hud-stack .creature-panel .ability-button { font-size: 8px; padding: 8px 5px; }
- .hud-stack .creature-name { font-size: 14px; }
- .inventory-toggle { top: 11px; left: auto; right: 8px; transform: none; padding: 6px 8px; font-size: 8px; }
- .inventory-panel { top: 52px; max-height: calc(100% - 70px); }
- .minimap-panel { width: min(116px, 31vw); right: 7px; bottom: 7px; padding: 6px; }
- .minimap-legend { display: none; }
- .hud-bottom-left { bottom: 9px; left: 8px; }
- .hud-bottom-right { display:none; }
- .radio-panel { width: min(310px, 85vw); bottom: 115px; }
- .combat-toast { bottom: 75px; }
- .welcome-card { top: 56%; }
-}
 @media (max-height: 650px) {
  .hud-stack { max-height: calc(100% - 120px); }
  .hud-stack .creature-panel p { display:none; }
@@ -79,7 +58,6 @@ button:focus-visible, input:focus-visible, .wordmark:focus-visible { outline: 2p
 }
 /* Only functional HUD buttons capture clicks; the rest remains click-through for the game. */
 .hud-stack .ability-button { pointer-events: auto; }
-
 
 /* v0.10: a true title state; all gameplay HUD remains behind the opaque overlay. */
 .title-screen {
@@ -110,13 +88,6 @@ button:focus-visible, input:focus-visible, .wordmark:focus-visible { outline: 2p
 .title-enter:focus-visible { outline:3px solid #fff; outline-offset:5px; }
 .title-hint { color:#91a69a; font:9px 'DM Mono',monospace; letter-spacing:.06em; margin-top:24px; line-height:1.8; }
 .title-build { position:absolute; z-index:1; right:32px; bottom:24px; color:#9baa99; font:9px 'DM Mono',monospace; letter-spacing:.1em; }
-@media (max-width:680px) {
- .title-screen::after { background:linear-gradient(90deg,rgba(6,16,13,.91),rgba(6,16,13,.55)); }
- .title-content { margin-left:24px; padding-right:22px; }
- .title-content h1 { font-size:clamp(72px,17vw,115px); }
- .title-build { display:none; }
- .title-hint { font-size:8px; }
-}
 @media (prefers-reduced-motion:reduce) { .title-screen,.title-enter {transition:none;} }
 
 /* v0.13 friend-only account panel: separate from the game HUD */
@@ -145,16 +116,6 @@ button:focus-visible, input:focus-visible, .wordmark:focus-visible { outline: 2p
 .field-menu button { min-height: 36px; font-size: 11px; }
 .hud-stack { pointer-events: auto; scrollbar-width: thin; }
 .hud-stack > section { pointer-events: auto; }
-@media (max-width: 680px) {
-  .co-op-bar { min-height: 48px; flex-wrap: nowrap; gap: 6px; font-size: 11px; }
-  .co-op-title { display: none; }
-  #account-state { white-space: nowrap; }
-  .co-op-bar #room-status { flex: 1; font-size: 11px; }
-  .hud-stack { width: min(45vw, 205px); }
-  .hud-stack .mission-panel, .hud-stack .mission-panel strong, .hud-stack .mission-panel small { font-size: 10px; line-height: 1.45; }
-  .hud-stack .creature-panel .ability-button { font-size: 11px; }
-  .hud-stack > .creature-panel, .hud-stack > .mission-panel { max-height: 230px; overflow-y: auto; }
-}
 
 /* v0.14: signed-in account only, no legacy backup controls */
 .auth-gate[hidden] { display:none!important; }

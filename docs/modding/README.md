@@ -12,7 +12,7 @@ The original **Copperbloom** demo can be imported with the demo button, or downl
 
 Packages/settings persist only in the current browser/WebView profile and origin, in the separate `murk-mettle-cosmetics` IndexedDB database. They are not account progression and do not sync. Clearing site data removes them. Storage denial/quota failures produce an error without changing account data or granting ownership. Invalid/missing stored assets keep the original visuals. Browser storage is not a rights registry or authenticity guarantee.
 
-On Windows, the existing Tauri host loads the same hosted game. Its WebView2 **HTML file input opens the operating system's user-selected file chooser**. This is the native-picker import path for v1: no directory scan, mods folder, new Rust file command or filesystem capability is needed. The remote game still receives no Tauri capabilities. Browser and Android importing use the same selected-file flow. Native WebView2 importing requires manual acceptance testing after deploying this frontend; the earlier desktop installer smoke test did not test this new feature.
+On Windows, the existing Tauri host loads the same hosted game. Its WebView2 **HTML file input opens the operating system's user-selected file chooser**. This is the native-picker import path for v1: no directory scan, mods folder, new Rust file command or filesystem capability is needed. The remote game still receives no Tauri capabilities. Windows browsers use the same selected-file flow; Android/mobile support has been retired. Native WebView2 importing requires manual acceptance testing after deploying this frontend; the earlier desktop installer smoke test did not test this new feature.
 
 ## Manifest contract
 
@@ -25,7 +25,7 @@ Optional fields:
 - `textures`: up to four package-relative PNG paths. Embedded PNGs inside the GLB are also supported. No HTTP, data or blob URI references may appear in input models.
 - `icon`: package-relative PNG, at most 256×256. An enabled pack's icon appears beside the official companion name; official names and stats remain unchanged.
 - `animations`: case-sensitive clip-name mapping for `idle`, `walk`, `run`, `pulse`, `hit`. Current companions use idle/walk/pulse presentation. Run/hit are reserved mappings; they do not add game states. Missing mapped clips use idle, then static pose; official root bob, growth and pulse scaling remain available. Clips can only rotate nodes. No root-motion or scale tracks.
-- `effects`: at most one `{ "type": "pulse-glow", "strength": 0..1 }`. It changes existing model emissive intensity on a cosmetic pulse; it creates no lights, particles, shaders, sounds or gameplay actions. Mobile/Performance suppress this accent with the existing point-light setting. Preview respects reduced-motion preferences by disabling automatic animation.
+- `effects`: at most one `{ "type": "pulse-glow", "strength": 0..1 }`. It changes existing model emissive intensity on a cosmetic pulse; it creates no lights, particles, shaders, sounds or gameplay actions. Performance suppresses this accent with the existing point-light setting. Preview respects reduced-motion preferences by disabling automatic animation.
 
 Compatibility is an explicit renderer contract, independent of the game's release number. Future support for skins, morphs or extensions requires a reviewed validator/renderer change; it cannot be enabled by declaring a different extension in a pack.
 
@@ -60,7 +60,7 @@ Author with +Y up, -Z forward and the creature center at the origin. The loader 
 | Clip duration | 10 seconds maximum |
 | Validation worker | terminated after 15 seconds |
 
-Validation jobs are serialized so restoring several packs cannot launch several decompression workers at once. ZIP expansion is checked against declared sizes before decoding and actual streamed output while decoding. PNG CRCs, chunk structure, scanline expansion and dimensions are checked before browser image decoding. GLB accessors/indices/references and animation tracks are checked before Three.js parses the model. Main-thread GLTF parsing is bounded but can still cause a short loading stall; mod GPU cost varies by asset/device. Budgets are ceilings, not a performance guarantee. Prefer under 3,000 triangles, few materials and 256–512px maps for Android.
+Validation jobs are serialized so restoring several packs cannot launch several decompression workers at once. ZIP expansion is checked against declared sizes before decoding and actual streamed output while decoding. PNG CRCs, chunk structure, scanline expansion and dimensions are checked before browser image decoding. GLB accessors/indices/references and animation tracks are checked before Three.js parses the model. Main-thread GLTF parsing is bounded but can still cause a short loading stall; mod GPU cost varies by asset/device. Budgets are ceilings, not a performance guarantee. Prefer under 3,000 triangles, few materials and 256–512px maps for lower-powered Windows PCs.
 
 ## Original demo and reproducibility
 
@@ -86,6 +86,6 @@ Geometry/textures are shared per validated source. Each visible replacement owns
 
 Run `npm test`, `npm run typecheck`, `npm run build`. With Playwright, Chromium and `npm run dev:client` on port 5173, run `node tests/browser/mods.cjs`; it uses a controlled authenticated fixture, stops the simulation/animation loop and suppresses pointer capture to test the actual manager, renderer and local registry. Existing browser character/interface/combat fixtures remain useful regressions. Test compiled production worker loading separately; Vite development success alone does not establish deployed Worker behavior.
 
-Manual acceptance still includes a physical Android file chooser and performance, real WebView2 import/IndexedDB behavior, real room play with three PC clients and one Android client, and native fullscreen/focus/rotation flows. No pack models or identifiers should appear in account saves or WebSocket packets. Test corrupted/missing local data and clearing site storage; original creatures must remain available. No FPS or physical-device result is implied by software-rendered screenshots.
+Manual acceptance still includes a Windows PC file chooser and performance, real WebView2 import/IndexedDB behavior, real room play with four Windows PC clients, and native fullscreen/focus/resize flows. No pack models or identifiers should appear in account saves or WebSocket packets. Test corrupted/missing local data and clearing site storage; original creatures must remain available. No FPS or physical-device result is implied by software-rendered screenshots.
 
 See [the validation record](VALIDATION.md) for actual checks, GPU resource counts and remaining manual tests.

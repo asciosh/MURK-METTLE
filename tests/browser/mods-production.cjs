@@ -1,11 +1,7 @@
 // Smoke the compiled worker and preview chunks against a local Worker or Vite preview.
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./support.cjs');
 (async () => {
-  const browser = await chromium.launch({
-    executablePath: '/usr/bin/chromium',
-    headless: true,
-    args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
-  });
+  const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } }),
     errors = [],
     requests = [];
@@ -13,7 +9,7 @@ const { chromium } = require('playwright');
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('request', (r) => requests.push(r.url()));
   await page.addInitScript(() =>
-    localStorage.setItem('murk-mettle-graphics', JSON.stringify({ quality: 'mobile', photo: false })),
+    localStorage.setItem('murk-mettle-graphics', JSON.stringify({ quality: 'low', photo: false })),
   );
   await page.route('**/api/account/**', (r) =>
     r.fulfill({ json: { username: 'production_test', revision: 0, data: null } }),

@@ -1,14 +1,10 @@
 // Same static actual-Game workload before/after. Timings are synchronized software-WebGL wall time, not device FPS.
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./support.cjs');
 const fs = require('node:fs'),
   path = require('node:path');
 const destination = process.env.PERF_OUTPUT || path.join(require('node:os').tmpdir(), 'murk-performance.json');
 (async () => {
-  const browser = await chromium.launch({
-    executablePath: '/usr/bin/chromium',
-    headless: true,
-    args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
-  });
+  const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -16,7 +12,7 @@ const destination = process.env.PERF_OUTPUT || path.join(require('node:os').tmpd
     if (m.type() === 'error' && m.text().includes('THREE')) errors.push(m.text());
   });
   await page.addInitScript(() =>
-    localStorage.setItem('murk-mettle-graphics', JSON.stringify({ quality: 'mobile', photo: false })),
+    localStorage.setItem('murk-mettle-graphics', JSON.stringify({ quality: 'low', photo: false })),
   );
   await page.route('**/api/account/**', (r) => r.fulfill({ json: { username: 'benchmark', revision: 0, data: null } }));
   await page.route('**/src/main.ts*', async (route) => {
@@ -41,7 +37,7 @@ const destination = process.env.PERF_OUTPUT || path.join(require('node:os').tmpd
     };
   });
   const cases = [];
-  for (const preset of ['mobile', 'balanced'])
+  for (const preset of ['low', 'balanced'])
     for (const scene of ['camp', 'haven']) {
       const sample = await page.evaluate(
         async ({ preset, scene }) => {

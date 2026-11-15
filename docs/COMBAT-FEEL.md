@@ -1,5 +1,7 @@
 # Cosmetic combat feel pass
 
+> Historical engineering report. Original measurements/results are retained, including retired Android/Mobile cases. Current support is Windows PC with Performance/Balanced/Cinematic; see the [current test guide](development/TESTING.md). Current fixtures exercise desktop Performance instead of Mobile; reproducing an old Mobile benchmark requires that release's script and source together.
+
 ## What changed
 
 - The original aim camera retains camera yaw/pitch, shoulder framing, ray construction and wall checks. A separate render camera adds a critically damped position spring, bounded pistol/rifle recoil and a brief damage impulse. The render camera also receives a wall check. Reticle projection follows the unshaken aim direction. The old recoil offset was removed from the aim camera, where it could influence later shot rays.

@@ -9,7 +9,7 @@ export function initInterface(): void {
     [
       '#mods-dialog[open]',
       '#account-panel:not([hidden])',
-      '#touch-journal-sheet:not([hidden])',
+      '#journal-sheet:not([hidden])',
       '#inventory-panel.visible',
       '#field-menu:not([hidden])',
       '#title-screen:not(.is-hidden)',
@@ -30,8 +30,8 @@ export function initInterface(): void {
         toggle.setAttribute('aria-expanded', 'false');
         if (document.querySelector('#inventory-panel.visible'))
           document.querySelector<HTMLButtonElement>('#inventory-close')?.click();
-        if (document.querySelector('#touch-journal-sheet:not([hidden])'))
-          document.querySelector<HTMLButtonElement>('#touch-journal-close')?.click();
+        if (document.querySelector('#journal-sheet:not([hidden])'))
+          document.querySelector<HTMLButtonElement>('#journal-close')?.click();
       }
       if (open === account) account.querySelector<HTMLElement>('input:not(:disabled),button')?.focus();
     }
@@ -53,7 +53,7 @@ export function initInterface(): void {
     if (e.key === 'Tab') {
       const nodes = [
         ...panel.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select,summary'),
-      ].filter((n) => n.getClientRects().length);
+      ].filter((n) => n.checkVisibility({ visibilityProperty: true }));
       const first = nodes[0],
         last = nodes[nodes.length - 1];
       if (e.shiftKey && document.activeElement === first) {

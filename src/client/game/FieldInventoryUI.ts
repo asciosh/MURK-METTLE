@@ -38,8 +38,8 @@ export class FieldInventoryUI {
       const menu = document.querySelector<HTMLElement>('#field-menu');
       if (menu) menu.hidden = true;
       document.querySelector('#field-menu-toggle')?.setAttribute('aria-expanded', 'false');
-      if (document.querySelector('#touch-journal-sheet:not([hidden])'))
-        document.querySelector<HTMLButtonElement>('#touch-journal-close')?.click();
+      if (document.querySelector('#journal-sheet:not([hidden])'))
+        document.querySelector<HTMLButtonElement>('#journal-close')?.click();
     }
     this.open = !this.open;
     this.panel?.toggleAttribute('inert', !this.open);
