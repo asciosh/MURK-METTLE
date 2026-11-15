@@ -2,6 +2,9 @@
 
 Current guides:
 
+- [v0.27 visual upgrade, evidence and checkpoints](VISUAL-UPGRADE-PROGRESS.md)
+- [v0.27 visual asset provenance](VISUAL-ASSETS-v0.27.md)
+
 - [Architecture and runtime entries](ARCHITECTURE.md)
 - [Developer setup](development/SETUP.md)
 - [Tests, cleanup results and manual acceptance](development/TESTING.md)

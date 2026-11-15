@@ -7,6 +7,7 @@ All new art in this release is original geometry, material/shader code or determ
 | Curved leaves, feathers, tapered stems | `src/client/game/BotanicalGeometry.ts` | Generated indexed geometry; no binary download |
 | Habitat flowers/foliage, wall vines, roots, facade details | `src/client/game/ShowcaseArt.ts` | Merged by material; smaller environment leaves use six rows |
 | Five creature species, three forms each | `src/client/game/CreatureArt.ts`, `Companion.ts` | Original curved leaf/feather/finned forms, expressive faces, shared per-creature materials; batched rigid parts |
+| Survivor tailoring, equipment adaptation and infected growth | `Player.ts`, `AnimationController.ts`, `Zombie.ts` in the client | Original procedural additions; legacy GLB bytes remain unchanged |
 | Moss and leaf-litter PBR texture | `src/client/game/SurfaceMaterials.ts` | Existing 512px local albedo/normal/roughness generation budget |
 | Terrain transitions and sky | `TerrainMaterial.ts`, `Atmosphere.ts`, `FieldGraphics.ts` in the client | Original shaders/material/lighting values |
 

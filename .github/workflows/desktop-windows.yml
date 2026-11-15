@@ -1,6 +1,12 @@
 name: Windows desktop test build
 on:
   workflow_dispatch:
+    inputs:
+      run_installer_smoke:
+        description: 'Explicitly run the unsigned installer smoke test on the disposable Windows runner'
+        type: boolean
+        required: false
+        default: false
   pull_request:
     paths:
       - 'desktop/**'
@@ -51,6 +57,7 @@ jobs:
         working-directory: desktop
         run: npm run build -- -- --locked
       - name: Install, launch and uninstall smoke test
+        if: github.event_name == 'workflow_dispatch' && inputs.run_installer_smoke == true
         shell: pwsh
         run: ./desktop/tests/install-smoke.ps1
       - name: Upload actual installer (not a published release)

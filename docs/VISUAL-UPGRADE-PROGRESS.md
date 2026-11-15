@@ -27,11 +27,35 @@ Resume this branch, do not restart the upgrade. Base: `45b8e34` (merged Windows 
 - Existing actor gallery/lifecycle/GLB cache checks and cosmetic import/preview/enable/disable/removal/persistence/disposal checks passed. No shader/page errors. Same-camera captures are in `/workspace/work/visual-v027/after-creatures/`; inspected all species' final forms and Lanternkin's base form, then corrected antler height, intersecting bibs/ear liners and shell scutes.
 - No binary asset, external texture, dependency, new rig or gameplay rule added.
 
-## Pending milestones
+## Verified milestone 3 — character polish and release validation
+
+- Survivor: round scarf/gloves/mask, respirator details, field blanket/bindings, tailored hem and softer, lighter GLB equipment. Infected: distinct original bark/fungal/rag growth. Existing pose/state machines and the six legacy GLB clips remain.
+- Root package/lock and HTML labels now say **0.27.0 / v0.27**. Desktop host remains its independent 0.1.0 version. Added release notes, source provenance, reproducible capture command and measured baseline/candidate counters.
+- Windows PR builds still compile/package but never execute the unsigned installer; execution requires an explicit manual workflow opt-in. No installer execution, deployment or merge was performed.
+
+| Final validation | Result |
+| --- | --- |
+| `npm test` | 67 passed, 0 failed/skipped; includes server/account/mod security and original GLB validation |
+| `npm run typecheck` | Passed |
+| `npm run build` | Passed; existing Three core >500 kB warning remains |
+| `wrangler deploy --dry-run` | Passed; 16 static files and all three existing Durable Object bindings |
+| `npm run test:browser` | All seven suites passed: interface, characters, creature-art, combat, world, mods, performance-safety; no reported page/shader errors |
+| Production browser suite | Passed: deferred engine/cinematic loading, compiled mod worker/preview, original demo and four authenticated local WebSocket sessions |
+| Desktop launcher browser suite/build | Passed keyboard/retry/layout/offline-recovery tests and standalone launcher production build |
+| Portable Rust `cargo test --locked --lib` | 4 policy tests passed; not a native Windows compilation |
+| Real-Game baseline/final captures | Passed; three locations, 15 forms and survivor/infected gallery; same cameras, seed, viewport and preset |
+| Resource lifecycle | Full Game teardown returned to 0 geometries / 0 textures; repeated evolution and cosmetic import/removal stable |
+| Native Windows hardware / full human co-op expedition | Pending manual acceptance, not claimed |
+
+Final images/logs are under `/workspace/work/visual-v027/` and `/workspace/work/visual-v027-*.log`. Final renderer counters are committed in `docs/performance/visual-v0.27/`. Inspected forest, settlement, wetland, creature forms and aim/heal/death poses. Fixed-view rendering costs increased 20–37% in triangles and 15–29% in draw calls; texture counts stayed at 38. This is not a performance-speedup claim. See [release notes](changelog/CHANGELOG-v0.27.md) for exact counts and remaining bottlenecks.
+
+Operational retries: the source server stopped during the interruption and was restarted before the successful final suite. Wrangler initially tried an unwritable home config; the successful dry run/local Worker used `XDG_CONFIG_HOME=/workspace/work/visual-v027/wrangler-config`. No production or security setting was bypassed.
+
+## Pending handoff
 
 1. Environment/material/lighting showcase pass: completed above.
 2. Creature rebuild: completed above.
-3. Practical survivor/infected polish; full tests/typecheck/build/Cloudflare dry run, visual review, provenance/changelog/version update; publish a versioned draft PR.
+3. Character/release validation: completed above. Publish the validated branch as a source-only **draft** PR with v0.27 in its title, then record its URL here. User merges.
 
 ## Constraints and known limitations
 
@@ -43,4 +67,4 @@ Resume this branch, do not restart the upgrade. Base: `45b8e34` (merged Windows 
 
 ## Next exact steps
 
-Apply a bounded survivor/infected visual-detail pass, then bump root/package-lock/HTML release labels to 0.27. Run the complete Node and browser suites, typecheck, production build and Cloudflare dry run. Capture final scenes and record actual before/after renderer counts, provenance/changelog and manual limitations. The uncommitted Windows workflow/doc guard makes unsigned-installer execution manual opt-in, as explicitly required by the brief; validate/include it before publishing the draft PR. Never run the installer or merge/deploy.
+Commit milestone 3, push `codex/v0.27-visual-leap`, create a draft PR against `main` titled `v0.27 — The Visual Leap: botanical world and expressive creatures`, and save the PR URL in this document. Then the next implementation session should address only review findings or Windows playtest evidence; do not rebuild completed milestones. Full Windows hardware/co-op checks remain in the release checklist. Never run the unsigned installer, deploy or merge as part of this task.

@@ -1,4 +1,5 @@
 import { batchRigidParts } from './ActorGeometry';
+import { leafGeometry } from './BotanicalGeometry';
 import { solveLeg, footCycle } from '../../../shared/actor-motion.mjs';
 import * as THREE from 'three';
 import type { World } from './World';
@@ -298,16 +299,20 @@ export class Zombie {
   }
 
   private addMutationDetails(seed = 0): void {
-    if (this.strain !== 'barkhide' && this.strain !== 'sporeling') return;
     const growth = new THREE.MeshStandardMaterial({
-      color: STRAINS[this.strain].spores,
-      roughness: 0.98,
+      color: this.strain === 'runner' ? 0x6f493c : this.strain === 'ashwalker' ? 0x494c4c : STRAINS[this.strain].spores,
+      roughness: 0.92,
+      side: THREE.DoubleSide,
+      vertexColors: true,
     });
-    for (let i = 0; i < 4; i++) {
-      const plate = new THREE.Mesh(new THREE.SphereGeometry(0.055 + (i % 2) * 0.025, 12, 8), growth);
-      plate.position.set((i % 2 ? 1 : -1) * 0.23, 1.24 + i * 0.075, 0.03 + Math.sin(seed + i) * 0.09);
-      plate.scale.set(1, 0.55, 0.7);
-      plate.castShadow = true;
+    const fungal = this.strain === 'sporeling', bark = this.strain === 'barkhide';
+    for (let i = 0; i < (bark ? 7 : fungal ? 5 : 3); i++) {
+      const side = i % 2 ? 1 : -1;
+      const plate = new THREE.Mesh(leafGeometry(fungal ? 0.32 : bark ? 0.18 : 0.08,
+        fungal ? 0.25 : bark ? 0.38 : 0.26, fungal ? -0.09 : 0.07, bark ? 0.12 : 0), growth);
+      plate.position.set(side * 0.19, 1.22 + i * 0.055, 0.03 + Math.sin(seed + i) * 0.07);
+      plate.rotation.set(fungal ? -1.15 : -0.12, side * 0.5, side * (fungal ? 0.4 : 0.55));
+      plate.castShadow = plate.receiveShadow = true;
       this.modelVisual.add(plate);
     }
   }
