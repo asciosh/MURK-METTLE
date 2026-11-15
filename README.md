@@ -1,5 +1,7 @@
 # MURK & METTLE
 
+**v0.27 — The Visual Leap.** Original botanical creature meshes, richer habitats and atmospheric field lighting. See the [visual release notes](docs/changelog/CHANGELOG-v0.27.md), [asset provenance](docs/VISUAL-ASSETS-v0.27.md) and [verified progress](docs/VISUAL-UPGRADE-PROGRESS.md).
+
 A cooperative third-person survival RPG for **Windows PC**, built with Three.js, TypeScript and Cloudflare Durable Objects. Play with mouse and keyboard in a current Windows Chrome/Edge browser or the [Tauri 2 Windows edition](desktop/README.md). Up to four players share a room.
 
 Explore the Wildlands, collect five original creature species with fifteen evolution forms, survive infected groups and complete expeditions. Local cosmetic mods change appearance only.

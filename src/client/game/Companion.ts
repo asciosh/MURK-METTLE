@@ -1,3 +1,4 @@
+import { buildCreatureArt } from './CreatureArt';
 import type { ModRegistry } from '../mods/ModRegistry';
 import type { ModVisual } from '../mods/ModVisual';
 import * as THREE from 'three';
@@ -23,9 +24,10 @@ export class Companion {
   private pulseTime = 0;
   private stage = -1;
   private readonly wings: { pivot: THREE.Group; side: number }[] = [];
-  private readonly tails: { mesh: THREE.Mesh; rest: number }[] = [];
-  private readonly legs: { mesh: THREE.Mesh; phase: number }[] = [];
+  private readonly tails: { mesh: THREE.Object3D; rest: number }[] = [];
+  private readonly legs: { mesh: THREE.Object3D; phase: number }[] = [];
   private gaitBlend = 0;
+  private readonly eyes: THREE.Group[] = [];
   private readonly petals: { mesh: THREE.Mesh; x: number; z: number }[] = [];
   private readonly luminous = new Set<THREE.MeshStandardMaterial>();
   speciesId: SpeciesId = 'lanternkin';
@@ -61,12 +63,16 @@ export class Companion {
     this.luminous.clear();
     this.tails.length = 0;
     this.legs.length = 0;
+    this.eyes.length = 0;
+    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>();
     this.visual.traverse((o) => {
       if (o instanceof THREE.Mesh) {
-        o.geometry.dispose();
-        (o.material as THREE.Material).dispose();
+        geometries.add(o.geometry);
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m);
       }
     });
+    geometries.forEach(g => g.dispose());
+    materials.forEach(m => m.dispose());
     this.visual.clear();
   }
   setForm(species: SpeciesId, xp: number): void {
@@ -77,209 +83,12 @@ export class Companion {
     this.stage = stage;
     this.clearVisual();
     const def = CREATURES[species];
-    const body = new THREE.MeshStandardMaterial({
-      color: def.color,
-      roughness: 0.82,
-      metalness: 0.04,
+    buildCreatureArt(this.visual, species, stage, {
+      wings: this.wings, tails: this.tails, legs: this.legs, petals: this.petals,
+      eyes: this.eyes, luminous: this.luminous,
     });
-    const dark = new THREE.MeshStandardMaterial({
-      color: species === 'emberling' ? 0x3e342e : 0x344d43,
-      roughness: 0.95,
-    });
-    const glow = new THREE.MeshStandardMaterial({
-      color: def.glow,
-      emissive: def.glow,
-      emissiveIntensity: 0.9,
-      roughness: 0.35,
-    });
-    const add = (
-      geo: THREE.BufferGeometry,
-      mat: THREE.Material,
-      x: number,
-      y: number,
-      z: number,
-      sx = 1,
-      sy = 1,
-      sz = 1,
-    ) => {
-      const material = mat.clone();
-      if (mat === glow) this.luminous.add(material as THREE.MeshStandardMaterial);
-      const m = new THREE.Mesh(geo, material);
-      m.position.set(x, y, z);
-      m.scale.set(sx, sy, sz);
-      m.castShadow = true;
-      this.visual.add(m);
-      return m;
-    };
-    const scale = 1 + stage * 0.28;
-    this.visual.scale.setScalar(scale);
-    if (species === 'lanternkin') {
-      add(new THREE.SphereGeometry(0.35, 24, 16), body, 0, 0, 0, 0.85, 1.2, 0.8);
-      add(new THREE.SphereGeometry(0.21, 20, 14), glow, 0, -0.01, -0.18, 0.8, 1, 0.5);
-      // Dark eyes keep the face legible against its luminous chest.
-      for (const side of [-1, 1]) {
-        add(new THREE.SphereGeometry(0.046, 10, 8), dark, side * 0.1, 0.29, -0.34, 0.75, 1, 0.45);
-        add(new THREE.SphereGeometry(0.013, 8, 6), glow, side * 0.1 - 0.01, 0.305, -0.361);
-      }
-      for (let i = 0; i < 6 + stage * 3; i++) {
-        const a = (i / (6 + stage * 3)) * Math.PI * 2;
-        const leaf = add(
-          new THREE.SphereGeometry(0.22, 14, 10),
-          dark,
-          Math.cos(a) * 0.28,
-          0.13,
-          Math.sin(a) * 0.28,
-          0.45,
-          2,
-          0.25,
-        );
-        leaf.rotation.z = -Math.cos(a) * 0.6;
-        leaf.rotation.x = Math.sin(a) * 0.6;
-        this.petals.push({
-          mesh: leaf,
-          x: leaf.rotation.x,
-          z: leaf.rotation.z,
-        });
-      }
-      for (const s of [-1, 1]) {
-        const antler = add(new THREE.CylinderGeometry(0.012, 0.035, 0.5 + stage * 0.18, 7), dark, s * 0.18, 0.55, 0);
-        antler.rotation.z = -s * 0.3;
-        add(new THREE.SphereGeometry(0.065, 12, 8), glow, s * 0.26, 0.82 + stage * 0.13, 0);
-      }
-    } else if (species === 'emberling') {
-      add(new THREE.SphereGeometry(0.36, 24, 16), body, 0, 0, 0, 0.8, 0.9, 1.4);
-      add(new THREE.SphereGeometry(0.25, 20, 14), body, 0, 0.22, -0.39, 0.85, 0.95, 1.2);
-      add(new THREE.SphereGeometry(0.13, 16, 12), dark, 0, 0.16, -0.64, 1, 0.6, 1.2);
-      for (const s of [-1, 1]) {
-        const ear = add(new THREE.ConeGeometry(0.1, 0.36 + stage * 0.15, 14), body, s * 0.15, 0.53, -0.34);
-        ear.rotation.z = s * 0.25;
-        for (const z of [-0.25, 0.28]) {
-          const leg = add(new THREE.CapsuleGeometry(0.07, 0.22, 5, 8), dark, s * 0.21, -0.3, z);
-          this.legs.push({
-            mesh: leg,
-            phase: (z > 0 ? Math.PI : 0) + (s > 0 ? Math.PI : 0),
-          });
-        }
-        add(new THREE.SphereGeometry(0.035, 12, 8), glow, s * 0.16, 0.27, -0.57);
-        if (stage > 0) {
-          const horn = add(new THREE.ConeGeometry(0.065, 0.4 + stage * 0.15, 12), glow, s * 0.22, 0.62, -0.15);
-          horn.rotation.z = -s * 0.4;
-        }
-      }
-      const tail = add(new THREE.CapsuleGeometry(0.11, 0.55, 6, 12), body, 0, 0.18, 0.66);
-      tail.rotation.x = 1.1;
-      this.tails.push({ mesh: tail, rest: tail.rotation.y });
-      add(new THREE.SphereGeometry(0.13, 16, 12), glow, 0, 0.45, 0.92);
-    } else if (species === 'mossback') {
-      add(new THREE.SphereGeometry(0.4, 24, 16), body, 0, -0.05, 0, 1.2, 0.7, 1.4);
-      add(new THREE.SphereGeometry(0.4, 24, 16), dark, 0, 0.12, 0.08, 1.25, 0.72, 1.35);
-      add(new THREE.SphereGeometry(0.19, 18, 12), body, 0, -0.04, -0.55, 0.9, 0.85, 1.2);
-      for (const side of [-1, 1]) {
-        for (const z of [-0.29, 0.34]) {
-          const leg = add(new THREE.CapsuleGeometry(0.095, 0.12, 5, 10), body, side * 0.34, -0.28, z);
-          this.legs.push({
-            mesh: leg,
-            phase: (z > 0 ? Math.PI : 0) + (side > 0 ? Math.PI : 0),
-          });
-        }
-        add(new THREE.SphereGeometry(0.03, 12, 8), glow, side * 0.13, 0.01, -0.69);
-        for (let i = 0; i < 2 + stage; i++) {
-          const branch = add(
-            new THREE.ConeGeometry(0.065, 0.23 + stage * 0.14, 10),
-            dark,
-            side * 0.23,
-            0.42,
-            i * 0.17 - 0.18,
-          );
-          branch.rotation.z = side * 0.38;
-          if (stage > 0)
-            add(
-              new THREE.SphereGeometry(0.1, 12, 8),
-              glow,
-              side * 0.29,
-              0.54 + stage * 0.06,
-              i * 0.17 - 0.18,
-              0.9,
-              0.45,
-              1.1,
-            );
-        }
-      }
-    } else if (species === 'stormrook') {
-      add(new THREE.SphereGeometry(0.28, 22, 16), body, 0, 0, 0, 0.8, 1.15, 1.1);
-      add(new THREE.SphereGeometry(0.19, 18, 14), body, 0, 0.32, -0.12);
-      const beak = add(new THREE.ConeGeometry(0.075, 0.22, 12), dark, 0, 0.29, -0.34);
-      beak.rotation.x = -Math.PI / 2;
-      for (const side of [-1, 1]) {
-        add(new THREE.SphereGeometry(0.03, 12, 8), glow, side * 0.13, 0.36, -0.25);
-        const wing = new THREE.Group();
-        wing.position.x = side * 0.22;
-        this.visual.add(wing);
-        this.wings.push({ pivot: wing, side });
-        for (let i = 0; i < 4 + stage; i++) {
-          const feather = add(
-            new THREE.SphereGeometry(0.2, 14, 10),
-            i % 2 ? dark : body,
-            side * (0.24 + i * 0.09),
-            0.02,
-            -0.04 + i * 0.07,
-            0.42,
-            0.2,
-            2.1 + stage * 0.3,
-          );
-          feather.rotation.y = side * (0.2 + i * 0.1);
-          feather.position.x -= side * 0.22;
-          wing.add(feather);
-        }
-        for (let i = 0; i <= stage; i++) {
-          const crest = add(
-            new THREE.ConeGeometry(0.045, 0.28 + stage * 0.1, 10),
-            glow,
-            side * 0.07,
-            0.54,
-            i * 0.08 - 0.08,
-          );
-          crest.rotation.z = -side * 0.3;
-        }
-      }
-      for (const x of [-0.1, 0, 0.1]) {
-        const tail = add(new THREE.SphereGeometry(0.18, 14, 10), dark, x, -0.03, 0.4, 0.35, 0.2, 1.7 + stage * 0.3);
-        tail.rotation.y = -x;
-        this.tails.push({ mesh: tail, rest: tail.rotation.y });
-      }
-    } else {
-      add(new THREE.SphereGeometry(0.35, 24, 16), body, 0, 0, 0, 1, 0.4, 1.5);
-      for (const s of [-1, 1]) {
-        const wing = add(
-          new THREE.SphereGeometry(0.33, 20, 14),
-          dark,
-          s * 0.43,
-          -0.01,
-          0.05,
-          1.6,
-          0.12,
-          1.1 + stage * 0.3,
-        );
-        wing.rotation.z = s * 0.2;
-        const pivot = new THREE.Group();
-        pivot.position.x = s * 0.2;
-        this.visual.add(pivot);
-        wing.position.x -= s * 0.2;
-        pivot.add(wing);
-        this.wings.push({ pivot, side: s });
-        add(new THREE.SphereGeometry(0.04, 12, 8), glow, s * 0.16, 0.1, -0.38);
-      }
-      const tail = add(new THREE.CapsuleGeometry(0.035, 0.8 + stage * 0.25, 5, 10), body, 0, -0.04, 0.7);
-      tail.rotation.x = Math.PI / 2;
-      if (stage > 0)
-        for (const s of [-1, 1]) {
-          const fin = add(new THREE.SphereGeometry(0.2, 18, 12), glow, s * 0.25, 0.18, 0.25, 0.25, 1 + stage * 0.4, 1);
-          fin.rotation.z = -s * 0.3;
-        }
-    }
-    body.dispose();
-    dark.dispose();
-    glow.dispose();
+    this.visual.scale.setScalar(1 + stage * 0.28);
+    this.visual.userData = { species, stage, authoring: 'original-procedural-v0.27' };
     this.light.color.setHex(def.glow);
     (this.aura.material as THREE.MeshBasicMaterial).color.setHex(def.glow);
     if (changed) this.triggerPulse();
@@ -352,7 +161,11 @@ export class Companion {
     world.constrainActorPosition(this.root.position, 0.3);
     this.root.position.y = y;
     this.root.position.y = height + Math.sin(this.elapsed * 2.3) * 0.055;
-    this.root.rotation.y = this.bound ? yaw : Math.sin(this.elapsed * 0.4) * 0.25;
+    let facing = this.bound ? yaw : Math.sin(this.elapsed * 0.4) * 0.25;
+    if (!this.bound && this.root.position.distanceToSquared(position) < 64)
+      facing = Math.atan2(this.root.position.x - position.x, this.root.position.z - position.z);
+    const turn = THREE.MathUtils.euclideanModulo(facing - this.root.rotation.y + Math.PI, Math.PI * 2) - Math.PI;
+    this.root.rotation.y += turn * (1 - Math.exp(-5 * dt));
     this.animateAura(height);
   }
   private animateParts(dt: number, walking: boolean): void {
@@ -366,10 +179,14 @@ export class Companion {
       petal.mesh.rotation.z = petal.z * (1 + breath);
     }
     for (const material of this.luminous)
-      material.emissiveIntensity = 0.65 + Math.sin(this.elapsed * 2.3) * 0.1 + pulse * 1.2;
+      material.emissiveIntensity = 0.28 + Math.sin(this.elapsed * 2.3) * 0.055 + pulse * 0.65;
     const size = (1 + this.stage * 0.28) * (1 + pulse * 0.09);
     this.visual.scale.set(size * (1 + pulse * 0.04), size, size * (1 + pulse * 0.04));
     this.cosmeticMount.scale.copy(this.visual.scale);
+    // A short blink reads at third-person scale. Eye groups retain their local face placement.
+    const blinkPhase = this.elapsed % 4.7;
+    const blink = blinkPhase < 0.16 ? 1 - Math.sin(blinkPhase / 0.16 * Math.PI) * 0.94 : 1;
+    for (const eye of this.eyes) eye.scale.y = blink;
     this.gaitBlend = THREE.MathUtils.damp(this.gaitBlend, walking ? 1 : 0, 7, dt);
     for (const wing of this.wings)
       wing.pivot.rotation.z =
@@ -382,7 +199,11 @@ export class Companion {
     for (const leg of this.legs) leg.mesh.rotation.x = Math.sin(this.elapsed * 9 + leg.phase) * 0.34 * this.gaitBlend;
   }
   private animateAura(height: number): void {
-    this.visual.rotation.z = Math.sin(this.elapsed * 2) * 0.035;
+    this.visual.rotation.z = Math.sin(this.elapsed * 2) * (this.speciesId === 'mossback' ? 0.012 : 0.025);
+    // Growing grounded forms must not sink into the unchanged collision floor. Only the
+    // official mesh is offset; remote positions and mod normalization contracts stay intact.
+    const footDepth = this.speciesId === 'emberling' ? 0.512 : this.speciesId === 'mossback' ? 0.372 : 0;
+    this.visual.position.y = footDepth ? footDepth * (this.visual.scale.y - 1) - Math.sin(this.elapsed * 2.3) * 0.055 : 0;
     this.cosmeticMount.rotation.copy(this.visual.rotation);
     const progress = this.pulseTime > 0 ? 1 - this.pulseTime / 0.65 : 0;
     this.aura.scale.setScalar(this.pulseTime > 0 ? 1 + progress * 18 : 1);

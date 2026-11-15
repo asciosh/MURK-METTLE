@@ -6,8 +6,8 @@ import type { QualityId, RenderProfile } from '../../../shared/render-profile.mj
 /** Owns field lighting and optional render targets; contains no simulation or network state. */
 export class FieldGraphics {
   private readonly sky = createAtmosphere();
-  private readonly sun = new THREE.DirectionalLight(0xffdbad, 3.0);
-  private readonly ambient = new THREE.HemisphereLight(0xc0d4df, 0x5e5e46, 1.85);
+  private readonly sun = new THREE.DirectionalLight(0xffdda9, 3.6);
+  private readonly ambient = new THREE.HemisphereLight(0xb3cddd, 0x35493b, 1.05);
   private readonly environmentTarget: THREE.WebGLRenderTarget;
   private effects: SceneEffects | null = null;
   private generation = 0;
@@ -20,15 +20,18 @@ export class FieldGraphics {
     private readonly camera: THREE.Camera,
     private readonly warn: (message: string) => void,
   ) {
+    // Cool distant air, warm directional light and restrained ambient fill.
+    scene.background = new THREE.Color(0x8fa9a2);
+    scene.fog = new THREE.FogExp2(0x8fa9a2, 0.009);
     scene.add(this.sky);
     const pmrem = new THREE.PMREMGenerator(renderer);
     const environment = new THREE.Scene();
     environment.add(this.sky.clone());
     this.environmentTarget = pmrem.fromScene(environment, 0.06);
     scene.environment = this.environmentTarget.texture;
-    scene.environmentIntensity = 1.0;
+    scene.environmentIntensity = 0.62;
     pmrem.dispose();
-    this.sun.position.set(-25, 35, 18);
+    this.sun.position.set(-28, 30, 16);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     Object.assign(this.sun.shadow.camera, { left: -35, right: 35, top: 35, bottom: -35, near: 1, far: 100 });
@@ -66,7 +69,7 @@ export class FieldGraphics {
   followShadow(position: THREE.Vector3): void {
     if (this.sun.target.position.distanceTo(position) > 4) {
       this.sun.target.position.copy(position);
-      this.sun.position.copy(position).add(new THREE.Vector3(-25, 35, 18));
+      this.sun.position.copy(position).add(new THREE.Vector3(-28, 30, 16));
     }
   }
 

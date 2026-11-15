@@ -78,7 +78,7 @@ export class Player {
   private createModel(): void {
     this.fallbackModel = new THREE.Group();
     this.visual.add(this.fallbackModel);
-    const bodyMaterial = this.surfaces.material('fabric', 0x718578, 4);
+    const bodyMaterial = this.surfaces.material('fabric', 0x929c82, 4);
     const darkMaterial = new THREE.MeshStandardMaterial({
       color: 0x262c28,
       roughness: 0.92,
@@ -120,12 +120,14 @@ export class Player {
     head.castShadow = true;
     this.fallbackModel.add(head);
 
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.075, 0.045), visorMaterial);
+    const visor = new THREE.Mesh(new RoundedBoxGeometry(0.25, 0.075, 0.045, 2, 0.015), visorMaterial);
     visor.position.set(0, 1.9, -0.185);
     visor.castShadow = true;
     this.fallbackModel.add(visor);
 
-    const scarf = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.13, 0.3), accentMaterial);
+    const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.135, 0.055, 8, 24), accentMaterial);
+    scarf.rotation.x = Math.PI / 2;
+    scarf.scale.y = 0.88;
     scarf.position.set(0, 1.55, -0.015);
     scarf.castShadow = true;
     this.fallbackModel.add(scarf);
@@ -152,7 +154,7 @@ export class Player {
       forearm.position.y = -0.15;
       forearm.castShadow = true;
       elbow.add(forearm);
-      const glove = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.075), darkMaterial);
+      const glove = new THREE.Mesh(new RoundedBoxGeometry(0.09, 0.12, 0.075, 2, 0.018), darkMaterial);
       glove.position.y = -0.3;
       glove.castShadow = true;
       elbow.add(glove);
@@ -214,7 +216,7 @@ export class Player {
     }
     this.addExpeditionEquipment();
     for (const part of [...this.fallbackModel.children])
-      if (part.position.y >= 1.65 && Math.abs(part.position.z) < 0.25) {
+      if (part.position.y >= 1.65 && Math.abs(part.position.z) < 0.28) {
         part.position.y -= 1.63;
         this.headRig.add(part);
       }
@@ -227,7 +229,7 @@ export class Player {
 
   /** Original meshes, built at runtime with no external model/IP dependency. */
   private addExpeditionEquipment(): void {
-    const coat = this.surfaces.material('fabric', 0x65786b, 3);
+    const coat = this.surfaces.material('fabric', 0x849279, 3);
     const trim = new THREE.MeshStandardMaterial({
       color: 0x8c826b,
       roughness: 0.8,
@@ -265,9 +267,26 @@ export class Player {
     // Expedition hood and segmented visor: face looks intentional from frontal and rear angles.
     const hood = add(new THREE.SphereGeometry(0.215, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.58), coat, 0, 1.9, 0.005);
     hood.scale.set(1.0, 1.06, 0.98);
-    const mask = add(new THREE.BoxGeometry(0.27, 0.14, 0.08), charcoal, 0, 1.77, -0.18);
+    const mask = add(new RoundedBoxGeometry(0.27, 0.14, 0.08, 2, 0.03), charcoal, 0, 1.77, -0.18);
     mask.rotation.x = -0.14;
     add(new THREE.BoxGeometry(0.3, 0.06, 0.035), glass, 0, 1.9, -0.212);
+    for (const side of [-1, 1]) {
+      const filter = add(new THREE.CylinderGeometry(0.035, 0.04, 0.025, 12), trim, side * 0.075, 1.76, -0.239);
+      filter.rotation.x = Math.PI / 2;
+      const inset = add(new THREE.CircleGeometry(0.024, 12), charcoal, side * 0.075, 1.76, -0.253);
+      inset.rotation.y = Math.PI;
+    }
+    const hem = add(new THREE.LatheGeometry([
+      new THREE.Vector2(0.235, -0.12), new THREE.Vector2(0.23, -0.08), new THREE.Vector2(0.21, 0.1),
+    ], 24), coat, 0, 0.86, 0);
+    hem.scale.z = 0.73;
+    // Rolled field blanket and bindings sit on the backpack with or without the optional GLB.
+    const roll = add(new THREE.CylinderGeometry(0.085, 0.085, 0.42, 16), coat, 0, 1.48, 0.32);
+    roll.rotation.z = Math.PI / 2;
+    for (const side of [-1, 1]) {
+      const binding = add(new THREE.TorusGeometry(0.087, 0.012, 5, 16), trim, side * 0.14, 1.48, 0.32);
+      binding.rotation.y = Math.PI / 2;
+    }
     for (const side of [-1, 1]) {
       // Utility pouch, armband and buckles.
       add(new RoundedBoxGeometry(0.14, 0.2, 0.16, 2, 0.02), charcoal, side * 0.235, 0.86, 0.02);

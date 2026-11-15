@@ -1,0 +1,211 @@
+{
+  "viewport": "1366x768",
+  "dpr": 1,
+  "quality": "balanced",
+  "photos": false,
+  "views": {
+    "forest": {
+      "frame": 55,
+      "calls": 261,
+      "triangles": 592046,
+      "points": 40,
+      "lines": 0,
+      "memory": {
+        "geometries": 129,
+        "textures": 38
+      }
+    },
+    "settlement": {
+      "frame": 56,
+      "calls": 239,
+      "triangles": 488864,
+      "points": 40,
+      "lines": 0,
+      "memory": {
+        "geometries": 148,
+        "textures": 38
+      }
+    },
+    "wetland": {
+      "frame": 57,
+      "calls": 191,
+      "triangles": 412466,
+      "points": 40,
+      "lines": 0,
+      "memory": {
+        "geometries": 157,
+        "textures": 38
+      }
+    }
+  },
+  "actors": {
+    "lanternkin-0": {
+      "frame": 2,
+      "calls": 19,
+      "triangles": 3778,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 158,
+        "textures": 7
+      }
+    },
+    "lanternkin-120": {
+      "frame": 3,
+      "calls": 22,
+      "triangles": 4534,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 161,
+        "textures": 7
+      }
+    },
+    "lanternkin-400": {
+      "frame": 4,
+      "calls": 25,
+      "triangles": 5290,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 164,
+        "textures": 7
+      }
+    },
+    "emberling-0": {
+      "frame": 5,
+      "calls": 16,
+      "triangles": 3546,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 155,
+        "textures": 7
+      }
+    },
+    "emberling-120": {
+      "frame": 6,
+      "calls": 18,
+      "triangles": 3594,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 157,
+        "textures": 7
+      }
+    },
+    "emberling-400": {
+      "frame": 7,
+      "calls": 18,
+      "triangles": 3594,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 157,
+        "textures": 7
+      }
+    },
+    "mossback-0": {
+      "frame": 8,
+      "calls": 16,
+      "triangles": 3326,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 155,
+        "textures": 7
+      }
+    },
+    "mossback-120": {
+      "frame": 9,
+      "calls": 24,
+      "triangles": 4374,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 163,
+        "textures": 7
+      }
+    },
+    "mossback-400": {
+      "frame": 10,
+      "calls": 28,
+      "triangles": 4750,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 167,
+        "textures": 7
+      }
+    },
+    "stormrook-0": {
+      "frame": 11,
+      "calls": 21,
+      "triangles": 4494,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 160,
+        "textures": 7
+      }
+    },
+    "stormrook-120": {
+      "frame": 12,
+      "calls": 25,
+      "triangles": 5038,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 164,
+        "textures": 7
+      }
+    },
+    "stormrook-400": {
+      "frame": 13,
+      "calls": 29,
+      "triangles": 5582,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 168,
+        "textures": 7
+      }
+    },
+    "reedwisp-0": {
+      "frame": 14,
+      "calls": 9,
+      "triangles": 2510,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 148,
+        "textures": 7
+      }
+    },
+    "reedwisp-120": {
+      "frame": 15,
+      "calls": 11,
+      "triangles": 3302,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 150,
+        "textures": 7
+      }
+    },
+    "reedwisp-400": {
+      "frame": 16,
+      "calls": 11,
+      "triangles": 3302,
+      "points": 0,
+      "lines": 0,
+      "memory": {
+        "geometries": 150,
+        "textures": 7
+      }
+    }
+  },
+  "source_ref": "a54028a",
+  "environment": "Linux managed workspace; Chromium 156 / SwiftShader; Node 24.22.1; Playwright 1.62.1",
+  "method": "Single deterministic static render, shadow passes included for Game views. No hardware FPS or GPU time measured."
+}

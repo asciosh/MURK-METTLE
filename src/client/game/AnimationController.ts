@@ -100,14 +100,14 @@ export class ActorAnimator {
           node.geometry.computeBoundingBox();
           const box = node.geometry.boundingBox!,
             size = box.getSize(new THREE.Vector3());
-          const geometry = new RoundedBoxGeometry(size.x, size.y, size.z, 1, Math.min(size.x, size.y, size.z) * 0.12);
+          const geometry = new RoundedBoxGeometry(size.x, size.y, size.z, 2, Math.min(size.x, size.y, size.z) * 0.23);
           const center = box.getCenter(new THREE.Vector3());
           geometry.translate(center.x, center.y, center.z);
           this.ownedGeometry.add(geometry);
           node.geometry = geometry;
           if (node.material instanceof THREE.MeshStandardMaterial) {
             node.material.color.setHex(
-              node.name === 'pack-panel' ? 0x8b8064 : node.name === 'beacon' ? 0x83b9a1 : 0x304a40,
+              node.name === 'pack-panel' ? 0x887b60 : node.name === 'beacon' ? 0x83b9a1 : 0x53624f,
             );
             node.material.roughness = node.name === 'beacon' ? 0.35 : 0.92;
             node.material.metalness = 0;

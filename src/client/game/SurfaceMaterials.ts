@@ -47,8 +47,8 @@ export class SurfaceMaterials {
       );
     };
     const base: Record<SurfaceKind, [number, number, number]> = {
-      earth: [113, 100, 78],
-      forest: [73, 77, 49],
+      earth: [100, 91, 72],
+      forest: [58, 75, 47],
       asphalt: [65, 67, 65],
       bark: [83, 76, 62],
       brick: [126, 105, 87],
@@ -119,9 +119,19 @@ export class SurfaceMaterials {
           h += stone ? 0.17 : 0;
           tone += stone ? 0.12 : 0;
           stain = n0 < 0.35 ? 0.9 : 1;
-          if (kind === 'forest' && n3 > 0.63) {
-            tone *= 1.17;
-            red = 1.15;
+          if (kind === 'forest') {
+            // Original leaf litter over moss. The 8x8 cells tile seamlessly; veins have height.
+            const cx = Math.floor(x / 64), cy = Math.floor(y / 64);
+            const phase = Math.sin(cx * 91.3 + cy * 47.7);
+            const px = x % 64 - 32, py = y % 64 - 32;
+            const u = px * Math.cos(phase * 6) - py * Math.sin(phase * 6);
+            const v = px * Math.sin(phase * 6) + py * Math.cos(phase * 6);
+            const fallen = u * u / 65 + v * v / 360 < 1 && phase > 0.6;
+            tone = 0.6 + n0 * 0.37 + n2 * 0.25 + grain * 0.06;
+            if (fallen) {
+              tone *= 1.24; red = 1.65;
+              h += Math.abs(u) < 0.9 ? 0.13 : 0.07;
+            }
           }
         }
         heights[i] = h;
