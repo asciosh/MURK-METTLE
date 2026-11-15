@@ -19,10 +19,18 @@ Resume this branch, do not restart the upgrade. Base: `45b8e34` (merged Windows 
 - `npm test`: 67 passed. Typecheck passed. World browser suite passed all ten viewpoints, flat-ground/anchor/trail checks and three presets with no page/shader errors. Repeated real-Game comparison captures passed.
 - Inspected forest, settlement and wetland before/after at identical cameras/settings. Captures: `/workspace/work/visual-v027/after-world/`. Increased geometry is an intentional art cost, not an FPS optimization; final comparison will include the complete release.
 
+## Verified milestone 2 — original creature art and animation
+
+- All five species / 15 forms rebuilt in `CreatureArt.ts`: Lanternkin's clear ivory face, lantern ribs, layered leaf crown and curved bud stems; Emberling's leaf ears, ruff and curled articulated tail; Mossback's fitted shell scutes and growth caps; Stormrook's layered feathers; Reedwisp's fins, whiskers and flowing tail.
+- Shared per-creature materials, merged rigid parts, smooth eye geometry, brief blinks, restrained emissive breathing, leaf/wing/tail motion and pulse response. Grounded forms compensate growth/pulse scale without changing root positions or cosmetic-mod normalization. Nearby wild creatures turn toward the player visually.
+- New `creature-art` browser regression validates every form, finite geometry, budgets, growth/pulse ground contact, blink recovery, unchanged bonding radius, attention without habitat displacement and stable GPU counts over 45 form builds. Typecheck passed.
+- Existing actor gallery/lifecycle/GLB cache checks and cosmetic import/preview/enable/disable/removal/persistence/disposal checks passed. No shader/page errors. Same-camera captures are in `/workspace/work/visual-v027/after-creatures/`; inspected all species' final forms and Lanternkin's base form, then corrected antler height, intersecting bibs/ear liners and shell scutes.
+- No binary asset, external texture, dependency, new rig or gameplay rule added.
+
 ## Pending milestones
 
 1. Environment/material/lighting showcase pass: completed above.
-2. Rebuild creature meshes and expressive animation, prioritizing Lanternkin and keeping all 15 forms/mod contracts. Validate lifecycle/actor/mod tests; commit.
+2. Creature rebuild: completed above.
 3. Practical survivor/infected polish; full tests/typecheck/build/Cloudflare dry run, visual review, provenance/changelog/version update; publish a versioned draft PR.
 
 ## Constraints and known limitations
@@ -35,4 +43,4 @@ Resume this branch, do not restart the upgrade. Base: `45b8e34` (merged Windows 
 
 ## Next exact steps
 
-Wire the new, not-yet-committed `CreatureArt.ts` builder into `Companion.ts`; add blink/ground-contact/secondary motion. `tests/browser/creature-art.cjs` is prepared but not yet runnable against the old Companion. Validate all 15 forms and repeated disposal, inspect close-ups and fix clipping before committing milestone 2. Do not mark these unfinished files complete.
+Apply a bounded survivor/infected visual-detail pass, then bump root/package-lock/HTML release labels to 0.27. Run the complete Node and browser suites, typecheck, production build and Cloudflare dry run. Capture final scenes and record actual before/after renderer counts, provenance/changelog and manual limitations. The uncommitted Windows workflow/doc guard makes unsigned-installer execution manual opt-in, as explicitly required by the brief; validate/include it before publishing the draft PR. Never run the installer or merge/deploy.

@@ -16,9 +16,10 @@
     "dev:client": "vite --host 0.0.0.0",
     "deploy": "npm run build && npx wrangler deploy",
     "dev:cloudflare": "npm run build && wrangler dev",
-    "test:browser": "node scripts/test-browser.mjs interface characters combat world mods performance-safety",
+    "test:browser": "node scripts/test-browser.mjs interface characters creature-art combat world mods performance-safety",
     "test:browser:production": "node scripts/test-browser.mjs loading mods-production worker",
-    "test:browser:launcher": "node scripts/test-browser.mjs desktop-launcher"
+    "test:browser:launcher": "node scripts/test-browser.mjs desktop-launcher",
+    "test:visual": "node tests/browser/visual-leap.cjs"
   },
   "dependencies": {
     "three": "^0.187.0"
