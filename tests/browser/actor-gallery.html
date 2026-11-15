@@ -82,7 +82,7 @@
         }
         companion.updateRemote(1 / 60, new T.Vector3(-0.7, 0, -2), 0, false);
         renderer.render(scene, camera);
-        requestAnimationFrame(render);
+        if (!new URLSearchParams(location.search).has('freeze')) requestAnimationFrame(render);
       }
       render();
       window.gallery = {
