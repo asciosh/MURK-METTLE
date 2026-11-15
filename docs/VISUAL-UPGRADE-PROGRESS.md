@@ -1,5 +1,7 @@
 # v0.27 — The Visual Leap
 
+> **Historical v0.27 record:** Git recovery on 2026-11-15 found PR #15 incorporated into `main` at `1bb0cd2`; its branch tree is identical. The open-PR, resume and Windows/Tauri instructions below describe the earlier session. Follow [NEXTGEN progress](NEXTGEN-PROGRESS.md) and root `AGENTS.md` for current scope. Original evidence and limitations are preserved below.
+
 Resume this branch, do not restart the upgrade. Base: `45b8e34` (merged Windows cleanup, PR #14). Branch: `codex/v0.27-visual-leap`. Release/PR version: **v0.27**. User merges; keep the eventual PR a source-only draft.
 
 **Published handoff:** [Draft PR #15 — v0.27 — The Visual Leap: botanical world and expressive creatures](https://github.com/asciosh/MURK-METTLE/pull/15). Open, not deployed or merged. Verified implementation commits: `a54028a` (baseline), `e3bbd54` (world), `421f534` (creatures), `39cdf20` (character/release validation). The remaining work is review and manual Windows acceptance, not reimplementation.

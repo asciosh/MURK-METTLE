@@ -1,5 +1,7 @@
 # Documentation
 
+> **2.0 direction:** [Vision](NEXTGEN-VISION.md), [checkpoint roadmap](NEXTGEN-ROADMAP.md), [verified progress/handoff](NEXTGEN-PROGRESS.md) and root [agent instructions](../AGENTS.md) govern nextgen work. Web-only supersedes the historical Windows/Tauri target below.
+
 Current guides:
 
 - [v0.27 visual upgrade, evidence and checkpoints](VISUAL-UPGRADE-PROGRESS.md)
