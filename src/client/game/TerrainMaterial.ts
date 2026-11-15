@@ -38,7 +38,7 @@ export function terrainMaterial(surfaces: SurfaceMaterials): THREE.MeshStandardM
     float path=max(max(northRoad,crossRoad),spur);
     vec3 soil=texture2D(map,groundUV).rgb;
     vec3 leaves=texture2D(fieldForest,groundUV*1.7+vec2(.21)).rgb;
-    float soilWeight=smoothstep(.28,.72,macro+path*.65);
+    float soilWeight=clamp((macro-.25)*.42+path*.94,0.,1.);
     vec3 dirt=mix(leaves,soil,soilWeight);
     float town=step(-78.,vFieldPosition.z)*step(vFieldPosition.z,-30.)*(1.-smoothstep(3.1,4.2,abs(vFieldPosition.x)));
     dirt=mix(dirt,texture2D(fieldRoad,groundUV*1.25).rgb,town);
@@ -47,7 +47,7 @@ export function terrainMaterial(surfaces: SurfaceMaterials): THREE.MeshStandardM
     float camp=1.-smoothstep(7.,19.,distance(vFieldPosition.xz,vec2(-4.,5.)));
     dirt*=mix(vec3(1.),vec3(.81,.93,.9),marsh*.55);
     dirt*=mix(vec3(1.),vec3(1.11,.99,.86),pines*.5);
-    dirt*=mix(.78,1.16,macro)*mix(.94,1.04,detail);
+    dirt*=mix(.74,1.12,macro)*mix(.94,1.04,detail);
     dirt=mix(dirt,dirt*vec3(1.12,1.08,.96),camp*.38);
     dirt=mix(dirt,soil*1.14,path*.68*(1.-town));
     diffuseColor.rgb*=dirt;
@@ -68,6 +68,6 @@ export function terrainMaterial(surfaces: SurfaceMaterials): THREE.MeshStandardM
       THREE.ShaderChunk.normal_fragment_maps.replaceAll('texture2D( normalMap, vNormalMapUv )', 'fieldNormal'),
     );
   };
-  material.customProgramCacheKey = () => 'field-pbr-terrain-zones-v1';
+  material.customProgramCacheKey = () => 'field-pbr-terrain-zones-v2';
   return material;
 }

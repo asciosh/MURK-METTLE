@@ -12,7 +12,7 @@ export function foliageScale(zone, layer) {
   return zone === 'pine'
     ? { width: 1.1 - layer * 0.065, height: 0.46, y: 3.8 + layer * 0.59 }
     : zone === 'wetland'
-      ? { width: 1.18, height: 0.94, y: 5.2 + (layer % 4) * 0.48 }
-      : { width: 1.04 + (layer % 3) * 0.08, height: 0.7 + (layer % 2) * 0.2, y: 6.2 + (layer % 4) * 0.58 };
+      ? { width: 1.03 + (layer % 2) * 0.2, height: 1.15, y: 4.5 + (layer % 4) * 0.65 }
+      : { width: 0.9 + (layer % 3) * 0.18, height: 0.72 + (layer % 2) * 0.2, y: 5.4 + (layer % 4) * 0.83 };
 }
 export const WORLD_DECOR_BUDGET = Object.freeze({ grass: 4200, ferns: 600, pebbles: 480, lilyPads: 64 });

@@ -1,4 +1,5 @@
 import { SpatialInstances, batchStaticWorld } from './WorldBatches';
+import { addShowcaseArt } from './ShowcaseArt';
 import { addHabitatArt } from './HabitatArt';
 import { forestZone, foliageScale, WORLD_DECOR_BUDGET } from './world-composition.mjs';
 import { OutdoorMotion, fernGeometry, waterRipples } from './OutdoorMotion';
@@ -42,6 +43,7 @@ export class World {
     const habitatFronds = addHabitatArt(this.scene, this.surfaces, this.texture('leaf'));
     this.applyWind(habitatFronds);
     this.detailMeshes.push({ detail: new InstanceDetail(habitatFronds, 16), kind: 'undergrowth' });
+    addShowcaseArt(this.scene, this.surfaces);
     this.outdoor = new OutdoorMotion(this.scene);
     batchStaticWorld(this.scene);
     const sources: THREE.InstancedMesh[] = [];
@@ -155,7 +157,7 @@ export class World {
               ly = ey + (rand() - 0.5) * 36,
               a = angle + (rand() - 0.5) * 2;
             const shade = rand();
-            ctx.fillStyle = `rgb(${48 + shade * 39},${61 + shade * 46},${29 + shade * 25})`;
+            ctx.fillStyle = `rgb(${48 + shade * 44},${72 + shade * 59},${39 + shade * 32})`;
             ctx.save();
             ctx.translate(lx, ly);
             ctx.rotate(a);
@@ -306,7 +308,7 @@ export class World {
     }
     mountains.setAttribute('color', new THREE.Float32BufferAttribute(tints, 3));
     mountains.computeVertexNormals();
-    const mountain = this.mesh(mountains, this.surfaces.material('forest', 0xa3ac91, 65), 0, -0.12, 0);
+    const mountain = this.mesh(mountains, this.surfaces.material('earth', 0x819b94, 65), 0, -0.12, 0);
     mountain.castShadow = false;
     // The settlement's worn asphalt is distinct from the forest's dirt path.
     const paint = new THREE.MeshStandardMaterial({
@@ -352,19 +354,29 @@ export class World {
     geometry.computeVertexNormals();
     return geometry;
   }
+  private crownGeometry(): THREE.PlaneGeometry {
+    const g = new THREE.PlaneGeometry(5.4, 5.2, 2, 1);
+    const p = g.getAttribute('position');
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i);
+      p.setZ(i, Math.cos(x * 0.55) * 0.6 + Math.sin(y * 0.6) * 0.25);
+    }
+    g.computeVertexNormals();
+    return g;
+  }
   private createForest(): void {
     const barkMaterial = this.surfaces.material('bark', 0xffffff, 2);
     const leaf = this.texture('leaf');
     const pineTrees = TREES.filter((t) => forestZone(t.x, t.z) === 'pine');
     const broadTrees = TREES.filter((t) => forestZone(t.x, t.z) !== 'pine');
     const branches = new THREE.InstancedMesh(
-      new THREE.CylinderGeometry(0.035, 0.1, 2.8, 6),
+      new THREE.CylinderGeometry(0.045, 0.17, 3.2, 7),
       barkMaterial,
       TREES.length * 10,
     );
     const trunks = new THREE.InstancedMesh(this.trunkGeometry(), barkMaterial, TREES.length);
     const foliage = new THREE.InstancedMesh(
-      new THREE.PlaneGeometry(5.4, 5.2),
+      this.crownGeometry(),
       new THREE.MeshStandardMaterial({
         map: leaf,
         alphaTest: 0.4,
@@ -430,7 +442,8 @@ export class World {
         if (zone === 'wetland') d.rotation.z += 0.32 * Math.sin(j * 2.3);
         d.updateMatrix();
         crown.setMatrixAt(crownIndex * 10 + j, d.matrix);
-        color.setHSL(0.2 + (i % 7) * 0.005, 0.1, 0.67 + (i % 4) * 0.045);
+        color.setHSL(0.24 + (i % 7) * 0.008, 0.13, 0.67 + (i % 4) * 0.045);
+        if (i % 17 === 0) color.setRGB(1, 0.72, 0.43);
         if (zone === 'wetland') color.setHSL(0.25, 0.1, 0.72);
         if (zone === 'pine') color.setHSL(0.29, 0.12, 0.66 + (i % 3) * 0.03);
         if (i === stormTree) color.setRGB(1, 0.64, 0.45);
@@ -440,7 +453,7 @@ export class World {
     trunks.castShadow = true;
     trunks.receiveShadow = true;
     foliage.castShadow = true;
-    foliage.receiveShadow = false;
+    foliage.receiveShadow = true;
     this.applyWind(foliage);
     trunks.computeBoundingSphere();
     foliage.computeBoundingSphere();
@@ -450,7 +463,7 @@ export class World {
     pineFoliage.name = 'southern-pine-crowns';
     foliage.name = 'broadleaf-and-willow-crowns';
     pineFoliage.castShadow = true;
-    pineFoliage.receiveShadow = false;
+    pineFoliage.receiveShadow = true;
     this.applyWind(pineFoliage);
     pineFoliage.computeBoundingSphere();
     this.scene.add(trunks, foliage, pineFoliage, branches);
@@ -684,10 +697,10 @@ export class World {
     const water = this.mesh(
       waterGeometry,
       new THREE.MeshPhysicalMaterial({
-        color: 0x344b48,
+        color: 0x1c5148,
         metalness: 0.35,
-        roughness: 0.22,
-        clearcoat: 0.7,
+        roughness: 0.28,
+        clearcoat: 0.5,
         bumpMap: this.waterBump,
         bumpScale: 0.035,
         transparent: true,
@@ -717,7 +730,7 @@ export class World {
     this.scene.add(reeds);
     const pads = new THREE.InstancedMesh(
       new THREE.CircleGeometry(0.29, 10, 0.15, Math.PI * 1.86),
-      new THREE.MeshStandardMaterial({ color: 0x64785c, roughness: 0.72, side: THREE.DoubleSide }),
+      new THREE.MeshStandardMaterial({ color: 0x3b7258, roughness: 0.72, side: THREE.DoubleSide }),
       WORLD_DECOR_BUDGET.lilyPads,
     );
     for (let i = 0; i < WORLD_DECOR_BUDGET.lilyPads; i++) {
