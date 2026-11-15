@@ -2,6 +2,8 @@
 
 Resume this branch, do not restart the upgrade. Base: `45b8e34` (merged Windows cleanup, PR #14). Branch: `codex/v0.27-visual-leap`. Release/PR version: **v0.27**. User merges; keep the eventual PR a source-only draft.
 
+**Published handoff:** [Draft PR #15 — v0.27 — The Visual Leap: botanical world and expressive creatures](https://github.com/asciosh/MURK-METTLE/pull/15). Open, not deployed or merged. Verified implementation commits: `a54028a` (baseline), `e3bbd54` (world), `421f534` (creatures), `39cdf20` (character/release validation). The remaining work is review and manual Windows acceptance, not reimplementation.
+
 ## Verified milestone 0 — baseline
 
 - Inspected the current runtime, rendering/material/world systems, all actor builders, model manifest/GLB, presets, cosmetics, browser fixtures and cleanup documentation.
@@ -51,11 +53,11 @@ Final images/logs are under `/workspace/work/visual-v027/` and `/workspace/work/
 
 Operational retries: the source server stopped during the interruption and was restarted before the successful final suite. Wrangler initially tried an unwritable home config; the successful dry run/local Worker used `XDG_CONFIG_HOME=/workspace/work/visual-v027/wrangler-config`. No production or security setting was bypassed.
 
-## Pending handoff
+## Milestone status
 
 1. Environment/material/lighting showcase pass: completed above.
 2. Creature rebuild: completed above.
-3. Character/release validation: completed above. Publish the validated branch as a source-only **draft** PR with v0.27 in its title, then record its URL here. User merges.
+3. Character/release validation and source-only draft PR publication: completed above. User merges after review/playtesting.
 
 ## Constraints and known limitations
 
@@ -67,4 +69,4 @@ Operational retries: the source server stopped during the interruption and was r
 
 ## Next exact steps
 
-Commit milestone 3, push `codex/v0.27-visual-leap`, create a draft PR against `main` titled `v0.27 — The Visual Leap: botanical world and expressive creatures`, and save the PR URL in this document. Then the next implementation session should address only review findings or Windows playtest evidence; do not rebuild completed milestones. Full Windows hardware/co-op checks remain in the release checklist. Never run the unsigned installer, deploy or merge as part of this task.
+Inspect current Git state and PR #15, then address only review findings or Windows playtest evidence. Start with the three showcase locations and all three graphics presets on an actual Windows GPU, then a four-player expedition with save/reconnect checks. The complete checklist is in `docs/changelog/CHANGELOG-v0.27.md`. Do not rebuild completed milestones or claim Windows CI/native acceptance without checking the actual result. Never run the unsigned installer, deploy or merge as part of this task.
