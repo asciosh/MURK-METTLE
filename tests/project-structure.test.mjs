@@ -54,10 +54,11 @@ test('client and backend entrypoints, GLB manifest and required modules exist', 
     'src/client/ui/HudLayout.ts', 'src/styles.css', 'src/styles/polish.css',
     'server/cloudflare/index.mjs', 'server/cloudflare/room.mjs',
     'server/cloudflare/account.mjs', 'server/cloudflare/profile.mjs',
-    'server/local/index.mjs', 'scripts/dev.mjs', 'public/models/survivor.glb'
+    'src/client/ui/FieldJournal.ts', 'src/client/rendering/FieldGraphics.ts',
+    'scripts/dev.mjs', 'public/models/survivor.glb'
   ]) await access(resolve(root, path));
   const dev = await read('scripts/dev.mjs');
-  assert.match(dev, /spawn\(bin\('wrangler'\)/);
+  assert.match(dev, /runTool\('wrangler'/);
   assert.match(dev, /'build', '--watch'/);
   assert.match(await read('src/main.ts'), /client\/game\/Game/);
   assert.doesNotMatch(await read('src/main.ts'), /\.\/game\/Game/);
@@ -66,7 +67,7 @@ test('client and backend entrypoints, GLB manifest and required modules exist', 
 test('stylesheets preserve the original CSS order and remain balanced', async () => {
   const stylesheet = await read('src/styles.css');
   const ordered = [...stylesheet.matchAll(/@import '\.\/styles\/([^']+)'/g)].map(m => m[1]);
-  assert.deepEqual(ordered, ['foundation.css','components.css','screens.css','polish.css','touch.css','botanical.css','mods.css']);
+  assert.deepEqual(ordered, ['foundation.css','components.css','screens.css','polish.css','botanical.css','mods.css']);
   for (const file of ordered) {
     const css = await read('src/styles/' + file);
     let count = 0;

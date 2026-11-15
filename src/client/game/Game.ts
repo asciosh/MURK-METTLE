@@ -1,16 +1,15 @@
 import { ModRegistry } from '../mods/ModRegistry';
 import { ModManager } from '../mods/ModManager';
 import { setText, setWidth } from '../ui/ChangedValue';
-import { renderProfile, type QualityId } from '../../../shared/render-profile.mjs';
-import { TouchControls } from './TouchControls';
+import { qualityId, renderProfile, type QualityId } from '../../../shared/render-profile.mjs';
+import { FieldJournal } from '../ui/FieldJournal';
+import { FieldGraphics } from '../rendering/FieldGraphics';
 import { journalEntry } from '../../../shared/collection.mjs';
 import { progressStore } from './ProgressStore';
 import { Firearms } from './Firearms';
 import { Collection, emptyCollection, type CollectionState } from './Collection';
-import { createAtmosphere } from './Atmosphere';
 import { CombatFeedback } from './CombatFeedback';
 import type { PerformancePanel } from '../debug/PerformancePanel';
-import type { SceneEffects } from './SceneEffects';
 import {
   CREATURES,
   SPECIES_IDS,
@@ -69,19 +68,12 @@ export class Game {
   private readonly scene = new THREE.Scene();
   private readonly feedback = new CombatFeedback(this.scene);
   private renderDelta = 0;
-  private effects: SceneEffects | null = null;
-  private effectsGeneration = 0;
   private disposed = false;
   private performancePanel: PerformancePanel | null = null;
   private readonly wildVisualTime = new Map<SpeciesId, number>();
-  private cinematic = false;
-  private sky: ReturnType<typeof createAtmosphere> | null = null;
-  private readonly mobileDevice = matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0;
   private quality: QualityId = 'balanced';
-  private lastFrameAt = 0;
-  private readonly touch: TouchControls;
-  private environmentTarget: THREE.WebGLRenderTarget | null = null;
-  private readonly sun = new THREE.DirectionalLight(0xffdbad, 3.0);
+  private readonly journal: FieldJournal;
+  private readonly graphics: FieldGraphics;
   private readonly firearms: Firearms;
   private readonly collection: Collection;
   private coopCollection: CollectionState | null = null;
@@ -222,7 +214,8 @@ export class Game {
 
     this.scene.background = new THREE.Color(0xaab7af);
     this.scene.fog = new THREE.FogExp2(0xaab7af, 0.0055);
-    this.createLighting();
+    this.graphics = new FieldGraphics(this.renderer, this.scene, this.feedback.camera,
+      (message) => this.showToast(message, 'warning'));
 
     this.world = new World(this.scene);
     this.createExtractionBeacon();
@@ -246,13 +239,8 @@ export class Game {
     } catch {
       /* Defaults work without browser storage. */
     }
-    const initialQuality = ['mobile', 'low', 'balanced', 'cinematic'].includes(saved.quality || '')
-      ? saved.quality!
-      : this.mobileDevice
-        ? 'mobile'
-        : 'balanced';
-    this.setQuality(initialQuality);
-    const photo = typeof saved.photo === 'boolean' ? saved.photo : !this.mobileDevice;
+    this.setQuality(qualityId(saved.quality));
+    const photo = typeof saved.photo === 'boolean' ? saved.photo : true;
     const photoToggle = document.querySelector<HTMLInputElement>('#photo-materials');
     if (photoToggle) photoToggle.checked = photo;
     this.updatePhotoMaterials(photo);
@@ -280,7 +268,7 @@ export class Game {
       document.body.classList.toggle('is-pointer-locked', locked);
     });
 
-    this.touch = new TouchControls(this.viewport, this.renderer.domElement, this.input);
+    this.journal = new FieldJournal(this.viewport);
     this.positionElement = document.querySelector<HTMLElement>('#player-position');
     this.playerLevelText = document.querySelector<HTMLElement>('#player-level');
     this.playerXpFill = document.querySelector<HTMLElement>('#player-xp-fill');
@@ -320,12 +308,7 @@ export class Game {
     this.updateHud(1);
     this.updateProgressHud();
     this.updateMissionHud();
-    this.showToast(
-      this.touch.enabled
-        ? 'TOUCH READY  //  Left thumb move · drag the view or FIRE to look · USE to interact.'
-        : 'FIELD READY  //  RMB aim · LMB fire · R reload · E bond / resupply.',
-      'info',
-    );
+    this.showToast('FIELD READY  //  RMB aim · LMB fire · R reload · E bond / resupply.', 'info');
   }
 
   private async loadOptionalModels(): Promise<void> {
@@ -340,35 +323,6 @@ export class Game {
     if (models.lanternkin?.url) void this.companion.installModel(models.lanternkin);
   }
 
-  private createLighting(): void {
-    const sky = createAtmosphere();
-    this.sky = sky;
-    sky.material.uniforms.cloudLayers.value = this.mobileDevice ? 3 : 5;
-    this.scene.add(sky);
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    const environment = new THREE.Scene();
-    const environmentSky = sky.clone();
-    environment.add(environmentSky);
-    this.environmentTarget = pmrem.fromScene(environment, 0.06);
-    this.scene.environment = this.environmentTarget.texture;
-    this.scene.environmentIntensity = 1.0;
-    pmrem.dispose();
-    this.scene.add(new THREE.HemisphereLight(0xc0d4df, 0x5e5e46, 1.85));
-    const sun = this.sun;
-    sun.position.set(-25, 35, 18);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -35;
-    sun.shadow.camera.right = 35;
-    sun.shadow.camera.top = 35;
-    sun.shadow.camera.bottom = -35;
-    sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 100;
-    sun.shadow.bias = -0.00015;
-    sun.shadow.normalBias = 0.025;
-    this.scene.add(sun, sun.target);
-  }
-
   start(): void {
     if (this.running) return;
     this.running = true;
@@ -378,7 +332,7 @@ export class Game {
 
   enterField(): void {
     this.fieldEntered = true;
-    this.touch.setActive(true);
+    this.journal.setActive(true);
   }
 
   requestMouseCapture(): void {
@@ -387,9 +341,6 @@ export class Game {
 
   private readonly tick = (): void => {
     if (!this.running) return;
-    const frameNow = performance.now();
-    if (this.quality === 'mobile' && frameNow - this.lastFrameAt < 32) return;
-    this.lastFrameAt = frameNow;
     if (!this.fieldEntered) {
       this.clock.getDelta(); // Do not accumulate a large first gameplay frame.
       if (this.needsPreviewFrame) {
@@ -448,8 +399,6 @@ export class Game {
     this.player.bandaging = this.vitals.healEndsAt > Date.now();
     this.firearms.aiming = this.aiming;
     this.player.update(movement, deltaSeconds, this.vitals.sprinting, this.world);
-    if (this.input.consumeSwapPressed())
-      this.firearms.switchWeapon(this.firearms.selected === 'pistol' ? 'rifle' : 'pistol');
     const weapon = this.input.consumeWeaponPressed();
     if (weapon) this.firearms.switchWeapon(weapon === 1 ? 'pistol' : 'rifle');
     if (this.input.consumeCyclePressed()) this.cycleCreature();
@@ -457,8 +406,7 @@ export class Game {
     if (pressed || (WEAPONS[this.firearms.selected].automatic && this.input.isFiring())) this.handleShooting();
     this.firearms.update(deltaSeconds);
     this.world.update(deltaSeconds, this.player.getPosition());
-    if (this.sky)
-      this.sky.material.uniforms.cloudTime.value = (this.sky.material.uniforms.cloudTime.value + deltaSeconds) % 3600;
+    this.graphics.update(deltaSeconds);
     this.updateWildCreatures(deltaSeconds);
     this.syncCollectionVisuals();
     if (this.multiplayer.connected) {
@@ -744,26 +692,7 @@ export class Game {
     const profile = renderProfile(quality);
     const selection = document.querySelector<HTMLSelectElement>('#graphics-quality');
     if (selection) selection.value = quality;
-    this.cinematic = quality === 'cinematic';
-    const generation = ++this.effectsGeneration;
-    if (this.cinematic && !this.effects) {
-      void import('./SceneEffects')
-        .then(({ SceneEffects }) => {
-          if (this.disposed || generation !== this.effectsGeneration || !this.cinematic) return;
-          this.effects = new SceneEffects(this.renderer, this.scene, this.feedback.camera);
-          this.resize();
-        })
-        .catch(() => {
-          if (generation === this.effectsGeneration)
-            this.showToast('Cinematic effects unavailable. Standard rendering remains active.', 'warning');
-        });
-    }
-    if (!this.cinematic && this.effects) {
-      this.effects.dispose();
-      this.effects = null;
-    }
-    this.renderer.shadowMap.enabled = profile.shadows;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, profile.pixelRatio));
+    this.graphics.setQuality(quality, profile);
     this.world.setQuality(profile);
     this.feedback.setQuality(quality);
     this.player.setEffectsLights(profile.pointLights);
@@ -773,7 +702,6 @@ export class Game {
     this.coopVisuals.lightsEnabled = profile.pointLights;
     this.companion.setLightEnabled(profile.pointLights);
     for (const wild of this.wildCreatures.values()) wild.setLightEnabled(profile.pointLights);
-    if (this.sky) this.sky.material.uniforms.cloudLayers.value = profile.cloudLayers;
     this.resize();
   }
   private saveGraphics(): void {
@@ -946,8 +874,6 @@ export class Game {
           : '',
       );
     }
-    const phoneNavigation = document.querySelector('#touch-navigation');
-    if (phoneNavigation) setText(phoneNavigation, tracker?.textContent || '');
     const hint = document.querySelector('#exploration-hint');
     if (hint)
       setText(
@@ -1336,11 +1262,7 @@ export class Game {
     const fov = this.aiming ? 43 : 62;
     this.camera.fov = THREE.MathUtils.damp(this.camera.fov, fov, 10, deltaSeconds);
     this.camera.updateProjectionMatrix();
-    const shadowTarget = this.sun.target.position;
-    if (shadowTarget.distanceTo(playerPosition) > 4) {
-      shadowTarget.copy(playerPosition);
-      this.sun.position.copy(playerPosition).add(new THREE.Vector3(-25, 35, 18));
-    }
+    this.graphics.followShadow(playerPosition);
   }
 
   private updateHud(deltaSeconds: number): void {
@@ -1398,15 +1320,6 @@ export class Game {
           : `GROUP ${this.infected.wave || 1} · ${this.infected.alive.length} INFECTED ACTIVE`,
       );
 
-    const touchHeal = document.querySelector<HTMLButtonElement>('[data-touch="heal"]');
-    if (touchHeal) {
-      touchHeal.disabled = health <= 0 || health >= 100 || !this.vitals.bandages || remaining > 0;
-      setText(touchHeal, remaining ? 'HEALING' : `HEAL ${this.vitals.bandages}`);
-    }
-    const touchReload = document.querySelector('[data-touch="reload"]');
-    if (touchReload) setText(touchReload, health <= 0 ? 'RESTART' : this.player.reloading ? 'LOADING' : 'RELOAD');
-    const phoneEncounter = document.querySelector('#touch-encounter');
-    if (phoneEncounter) setText(phoneEncounter, status?.textContent || '');
     this.updateCompanionHud();
     const nearestDrop = this.multiplayer.connected ? undefined : this.drops.find((drop) => drop.canPickUp(position));
     if (this.missionHint) {
@@ -1566,8 +1479,7 @@ export class Game {
       reticle.style.left = `${(target.x * 0.5 + 0.5) * 100}%`;
       reticle.style.top = `${(-target.y * 0.5 + 0.5) * 100}%`;
     }
-    if (this.cinematic && this.effects) this.effects.render();
-    else this.renderer.render(this.scene, this.feedback.camera);
+    this.graphics.render();
     this.performancePanel?.record(
       performance.now(),
       this.renderer.info,
@@ -1583,18 +1495,17 @@ export class Game {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
-    this.effects?.resize(width, height, this.renderer.getPixelRatio());
+    this.graphics.resize();
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.running = false;
     this.disposed = true;
-    this.effectsGeneration++;
     this.performancePanel?.dispose();
     this.renderer.setAnimationLoop(null);
     this.clock.stop();
-    this.touch.dispose();
+    this.journal.dispose();
     this.input.dispose();
     this.abilityButton?.removeEventListener('click', this.handleAbilityClick);
     document.querySelector('#heal-button')?.removeEventListener('click', this.handleHealClick);
@@ -1613,6 +1524,7 @@ export class Game {
     this.wildCreatures.clear();
     this.modUI.dispose();
     this.cosmetics.dispose();
+    this.graphics.dispose();
     const geometry = new Set<THREE.BufferGeometry>(),
       materials = new Set<THREE.Material>();
     this.scene.traverse((object) => {
@@ -1624,15 +1536,12 @@ export class Game {
     });
     geometry.forEach((g) => g.dispose());
     materials.forEach((m) => m.dispose());
-    this.sun.dispose();
     this.feedback.dispose();
     this.firearms.dispose();
     this.world.dispose();
-    this.environmentTarget?.dispose();
     document.querySelector('#creature-roster')?.removeEventListener('click', this.handleRosterClick);
     document.querySelector('#graphics-quality')?.removeEventListener('change', this.handleGraphicsQuality);
     document.querySelector('#photo-materials')?.removeEventListener('change', this.handlePhotoMaterials);
-    this.effects?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
     document.body.classList.remove('is-pointer-locked');

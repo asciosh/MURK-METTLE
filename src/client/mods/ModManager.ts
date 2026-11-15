@@ -67,7 +67,7 @@ export class ModManager {
     if (menu) menu.hidden = true;
     document.querySelector('#field-menu-toggle')?.setAttribute('aria-expanded', 'false');
     document.querySelector<HTMLButtonElement>('#inventory-close')?.click();
-    document.querySelector<HTMLButtonElement>('#touch-journal-close')?.click();
+    document.querySelector<HTMLButtonElement>('#journal-close')?.click();
     document.dispatchEvent(new Event('field-overlay-open'));
     if (document.pointerLockElement) document.exitPointerLock();
     this.dialog.showModal();

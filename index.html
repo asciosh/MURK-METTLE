@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#101914" />
     <meta
       name="description"
@@ -40,10 +40,9 @@
             <button id="coop-craft-balanced" type="button" disabled>CO-OP GRIP</button>
             <button id="coop-craft-restorative" type="button" disabled>CO-OP ANTIDOTE</button>
           </div>
-          <label class="graphics-label">GRAPHICS <select id="graphics-quality" aria-label="Graphics quality"><option value="mobile">Mobile · reduced detail</option><option value="balanced">Balanced · shadows</option><option value="cinematic">Cinematic · contact shading</option><option value="low">Performance · no shadows</option></select></label>
+          <label class="graphics-label">GRAPHICS <select id="graphics-quality" aria-label="Graphics quality"><option value="balanced">Balanced · shadows</option><option value="cinematic">Cinematic · contact shading</option><option value="low">Performance · no shadows</option></select></label>
           <label class="graphics-label"><input id="photo-materials" type="checkbox" checked> Photographic surfaces · online (11 MB)</label>
           <small id="photo-materials-status" role="status">Offline fallback ready</small>
-          <label class="graphics-label">CONTROLS <select id="control-mode"><option value="auto">Auto · detect device</option><option value="touch">Touch controls</option><option value="keyboard">Mouse &amp; keyboard</option></select></label>
           <button id="mods-open" type="button">CREATURE MODS</button>
           <strong>COMBAT AUDIO</strong>
           <label class="graphics-label"><input id="combat-mute" type="checkbox"> Mute sound effects</label>
@@ -140,7 +139,7 @@
           <div id="crafting-list" class="crafting-list"></div>
           <p class="inventory-footnote">Press I to close or use the BACKPACK button.</p>
         </section>
-        <button id="journal-button" class="journal-toggle" type="button" aria-controls="touch-journal-sheet" aria-expanded="false">J · JOURNAL</button>
+        <button id="journal-button" class="journal-toggle" type="button" aria-controls="journal-sheet" aria-expanded="false">J · JOURNAL</button>
         <button id="inventory-button" class="inventory-toggle" type="button" aria-expanded="false">I · BACKPACK</button>
         <div id="loot-hint" class="loot-hint" role="status"></div>
         <section id="radio-panel" class="radio-panel" aria-live="polite" aria-label="Field radio">
@@ -156,7 +155,7 @@
           <p class="eyebrow">FIELD TEST 009 · FAILED</p>
           <h2>YOU'RE<br /><em>DOWN.</em></h2>
           <p>The infected overpowered you. Regroup and try again.</p>
-          <div class="retry-hint"><kbd>R</kbd> / TOUCH RELOAD · RESTART</div>
+          <div class="retry-hint"><kbd>R</kbd> · RESTART</div>
         </section>
 
         <section class="minimap-panel" aria-label="Field navigation map">
@@ -191,7 +190,7 @@
           <p class="title-description">An abandoned settlement. A forest reclaiming its dead. Explore the expanded Wildlands, survive the infected, and evolve the creatures that choose to trust you.</p>
           <button id="enter-field" class="title-enter" type="button">ENTER THE WILDLANDS <span aria-hidden="true">↗</span></button>
           <p id="game-load-status" class="game-load-status" role="status">Sign in to prepare the Wildlands.</p>
-          <p class="touch-title-hint">Thumb stick to move · Drag the view or FIRE to look · AIM and RUN toggle · Landscape gives more room.</p><p class="title-hint">WASD MOVE · RMB AIM · LMB FIRE · R RELOAD · 1/2 WEAPON · SPACE MELEE · E INTERACT · Q PULSE · H BANDAGE · C COMPANION</p>
+          <p class="title-hint">WASD MOVE · RMB AIM · LMB FIRE · R RELOAD · 1/2 WEAPON · SPACE MELEE · E INTERACT · Q PULSE · H BANDAGE · C COMPANION</p>
         </div>
         <p class="title-build">MURK &amp; METTLE / v0.26 · ORIGINAL INDIE PROTOTYPE</p>
       </section>

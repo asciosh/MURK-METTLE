@@ -10,54 +10,8 @@ export interface MouseDelta {
   y: number;
 }
 
-export type TouchAction =
-  | 'fire'
-  | 'aim'
-  | 'sprint'
-  | 'reload'
-  | 'interact'
-  | 'pulse'
-  | 'melee'
-  | 'heal'
-  | 'inventory'
-  | 'cycle'
-  | 'swap';
-
-/** Keyboard, mouse and touch feed the same gameplay actions. */
+/** PC keyboard/mouse actions; menu focus and pointer-lock loss clear held input. */
 export class InputController {
-  touchEnabled = false;
-  private touchMovement: MovementAxes = { right: 0, forward: 0 };
-  private readonly touchHeld = new Set<TouchAction>();
-  private swapPressed = false;
-  setTouchMovement(axes: MovementAxes): void {
-    this.touchMovement = axes;
-  }
-  addTouchLook(x: number, y: number): void {
-    this.mouseX += x * (this.isAiming() ? 1.9 : 2.8);
-    this.mouseY += y * (this.isAiming() ? 1.9 : 2.8);
-  }
-  setTouchAction(action: TouchAction, pressed: boolean): void {
-    if (pressed) this.touchHeld.add(action);
-    else this.touchHeld.delete(action);
-    if (!pressed) return;
-    if (action === 'fire') this.firePressed = true;
-    if (action === 'reload') this.restartPressed = true;
-    if (action === 'interact') this.interactPressed = true;
-    if (action === 'pulse') this.abilityPressed = true;
-    if (action === 'melee') this.attackPressed = true;
-    if (action === 'heal') this.healPressed = true;
-    if (action === 'inventory') this.inventoryPressed = true;
-    if (action === 'cycle') this.cyclePressed = true;
-    if (action === 'swap') this.swapPressed = true;
-  }
-  consumeSwapPressed(): boolean {
-    const value = this.swapPressed;
-    this.swapPressed = false;
-    return value;
-  }
-  clearHeld(): void {
-    this.handleWindowBlur();
-  }
   private readonly keys = new Set<string>();
   private mouseX = 0;
   private mouseY = 0;
@@ -79,10 +33,10 @@ export class InputController {
   private weaponPressed: 1 | 2 | null = null;
   private cyclePressed = false;
   isAiming(): boolean {
-    return this.aimHeld || this.touchHeld.has('aim');
+    return this.aimHeld;
   }
   isFiring(): boolean {
-    return this.fireHeld || this.touchHeld.has('fire');
+    return this.fireHeld;
   }
   consumeFirePressed(): boolean {
     const v = this.firePressed;
@@ -121,9 +75,8 @@ export class InputController {
   requestCapture(): void {
     if (
       !this.disposed &&
-      !this.touchEnabled &&
       !document.querySelector(
-        '#mods-dialog[open],#field-menu:not([hidden]),#account-panel:not([hidden]),#touch-journal-sheet:not([hidden]),#inventory-panel.visible',
+        '#mods-dialog[open],#field-menu:not([hidden]),#account-panel:not([hidden]),#journal-sheet:not([hidden]),#inventory-panel.visible',
       ) &&
       typeof this.element.requestPointerLock === 'function' &&
       document.pointerLockElement !== this.element
@@ -137,14 +90,12 @@ export class InputController {
   getMovementAxes(): MovementAxes {
     const right = Number(this.isDown('KeyD', 'ArrowRight')) - Number(this.isDown('KeyA', 'ArrowLeft'));
     const forward = Number(this.isDown('KeyW', 'ArrowUp')) - Number(this.isDown('KeyS', 'ArrowDown'));
-    const x = right + this.touchMovement.right,
-      z = forward + this.touchMovement.forward,
-      length = Math.max(1, Math.hypot(x, z));
-    return { right: x / length, forward: z / length };
+    const length = Math.max(1, Math.hypot(right, forward));
+    return { right: right / length, forward: forward / length };
   }
 
   isSprinting(): boolean {
-    return this.isDown('ShiftLeft', 'ShiftRight') || this.touchHeld.has('sprint');
+    return this.isDown('ShiftLeft', 'ShiftRight');
   }
 
   consumeAttackPressed(): boolean {
@@ -206,7 +157,7 @@ export class InputController {
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (
       document.querySelector(
-        '#mods-dialog[open],#field-menu:not([hidden]),#account-panel:not([hidden]),#touch-journal-sheet:not([hidden]),#inventory-panel.visible',
+        '#mods-dialog[open],#field-menu:not([hidden]),#account-panel:not([hidden]),#journal-sheet:not([hidden]),#inventory-panel.visible',
       )
     ) {
       this.handleWindowBlur();
@@ -280,9 +231,6 @@ export class InputController {
   };
   private readonly handleWindowBlur = (): void => {
     this.keys.clear();
-    this.touchHeld.clear();
-    this.touchMovement = { right: 0, forward: 0 };
-    this.swapPressed = false;
     this.healPressed = false;
     this.firePressed = false;
     this.fireHeld = false;
@@ -313,9 +261,6 @@ export class InputController {
     document.removeEventListener('mouseup', this.handleMouseUp);
     this.element.removeEventListener('contextmenu', this.handleContextMenu);
     this.keys.clear();
-    this.touchHeld.clear();
-    this.touchMovement = { right: 0, forward: 0 };
-    this.swapPressed = false;
     this.healPressed = false;
     this.firePressed = false;
     this.fireHeld = false;

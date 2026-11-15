@@ -1,10 +1,6 @@
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./support.cjs');
 (async () => {
-  const browser = await chromium.launch({
-    executablePath: '/usr/bin/chromium',
-    headless: true,
-    args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
-  });
+  const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
   const errors = [],
     requests = [];
@@ -12,7 +8,7 @@ const { chromium } = require('playwright');
   page.on('request', (r) => requests.push(r.url()));
   let authenticated = false;
   await page.addInitScript(() =>
-    localStorage.setItem('murk-mettle-graphics', JSON.stringify({ quality: 'mobile', photo: false })),
+    localStorage.setItem('murk-mettle-graphics', JSON.stringify({ quality: 'low', photo: false })),
   );
   await page.route('**/api/account/**', (route) =>
     route.fulfill({ json: authenticated ? { username: 'benchmark', revision: 0, data: null } : {} }),
@@ -67,7 +63,7 @@ const { chromium } = require('playwright');
         throw Error('Spatial instances changed transforms/colors');
     }
     const full = g.world.spatial.map((s) => [s.source.count, Array.from(s.source.instanceMatrix.array)]);
-    g.setQuality('mobile');
+    g.setQuality('low');
     g.setQuality('balanced');
     g.world.spatial.forEach((s, i) => {
       if (s.source.count !== full[i][0] || s.source.instanceMatrix.array.some((v, j) => v !== full[i][1][j]))
@@ -84,15 +80,15 @@ const { chromium } = require('playwright');
     for (let i = 0; i < 60; i++) g.updateWildCreatures(1 / 60);
     if (wildUpdates >= 300 || wildUpdates < 60) throw Error('Distant animation scheduling failed');
     g.setQuality('cinematic');
-    g.setQuality('mobile');
+    g.setQuality('low');
     await new Promise((r) => setTimeout(r, 100));
-    if (g.effects) throw Error('Stale compositor allocated');
+    if (g.graphics.effects) throw Error('Stale compositor allocated');
     g.setQuality('cinematic');
     await new Promise((r) => setTimeout(r, 100));
-    if (!g.effects) throw Error('Cinematic lazy load failed');
+    if (!g.graphics.effects) throw Error('Cinematic lazy load failed');
     g.renderScene();
-    g.setQuality('mobile');
-    if (g.effects) throw Error('Compositor not released');
+    g.setQuality('low');
+    if (g.graphics.effects) throw Error('Compositor not released');
     g.renderScene();
     return { titleDraws: draws, wildUpdates, cells: g.world.spatial.reduce((a, s) => a + s.cells.size, 0) };
   });

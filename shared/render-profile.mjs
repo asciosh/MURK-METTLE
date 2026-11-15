@@ -1,15 +1,5 @@
 // Explicit quality limits, independent of gameplay and server simulation.
 export const RENDER_PROFILES = Object.freeze({
-  mobile: {
-    pixelRatio: 1,
-    shadows: false,
-    pointLights: false,
-    foliage: 0.5,
-    grass: 0.32,
-    undergrowth: 0.4,
-    particles: 12,
-    cloudLayers: 3,
-  },
   low: {
     pixelRatio: 1,
     shadows: false,
@@ -41,4 +31,10 @@ export const RENDER_PROFILES = Object.freeze({
     cloudLayers: 5,
   },
 });
-export const renderProfile = (id) => RENDER_PROFILES[id] || RENDER_PROFILES.balanced;
+// Graphics preferences are device-local, independent of account/progression saves.
+export function qualityId(id) {
+  if (typeof id !== 'string') return 'balanced';
+  if (id === 'mobile') return 'low'; // Retired preference from the Android build.
+  return Object.hasOwn(RENDER_PROFILES, id) ? id : 'balanced';
+}
+export const renderProfile = (id) => RENDER_PROFILES[qualityId(id)];

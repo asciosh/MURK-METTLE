@@ -1,17 +1,13 @@
-const { chromium, devices } = require('playwright');
+const { launchBrowser } = require('./support.cjs');
 const fs = require('node:fs'),
   path = require('node:path');
 (async () => {
-  const browser = await chromium.launch({
-    executablePath: '/usr/bin/chromium',
-    headless: true,
-    args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
-  });
+  const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } }),
     errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.addInitScript(() =>
-    localStorage.setItem('murk-mettle-graphics', JSON.stringify({ quality: 'mobile', photo: false })),
+    localStorage.setItem('murk-mettle-graphics', JSON.stringify({ quality: 'low', photo: false })),
   );
   await page.route('**/api/account/**', (r) =>
     r.fulfill({ json: { username: 'mods_test', revision: 0, data: null } }),
@@ -163,14 +159,15 @@ const fs = require('node:fs'),
   if (await page.locator('#mods-dialog').evaluate((n) => n.open)) throw Error('Escape failed');
   await require('./mod-resources.cjs')(page);
   await page.evaluate(() => __game.dispose());
-  const mobile = await browser.newContext({ ...devices['Pixel 7'], viewport: { width: 390, height: 844 } }),
-    phone = await mobile.newPage();
-  phone.on('pageerror', (e) => errors.push(String(e)));
-  await phone.route('**/api/account/**', (r) => r.fulfill({ json: {} }));
-  await phone.goto('http://localhost:5173');
-  await phone.evaluate(async () => {
-    const { ModRegistry } = await import('/src/client/mods/ModRegistry.ts'),
-      { ModManager } = await import('/src/client/mods/ModManager.ts');
+  // Preview at the minimum supported desktop window, using desktop input.
+  const compact = await browser.newContext({ viewport: { width: 960, height: 540 } });
+  const compactPage = await compact.newPage();
+  compactPage.on('pageerror', (e) => errors.push(String(e)));
+  await compactPage.route('**/api/account/**', (r) => r.fulfill({ json: {} }));
+  await compactPage.goto(process.env.GAME_URL || 'http://localhost:5173');
+  await compactPage.evaluate(async () => {
+    const { ModRegistry } = await import('/src/client/mods/ModRegistry.ts');
+    const { ModManager } = await import('/src/client/mods/ModManager.ts');
     window.registry = new ModRegistry();
     window.manager = new ModManager(registry);
     document.querySelector('#auth-gate').hidden = true;
@@ -178,32 +175,16 @@ const fs = require('node:fs'),
     document.querySelector('#title-screen').classList.add('is-hidden');
     document.querySelector('#mods-open').click();
   });
-  await phone.locator('#mods-demo').click();
-  await phone.waitForFunction(() => document.querySelector('#mod-preview canvas'), { timeout: 30000 });
-  if (
-    await phone.evaluate(() => {
-      const r = document.querySelector('#mods-dialog').getBoundingClientRect();
-      return r.left < 0 || r.right > innerWidth || r.bottom > innerHeight || r.top < 0;
-    })
-  )
-    throw Error('Mobile dialog outside viewport');
-  await phone.screenshot({ path: path.join(output, 'mobile-preview.png') });
-  await phone.setViewportSize({ width: 844, height: 390 });
-  await phone.waitForTimeout(100);
-  if (
-    await phone.locator('#mods-dialog').evaluate((n) => {
-      const r = n.getBoundingClientRect();
-      return r.left < 0 || r.right > innerWidth || r.bottom > innerHeight || r.top < 0;
-    })
-  )
-    throw Error('Landscape dialog overflow');
-  await phone.locator('#mod-preview').scrollIntoViewIfNeeded();
-  await phone.screenshot({ path: path.join(output, 'mobile-landscape.png') });
-  await phone.locator('#mods-close').click();
-  await phone.evaluate(() => {
-    manager.dispose();
-    registry.dispose();
-  });
+  await compactPage.locator('#mods-demo').click();
+  await compactPage.waitForFunction(() => document.querySelector('#mod-preview canvas'), { timeout: 30000 });
+  if (await compactPage.locator('#mods-dialog').evaluate((n) => {
+    const r = n.getBoundingClientRect();
+    return r.left < 0 || r.right > innerWidth || r.bottom > innerHeight || r.top < 0;
+  })) throw Error('Compact desktop dialog outside viewport');
+  await compactPage.screenshot({ path: path.join(output, 'compact-desktop-preview.png') });
+  await compactPage.locator('#mods-close').click();
+  await compactPage.evaluate(() => { manager.dispose(); registry.dispose(); });
+  await compact.close();
   await browser.close();
   console.log('errors', errors);
   if (errors.length) throw Error(errors.join('\n'));

@@ -7,7 +7,7 @@ export function springStep(position, velocity, target, dt, frequency = 14) {
   return { position: target + (displacement + offset) * decay, velocity: (velocity - frequency * offset) * decay };
 }
 export function impactBudget(quality) {
-  return quality === 'low' ? 0 : quality === 'mobile' ? 12 : quality === 'cinematic' ? 64 : 40;
+  return quality === 'low' ? 0 : quality === 'cinematic' ? 64 : 40;
 }
 export const SOUND_CUES = Object.freeze({
   pistol: { frequency: 145, end: 48, duration: 0.13, noise: 0.7, gain: 0.18 },

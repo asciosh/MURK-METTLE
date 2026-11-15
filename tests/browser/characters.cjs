@@ -1,14 +1,10 @@
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./support.cjs');
 const path = require('node:path'),
   fs = require('node:fs');
 const output = process.env.ARTIFACT_DIR || path.join(require('node:os').tmpdir(), 'murk-actor-check');
 fs.mkdirSync(output, { recursive: true });
 (async () => {
-  const browser = await chromium.launch({
-    executablePath: '/usr/bin/chromium',
-    headless: true,
-    args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
-  });
+  const browser = await launchBrowser();
   const page = await browser.newPage({
     viewport: { width: 1440, height: 900 },
   });
@@ -79,7 +75,7 @@ fs.mkdirSync(output, { recursive: true });
         { species, xp },
       );
     }
-  await page.setViewportSize({ width: 844, height: 390 });
+  await page.setViewportSize({ width: 960, height: 540 });
   await page.evaluate(() => {
     gallery.renderer.setSize(innerWidth, innerHeight);
     gallery.camera.aspect = innerWidth / innerHeight;
@@ -87,7 +83,7 @@ fs.mkdirSync(output, { recursive: true });
     gallery.renderer.render(gallery.scene, gallery.camera);
   });
   await page.screenshot({
-    path: path.join(output, 'actors-small-landscape.png'),
+    path: path.join(output, 'actors-compact-desktop.png'),
   });
   console.log('errors', errors);
   if (errors.length) throw Error(errors.join('\n'));

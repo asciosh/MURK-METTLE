@@ -1,4 +1,4 @@
-export type QualityId = 'mobile' | 'low' | 'balanced' | 'cinematic';
+export type QualityId = 'low' | 'balanced' | 'cinematic';
 export interface RenderProfile {
   pixelRatio: number;
   shadows: boolean;
@@ -11,3 +11,4 @@ export interface RenderProfile {
 }
 export const RENDER_PROFILES: Readonly<Record<QualityId, RenderProfile>>;
 export function renderProfile(id: string): RenderProfile;
+export function qualityId(id: unknown): QualityId;

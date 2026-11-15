@@ -58,22 +58,11 @@ body { min-width: 320px; }
 .reticle::before { width: 1px; height: 12px; left: 5px; }
 .reticle::after { width: 12px; height: 1px; top: 5px; }
 body:not(.is-pointer-locked) .reticle { opacity: 0; }
-
-.welcome-card {
-  position: absolute; z-index: 3; left: clamp(22px, 8vw, 120px); top: 50%;
-  width: min(460px, calc(100% - 44px)); transform: translateY(-39%);
-  padding: 0 0 0 22px; border-left: 1px solid rgba(196,217,139,.55);
-  pointer-events: none; transition: opacity .25s, transform .25s;
-  text-shadow: 0 2px 25px rgba(0,0,0,.45);
-}
 .eyebrow, .hud-label, .corner-note { color: var(--acid); font: 9px 'DM Mono', monospace; letter-spacing: .17em; }
-.welcome-card h1 { margin: 16px 0 13px; font: 900 clamp(54px, 7.4vw, 94px)/.82 'Barlow Condensed', sans-serif; letter-spacing: -.015em; }
-.welcome-card h1 em { color: var(--acid); font-style: normal; }
 .welcome-copy { max-width: 310px; margin: 0; color: rgba(239,243,229,.78); font-size: 12px; line-height: 1.8; }
 .enter-prompt { display: flex; align-items: center; gap: 11px; margin-top: 33px; color: #edf0e7; font: 9px 'DM Mono', monospace; letter-spacing: .14em; }
 .enter-key { padding: 10px 13px; color: #152017; background: var(--acid); font-weight: 600; letter-spacing: .05em; }
 .welcome-footnote { margin: 30px 0 0; color: rgba(239,243,229,.4); font: 8px 'DM Mono', monospace; letter-spacing: .11em; }
-body.is-pointer-locked .welcome-card { opacity: 0; transform: translate(-10px, -39%); }
 
 .hud-bottom-left, .hud-bottom-right { position: absolute; z-index: 3; bottom: 27px; pointer-events: none; }
 .hud-bottom-left { left: clamp(18px, 3.8vw, 58px); }
@@ -85,22 +74,6 @@ body.is-pointer-locked .welcome-card { opacity: 0; transform: translate(-10px, -
 kbd { min-width: 16px; padding: 3px 4px; border: 1px solid rgba(226,237,214,.2); color: #e9efdf; background: rgba(255,255,255,.04); text-align: center; font: 8px 'DM Mono', monospace; }
 .corner-note { position: absolute; right: clamp(18px, 3.8vw, 58px); top: 106px; z-index: 3; color: rgba(230,239,219,.5); font-size: 8px; }
 .corner-note span { color: #d47b54; margin-left: 4px; }
-
-@media (max-width: 680px) {
-  .topbar { height: 68px; padding-inline: 16px; }
-  .wordmark-mark { width: 36px; height: 36px; }
-  .wordmark-copy strong { font-size: 15px; }
-  .wordmark-copy small { font-size: 7px; }
-  .build-tag { font-size: 7px; gap: 6px; }
-  .build-tag b { padding: 5px 6px; }
-  .welcome-card { left: 25px; padding-left: 15px; }
-  .welcome-card h1 { font-size: clamp(54px, 15vw, 78px); }
-  .welcome-copy { max-width: 260px; font-size: 11px; }
-  .hud-bottom-right { left: 16px; right: 16px; bottom: 58px; max-width: none; justify-content: flex-start; gap: 5px; }
-  .control-chip { padding: 6px; gap: 4px; font-size: 7px; }
-  .hud-bottom-left { left: 16px; bottom: 18px; }
-  .corner-note { top: 83px; right: 16px; font-size: 7px; }
-}
 
 /* Prototype 0.2 — combat HUD */
 .player-status,
@@ -175,21 +148,6 @@ kbd { min-width: 16px; padding: 3px 4px; border: 1px solid rgba(226,237,214,.2);
 .retry-hint { display: flex; align-items: center; gap: 10px; margin-top: 20px; color: #edf0e7; font: 9px 'DM Mono', monospace; letter-spacing: .12em; }
 .retry-hint kbd { padding: 8px 11px; border-color: rgba(196,217,139,.55); color: var(--acid); }
 
-@media (max-width: 680px) {
-  .player-status, .enemy-panel { top: 79px; width: calc(50vw - 24px); padding: 9px; }
-  .player-status { left: 12px; }
-  .enemy-panel { right: 12px; }
-  .status-heading .hud-label { font-size: 7px; letter-spacing: .1em; }
-  .health-number { font-size: 8px; }
-  .enemy-subtitle { font-size: 6px; }
-  .combat-toast { bottom: 112px; font-size: 8px; line-height: 1.5; }
-  .hud-bottom-right { bottom: 58px; }
-}
-
 /* Keep the ambient warning clear of the new enemy health panel. */
 .corner-note { top: 188px; }
-@media (max-width: 680px) {
-  .corner-note { top: 154px; }
-}
-
 
