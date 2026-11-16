@@ -63,27 +63,37 @@ export class SimpleDemo {
     const renderer = this.renderer.backendRenderer;
     if (!renderer) throw new Error('SimpleDemo: no backend renderer.');
 
-    const hemi = new THREE.HemisphereLight(0xb3cddd, 0x35493b, 0.9);
-    scene.add(this.renderer.track(hemi));
+    // Quality-dependent shadow presets (low/balanced/cinematic).
+    const shadowPreset = 'balanced';
+    const shadowConfig = {
+      low: { resolution: 512, cameraFar: 100, distance: 30 },
+      balanced: { resolution: 1024, cameraFar: 200, distance: 60 },
+      cinematic: { resolution: 2048, cameraFar: 300, distance: 100 },
+    }[shadowPreset];
 
+    // Directional sunlight with quality-dependent shadow configuration.
     this.sun = new THREE.DirectionalLight(0xffdda9, 2.5);
     this.sun.position.set(-20, 30, 15);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(shadowConfig.resolution, shadowConfig.resolution);
     this.sun.shadow.camera.near = 1;
-    this.sun.shadow.camera.far = 60;
+    this.sun.shadow.camera.far = shadowConfig.cameraFar;
+    this.sun.shadow.camera.left = -shadowConfig.distance;
+    this.sun.shadow.camera.right = shadowConfig.distance;
+    this.sun.shadow.camera.top = shadowConfig.distance;
+    this.sun.shadow.camera.bottom = -shadowConfig.distance;
     scene.add(this.renderer.track(this.sun));
     scene.add(this.sun.target);
 
     // PBR image-based ambient via PMREM (cinematic lighting foundation).
     const envScene = new THREE.Scene();
-    envScene.add(hemi.clone());
+    const hemi = new THREE.HemisphereLight(0xb3cddd, 0x35493b, 0.9);
+    envScene.add(hemi);
     const pmrem = new THREE.PMREMGenerator(renderer);
     const envTarget = pmrem.fromScene(envScene, 0.06);
     scene.environment = envTarget.texture;
     scene.environmentIntensity = 0.7;
     pmrem.dispose();
-    this.renderer.track(envTarget);
 
     // Ground — PBR standard material.
     const ground = new THREE.Mesh(
@@ -105,10 +115,7 @@ export class SimpleDemo {
     const dummy = new THREE.Object3D();
 
     const crownGeo = new THREE.ConeGeometry(0.9, 1.8, 8);
-    const crownMat = new THREE.MeshStandardMaterial({
-      color: 0x4a7c59,
-      roughness: 0.9,
-    });
+    const crownMat = new THREE.MeshStandardMaterial({ color: 0x4a7c59, roughness: 0.9 });
     const trees = new THREE.InstancedMesh(crownGeo, crownMat, count);
     let n = 0;
     for (let y = 0; y < 6; y++) {

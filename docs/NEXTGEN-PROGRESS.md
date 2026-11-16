@@ -21,8 +21,10 @@ the `cline/m00-reconcile` and `codex/nextgen-development` branches.
   `docs/NEXTGEN-PROGRESS.md`, plus README/index updates.
 - Both branches are direct children of `main` (`1bb0cd2`); no shared commits between
   their M00 work.
-- `src/nextgen/` does not exist on either branch; M01 (Graphics Engine Foundation) has
-  not started.
+- `src/nextgen/` exists on the `cline/m01-graphics-foundation` branch;
+  M01 Task 1 (Graphics Engine Foundation) is complete — nextgen renderer scaffold
+  with fixed render loop and lifecycle tests, verified with 67/67 checks, typecheck,
+  build, and 9/9 nextgen unit tests.
 
 **Delivered (branch `cline/m00-reconcile`):**
 
@@ -55,8 +57,7 @@ the `cline/m00-reconcile` and `codex/nextgen-development` branches.
 - Documentation-only change; no runtime code touched, Cloudflare infrastructure and
   player data unaffected. Nothing deployed.
 
-**Next:** begin M01 (Graphics Engine Foundation), first task: nextgen renderer scaffold
-under `src/nextgen/` with fixed render loop and lifecycle tests.
+**Next:** M01 Task 1 complete — next steps for M02 (Character & Animation Foundation).
 
 ---
 
