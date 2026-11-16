@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { pass } from 'three/tsl';
+import { pass, vec3, vec4 } from 'three/tsl';
 import { NextGenRenderer } from '../core/NextGenRenderer';
 import type { PresentResult } from '../core/types';
 import { qualityId } from '../../../shared/render-profile.mjs';
@@ -110,7 +110,12 @@ export class SimpleDemo {
     const sceneColor = this.scenePass.getTextureNode('output');
 
     this.bloomNode = bloom(sceneColor, 1.0, 0.8, 0.3);
-    this.pipeline.outputNode = sceneColor.add(this.bloomNode);
+    const combined = sceneColor.add(this.bloomNode);
+
+    this.pipeline.outputNode = vec4(
+      combined.rgb.mul(vec3(0.96, 1.0, 1.04)),
+      sceneColor.a
+    );
 
     // Configure RenderPipeline exposure and bloom/color grading settings.
     this.setQualityPreset('balanced');
