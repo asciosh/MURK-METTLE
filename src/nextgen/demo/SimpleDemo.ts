@@ -2,6 +2,8 @@ import * as THREE from 'three/webgpu';
 import { pass } from 'three/tsl';
 import { NextGenRenderer } from '../core/NextGenRenderer';
 import type { PresentResult } from '../core/types';
+import { qualityId } from '../../../shared/render-profile.mjs';
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 
 /**
  * Independent graphics demonstration scene (M01 checkpoint).
@@ -51,6 +53,8 @@ export class SimpleDemo {
 
   private scenePass?: ReturnType<typeof pass>;
 
+  private bloomNode?: ReturnType<typeof bloom>;
+
   constructor() {
     document.body.style.margin = '0';
     this.canvas = document.createElement('canvas');
@@ -91,9 +95,26 @@ export class SimpleDemo {
       throw new Error('SimpleDemo: no backend renderer.');
     }
 
-    this.scenePass = pass(scene, camera);
+    // Create the RenderPipeline once — works with both WebGPU and WebGL2.
+    // No duplicate creation in buildScene().
     this.pipeline = new THREE.RenderPipeline(renderer);
-    this.pipeline.outputNode = this.scenePass;
+
+    // Configure renderer tone mapping and exposure
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+    // Create the TSL scene pass (used as the RenderPipeline's output node)
+    this.scenePass = pass(scene, camera);
+
+    // Render the original scene and combine it with bloom.
+    const sceneColor = this.scenePass.getTextureNode('output');
+
+    this.bloomNode = bloom(sceneColor, 1.0, 0.8, 0.3);
+    this.pipeline.outputNode = sceneColor.add(this.bloomNode);
+
+    // Configure RenderPipeline exposure and bloom/color grading settings.
+    this.setQualityPreset('balanced');
+
     this.renderer.setRenderPipeline(this.pipeline);
   }
 
@@ -197,14 +218,6 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = preset.exposure;
 
-// Create the RenderPipeline — the new post-processing pipeline that works
-// with both WebGPU and WebGL2, replacing the legacy EffectComposer.
-this.pipeline = new THREE.RenderPipeline(renderer);
-
-// Configure RenderPipeline exposure and bloom/color grading settings.
-// The RenderPipeline internally reads renderer.toneMapping and renderer.toneMappingExposure.
-// Bloom and atmospheric color grading are controlled via the pipeline's settings.
-
 // Slow orbit for a cinematic feel, driven by display-rate frames.
     let angle = 0;
     const prev = this.renderer.onFrame;
@@ -218,11 +231,8 @@ this.pipeline = new THREE.RenderPipeline(renderer);
       }
       this.sun?.target.position.set(0, 0, 0);
       this.frame += 1;
-      // Render the scene into the backend renderer first,
-      // then apply the RenderPipeline post-processing effects.
-      renderer.render(scene, camera);
-      // Render via RenderPipeline for post-processing effects (WebGPU/WebGL2 compatible).
-      this.pipeline?.render();
+  // Render via RenderPipeline for post-processing effects (WebGPU/WebGL2 compatible).
+  this.pipeline?.render();
     };
   }
 
@@ -252,11 +262,62 @@ this.pipeline = new THREE.RenderPipeline(renderer);
     return this.renderer.getDeviceInfo();
   }
 
+  /** Set the quality preset and update ALL renderer + pipeline settings. */
+  setQuality(id: string): void {
+    this.currentPreset = qualityId(id);
+    const preset = this.qualityPresets[this.currentPreset as keyof typeof this.qualityPresets];
+
+    // Update renderer exposure
+    const renderer = this.renderer.backendRenderer;
+    if (renderer) {
+      renderer.toneMappingExposure = preset.exposure;
+    }
+
+    // Update RenderPipeline bloom and exposure settings
+    if (this.pipeline) {
+      // @ts-expect-error — RenderPipeline accepts bloom configuration properties
+      this.pipeline.bloomStrength = preset.bloomStrength;
+      // @ts-expect-error — RenderPipeline accepts bloom configuration properties
+      this.pipeline.bloomThreshold = preset.bloomThreshold;
+      // @ts-expect-error — RenderPipeline accepts bloom configuration properties
+      this.pipeline.bloomRadius = preset.bloomRadius;
+    }
+
+    // Forward to NextGenRenderer quality for downstream compatibility
+    this.renderer.setQuality(this.currentPreset);
+  }
+
+  /** Apply a quality preset directly, updating renderer and pipeline settings. */
+  private setQualityPreset(id: keyof typeof this.qualityPresets): void {
+    const preset = this.qualityPresets[id];
+
+    // Update renderer exposure
+    const renderer = this.renderer.backendRenderer;
+    if (renderer) {
+      renderer.toneMappingExposure = preset.exposure;
+    }
+
+    // Update TSL bloom node settings
+    if (this.bloomNode) {
+      // @ts-expect-error — BloomNode accepts strength, radius, threshold properties
+      this.bloomNode.strength = preset.bloomStrength;
+      // @ts-expect-error — BloomNode accepts strength, radius, threshold properties
+      this.bloomNode.threshold = preset.bloomThreshold;
+      // @ts-expect-error — BloomNode accepts strength, radius, threshold properties
+      this.bloomNode.radius = preset.bloomRadius;
+    }
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     window.removeEventListener('resize', this._onResize);
     this.resizeObserver?.disconnect();
+    // Dispose RenderPipeline resources
+    if (this.pipeline) {
+      this.pipeline.dispose();
+      this.pipeline = undefined;
+    }
     this.renderer.dispose();
     this.container.remove();
     document.body.style.margin = '';
