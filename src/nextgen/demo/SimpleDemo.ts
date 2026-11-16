@@ -6,6 +6,7 @@ import { qualityId } from '../../../shared/render-profile.mjs';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { TerrainGenerator } from '../core/TerrainGenerator';
 import { TerrainMaterial } from '../core/TerrainMaterial';
+import { VegetationRenderer } from '../core/VegetationRenderer';
 
 /**
  * Independent graphics demonstration scene (M01 checkpoint).
@@ -27,6 +28,7 @@ export class SimpleDemo {
   private readonly results: PresentResult[] = [];
   private disposed = false;
   private resizeObserver?: ResizeObserver;
+  private vegetation?: VegetationRenderer;
 
   private readonly qualityPresets = {
     low: {
@@ -214,75 +216,28 @@ async mount(): Promise<void> {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // Instanced placeholder trees
-    const count = 36;
-    const spacing = 8;
-    const centerX = 100;
-    const centerZ = 100;
+        const centerX = terrain.size / 2;
+    const centerZ = terrain.size / 2;
 
-    const dummy = new THREE.Object3D();
-
-    const trunkGeo = this.renderer.track(
-      new THREE.CylinderGeometry(0.25, 0.4, 3, 8)
+    // Procedural vegetation and environment props.
+    this.vegetation = this.renderer.track(
+      new VegetationRenderer(scene, terrain, 12345)
     );
 
-    const trunkMat = this.renderer.track(
-      new THREE.MeshStandardMaterial({
-        color: 0x5d4a3a,
-        roughness: 0.95
-      })
+    this.vegetation.setQuality(this.currentPreset);
+
+    // Natural ambient illumination.
+    const ambient = new THREE.HemisphereLight(
+      0xc5d9ef,
+      0x596044,
+      1.4
     );
 
-    const crownGeo = this.renderer.track(
-      new THREE.ConeGeometry(1.8, 4, 8)
-    );
+    scene.add(ambient);
 
-    const crownMat = this.renderer.track(
-      new THREE.MeshStandardMaterial({
-        color: 0x355d39,
-        roughness: 0.9
-      })
-    );
-
-    const trunks = this.renderer.track(
-      new THREE.InstancedMesh(trunkGeo, trunkMat, count)
-    );
-
-    const crowns = this.renderer.track(
-      new THREE.InstancedMesh(crownGeo, crownMat, count)
-    );
-
-    let n = 0;
-
-    for (let z = 0; z < 6; z++) {
-      for (let x = 0; x < 6; x++) {
-        const px = centerX + (x - 2.5) * spacing;
-        const pz = centerZ + (z - 2.5) * spacing;
-        const h = terrain.heightAt(px, pz);
-
-        dummy.position.set(px, h + 1.5, pz);
-        dummy.updateMatrix();
-        trunks.setMatrixAt(n, dummy.matrix);
-
-        dummy.position.set(px, h + 3.6, pz);
-        dummy.updateMatrix();
-        crowns.setMatrixAt(n, dummy.matrix);
-
-        n++;
-      }
+    if (scene.fog instanceof THREE.FogExp2) {
+      scene.fog.density = 0.012;
     }
-
-    trunks.instanceMatrix.needsUpdate = true;
-    crowns.instanceMatrix.needsUpdate = true;
-
-    trunks.castShadow = true;
-    crowns.castShadow = true;
-
-    trunks.receiveShadow = true;
-    crowns.receiveShadow = true;
-
-    scene.add(trunks);
-    scene.add(crowns);
 
     // Center the lighting on the new terrain.
     const centerHeight = terrain.heightAt(centerX, centerZ);
@@ -305,18 +260,20 @@ async mount(): Promise<void> {
     let angle = 0;
     const prev = this.renderer.onFrame;
 
-    const updateCamera = () => {
-      const px = centerX + Math.sin(angle) * 43;
-      const pz = centerZ + Math.cos(angle) * 43;
+ const updateCamera = () => {
+  const px = centerX + Math.sin(angle) * 43;
+  const pz = centerZ + Math.cos(angle) * 43;
 
-      const cameraHeight = Math.max(
-        terrain.heightAt(px, pz) + 12,
-        centerHeight + 20
-      );
+  const cameraHeight = Math.max(
+    terrain.heightAt(px, pz) + 12,
+    centerHeight + 20
+  );
 
-      camera.position.set(px, cameraHeight, pz);
-      camera.lookAt(centerX, centerHeight + 2.5, centerZ);
-    };
+  camera.position.set(px, cameraHeight, pz);
+  camera.lookAt(centerX, centerHeight + 2.5, centerZ);
+
+  this.vegetation?.update(px, pz);
+};
 
     updateCamera();
 
@@ -379,6 +336,7 @@ async mount(): Promise<void> {
 
     // Forward to NextGenRenderer quality for downstream compatibility
     this.renderer.setQuality(this.currentPreset);
+    this.vegetation?.setQuality(this.currentPreset);
   }
 
   /** Apply a quality preset directly, updating renderer and pipeline settings. */
