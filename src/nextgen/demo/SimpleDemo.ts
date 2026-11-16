@@ -4,6 +4,8 @@ import { NextGenRenderer } from '../core/NextGenRenderer';
 import type { PresentResult } from '../core/types';
 import { qualityId } from '../../../shared/render-profile.mjs';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
+import { TerrainGenerator } from '../core/TerrainGenerator';
+import { TerrainMaterial } from '../core/TerrainMaterial';
 
 /**
  * Independent graphics demonstration scene (M01 checkpoint).
@@ -73,55 +75,57 @@ export class SimpleDemo {
     };
   }
 
-  async mount(): Promise<void> {
-    await this.renderer.init();
-    this.resize(window.innerWidth, window.innerHeight);
-    this.buildScene();
-    this.renderer.start();
-    window.addEventListener('resize', this._onResize);
-    this.resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) this.resize(width, height);
-      }
-    });
-    this.resizeObserver.observe(this.container);
-    // Initialize RenderPipeline and TSL pass
-    const scene = this.renderer.sceneRef;
-    const camera = this.renderer.cameraRef;
-    const renderer = this.renderer.backendRenderer;
+async mount(): Promise<void> {
+  await this.renderer.init();
+  this.resize(window.innerWidth, window.innerHeight);
 
-    if (!renderer) {
-      throw new Error('SimpleDemo: no backend renderer.');
-    }
+  this.buildScene();
 
-    // Create the RenderPipeline once — works with both WebGPU and WebGL2.
-    // No duplicate creation in buildScene().
-    this.pipeline = new THREE.RenderPipeline(renderer);
+  const scene = this.renderer.sceneRef;
+  const camera = this.renderer.cameraRef;
+  const renderer = this.renderer.backendRenderer;
 
-    // Configure renderer tone mapping and exposure
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-
-    // Create the TSL scene pass (used as the RenderPipeline's output node)
-    this.scenePass = pass(scene, camera);
-
-    // Render the original scene and combine it with bloom.
-    const sceneColor = this.scenePass.getTextureNode('output');
-
-    this.bloomNode = bloom(sceneColor, 1.0, 0.8, 0.3);
-    const combined = sceneColor.add(this.bloomNode);
-
-    this.pipeline.outputNode = vec4(
-      combined.rgb.mul(vec3(0.96, 1.0, 1.04)),
-      sceneColor.a
-    );
-
-    // Configure RenderPipeline exposure and bloom/color grading settings.
-    this.setQualityPreset('balanced');
-
-    this.renderer.setRenderPipeline(this.pipeline);
+  if (!renderer) {
+    throw new Error('SimpleDemo: no backend renderer.');
   }
+
+  this.pipeline = new THREE.RenderPipeline(renderer);
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+  this.scenePass = pass(scene, camera);
+
+  const sceneColor = this.scenePass.getTextureNode('output');
+
+  this.bloomNode = bloom(sceneColor, 1.0, 0.8, 0.3);
+
+  const combined = sceneColor.add(this.bloomNode);
+
+  this.pipeline.outputNode = vec4(
+    combined.rgb.mul(vec3(0.96, 1.0, 1.04)),
+    sceneColor.a
+  );
+
+  this.setQualityPreset('balanced');
+  this.renderer.setRenderPipeline(this.pipeline);
+
+  this.renderer.start();
+
+  window.addEventListener('resize', this._onResize);
+
+  this.resizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const { width, height } = entry.contentRect;
+
+      if (width > 0 && height > 0) {
+        this.resize(width, height);
+      }
+    }
+  });
+
+  this.resizeObserver.observe(this.container);
+}
 
   private readonly _onResize = () => this.resize(window.innerWidth, window.innerHeight);
   private buildScene(): void {
@@ -162,82 +166,167 @@ export class SimpleDemo {
     scene.environmentIntensity = 0.7;
     pmrem.dispose();
 
-    // Ground — PBR standard material.
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(60, 60),
-      new THREE.MeshStandardMaterial({
-        color: 0x3d5a51,
-        roughness: 0.8,
-        metalness: 0.1,
-      }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(this.renderer.track(ground));
+        // Heightfield terrain
+    const terrain = new TerrainGenerator(12345);
+    const grid = terrain.gridSize;
+    const cell = terrain.cellSize;
+    const heights = terrain.getHeights();
 
-    // Instanced vegetation — crowns and trunks.
+    const geometry = this.renderer.track(
+      new THREE.PlaneGeometry(
+        terrain.size,
+        terrain.size,
+        grid - 1,
+        grid - 1
+      )
+    );
+
+    const positions = geometry.getAttribute('position');
+
+    for (let z = 0; z < grid; z++) {
+      for (let x = 0; x < grid; x++) {
+        const index = z * grid + x;
+
+        positions.setXYZ(
+          index,
+          x * cell,
+          heights[index],
+          z * cell
+        );
+      }
+    }
+
+    positions.needsUpdate = true;
+
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+
+    const groundMaterial = this.renderer.track(
+      new TerrainMaterial()
+    );
+
+    const ground = new THREE.Mesh(
+      geometry,
+      groundMaterial
+    );
+
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Instanced placeholder trees
     const count = 36;
-    const spacing = 3;
-    const half = (6 * spacing) / 2;
+    const spacing = 8;
+    const centerX = 100;
+    const centerZ = 100;
+
     const dummy = new THREE.Object3D();
 
-    const crownGeo = new THREE.ConeGeometry(0.9, 1.8, 8);
-    const crownMat = new THREE.MeshStandardMaterial({ color: 0x4a7c59, roughness: 0.9 });
-    const trees = new THREE.InstancedMesh(crownGeo, crownMat, count);
+    const trunkGeo = this.renderer.track(
+      new THREE.CylinderGeometry(0.25, 0.4, 3, 8)
+    );
+
+    const trunkMat = this.renderer.track(
+      new THREE.MeshStandardMaterial({
+        color: 0x5d4a3a,
+        roughness: 0.95
+      })
+    );
+
+    const crownGeo = this.renderer.track(
+      new THREE.ConeGeometry(1.8, 4, 8)
+    );
+
+    const crownMat = this.renderer.track(
+      new THREE.MeshStandardMaterial({
+        color: 0x355d39,
+        roughness: 0.9
+      })
+    );
+
+    const trunks = this.renderer.track(
+      new THREE.InstancedMesh(trunkGeo, trunkMat, count)
+    );
+
+    const crowns = this.renderer.track(
+      new THREE.InstancedMesh(crownGeo, crownMat, count)
+    );
+
     let n = 0;
-    for (let y = 0; y < 6; y++) {
-      for (let x = 0; x < 6; x++) {
-        dummy.position.set(x * spacing - half, 0.9, y * spacing - half);
-        dummy.updateMatrix();
-        trees.setMatrixAt(n++, dummy.matrix);
-      }
-    }
-    trees.castShadow = true;
-    trees.receiveShadow = true;
-    scene.add(this.renderer.track(trees));
-    this.renderer.track(crownGeo);
-    this.renderer.track(crownMat);
 
-    const trunkGeo = new THREE.CylinderGeometry(0.16, 0.2, 1.8, 8);
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5d4a3a });
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
-    n = 0;
-    for (let y = 0; y < 6; y++) {
+    for (let z = 0; z < 6; z++) {
       for (let x = 0; x < 6; x++) {
-        dummy.position.set(x * spacing - half, 0.9, y * spacing - half);
+        const px = centerX + (x - 2.5) * spacing;
+        const pz = centerZ + (z - 2.5) * spacing;
+        const h = terrain.heightAt(px, pz);
+
+        dummy.position.set(px, h + 1.5, pz);
         dummy.updateMatrix();
-        trunks.setMatrixAt(n++, dummy.matrix);
+        trunks.setMatrixAt(n, dummy.matrix);
+
+        dummy.position.set(px, h + 3.6, pz);
+        dummy.updateMatrix();
+        crowns.setMatrixAt(n, dummy.matrix);
+
+        n++;
       }
     }
+
+    trunks.instanceMatrix.needsUpdate = true;
+    crowns.instanceMatrix.needsUpdate = true;
+
     trunks.castShadow = true;
-    scene.add(this.renderer.track(trunks));
-    this.renderer.track(trunkGeo);
-    this.renderer.track(trunkMat);
-    this.renderer.track(dummy);
+    crowns.castShadow = true;
 
-    // ---- RenderPipeline post-processing (WebGPU/WebGL2 compatible) ----
+    trunks.receiveShadow = true;
+    crowns.receiveShadow = true;
 
-// Configure renderer for ACESFilmic tone mapping with quality-dependent exposure.
-const preset = this.qualityPresets[this.currentPreset as keyof typeof this.qualityPresets];
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = preset.exposure;
+    scene.add(trunks);
+    scene.add(crowns);
 
-// Slow orbit for a cinematic feel, driven by display-rate frames.
+    // Center the lighting on the new terrain.
+    const centerHeight = terrain.heightAt(centerX, centerZ);
+
+    if (this.sun) {
+      this.sun.position.set(
+        centerX - 30,
+        centerHeight + 45,
+        centerZ + 25
+      );
+
+      this.sun.target.position.set(
+        centerX,
+        centerHeight,
+        centerZ
+      );
+    }
+
+    // Camera orbit above the actual heightfield.
     let angle = 0;
     const prev = this.renderer.onFrame;
+
+    const updateCamera = () => {
+      const px = centerX + Math.sin(angle) * 43;
+      const pz = centerZ + Math.cos(angle) * 43;
+
+      const cameraHeight = Math.max(
+        terrain.heightAt(px, pz) + 12,
+        centerHeight + 20
+      );
+
+      camera.position.set(px, cameraHeight, pz);
+      camera.lookAt(centerX, centerHeight + 2.5, centerZ);
+    };
+
+    updateCamera();
+
     this.renderer.onFrame = (result) => {
       prev?.(result);
-      angle += 0.01;
-      camera.position.set(Math.sin(angle) * 14, 4.5, Math.cos(angle) * 14);
-      camera.lookAt(0, 0.9, 0);
-      if (this.sun) {
-        this.sun.position.set(Math.sin(angle) * 20, 30, Math.cos(angle) * 20);
-      }
-      this.sun?.target.position.set(0, 0, 0);
-      this.frame += 1;
-  // Render via RenderPipeline for post-processing effects (WebGPU/WebGL2 compatible).
-  this.pipeline?.render();
+
+      angle += 0.005;
+      updateCamera();
+
+      this.frame++;
     };
   }
 

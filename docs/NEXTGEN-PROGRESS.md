@@ -6,7 +6,7 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
-## 2026-11-16 — M01: Graphics Engine Foundation — Tasks 1–3 Complete
+## 2026-11-16 — M01: Graphics Engine Foundation — Tasks 1–4A Complete
 
 **Status:** M01 Tasks 1–3 complete — Graphics Engine Foundation with PBR lighting and RenderPipeline-based cinematic post-processing. All acceptance criteria verified.
 
@@ -41,7 +41,54 @@ what was done, how it was verified, and what remains. See the
 
 **Next:** M01 complete — next steps for M02 (Character & Animation Foundation): third-person character controller, survivor/infected models with rigged skeletons, animation state machine, third-person camera.
 
----
+## 2026-11-16 — M01: Graphics Engine Foundation — Tasks 1–4A Complete
+
+**Status:** M01 Tasks 1–4A complete — Terrain Foundation with deterministic procedural terrain, heightfield height sampling, PBR terrain material with elevation-dependent blending, and demo integration. All acceptance criteria verified.
+
+**Context found on arrival:**
+- `cline/m01-task3-postprocessing` at `600c6aa`: M01 Task 3 complete — cinematic post-processing pipeline. Verified: 67/67 checks, typecheck, build, 9/9 nextgen unit tests.
+
+**Delivered (branch `cline/m01-task4-terrain`):**
+
+- `src/nextgen/core/TerrainGenerator.ts` — Deterministic, seeded procedural terrain generator.
+  - 200m × 200m terrain with 257 × 257 heightfield sample grid
+  - Natural rolling hills, slopes and valleys via multi-octave noise
+  - Elevations bounded between 0 and 20 metres
+  - Efficient indexed geometry with correct vertex normals and bounding volumes
+  - `heightAt(x, z)` sampling matches rendered mesh surface (bilinear interpolation)
+  - Identical seeds generate identical terrain; different seeds produce different terrain
+  - No external assets or paid dependencies
+
+- `src/nextgen/core/TerrainMaterial.ts` — Physically based terrain material with smooth elevation-dependent blending.
+  - Low elevation (0–7m): brown soil
+  - Medium elevation (7–13m): natural green grass
+  - High elevation (13–20m): grey exposed rock
+  - Uses `MeshStandardMaterial` from `three/webgpu` with elevation-based uniforms
+  - No `onBeforeCompile`, no custom GLSL shader injection
+  - Compatible with both WebGPU and WebGL2 backends
+
+- `src/nextgen/demo/SimpleDemo.ts` — Demo integration of terrain foundation.
+  - Replaced flat ground with generated heightfield terrain mesh
+  - Applied the new terrain material with elevation-based color/roughness/metalness blending
+  - Positioned tree trunks using `terrain.heightAt(x, z)` to prevent floating or buried trees
+  - Positioned tree crowns 2m above their trunks
+  - Removed redundant `pipeline.render()` from `onFrame` callback (rendering owned by `NextGenRenderer`)
+  - Adjusted orbit camera to remain above terrain and target to account for elevation
+  - Preserved PBR lighting, fog, shadows, ACESFilmic tone mapping, bloom and color grading
+  - Preserved existing quality presets (low/balanced/cinematic)
+  - Initialized resources before starting the render loop
+  - Properly disposes all terrain resources
+
+**Verification:**
+- `npm run typecheck` — pass
+- `npm run build` — pass (Vite build + typecheck)
+- `npm test` — 67/67 checks pass (21 suites)
+- `node --experimental-strip-types --test tests/nextgen/nextgen-renderer.test.mjs` — 9/9 nextgen unit tests pass
+- `git diff --check` — no whitespace errors
+
+**Next:** M01 Task 4B — Vegetation and Environment Foundation; then M01 Task 5 — Performance Benchmark.
+
+--
 
 ---
 
