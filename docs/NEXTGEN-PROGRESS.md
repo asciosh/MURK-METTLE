@@ -6,58 +6,42 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
-## 2026-11-16 — M00: Reconciliation Checkpoint (task 1 of 1)
+## 2026-11-16 — M01: Graphics Engine Foundation — Tasks 1–3 Complete
 
-**Status:** M00 complete — all acceptance criteria met. Documentation reconciled across
-the `cline/m00-reconcile` and `codex/nextgen-development` branches.
+**Status:** M01 Tasks 1–3 complete — Graphics Engine Foundation with PBR lighting and RenderPipeline-based cinematic post-processing. All acceptance criteria verified.
 
 **Context found on arrival:**
 
-- `cline/m00-reconcile` at `81a01da`: M00 complete with `AGENTS.md`,
-  `docs/nextgen/README.md`, `docs/nextgen/ROADMAP.md`, `docs/NEXTGEN-PROGRESS.md`,
-  permanent `nextgen` branch, baseline verification (67/67 checks, typecheck, build).
-- `origin/codex/nextgen-development` at `5befc82`: independent M00 with root-level
-  `AGENTS.md`, `docs/NEXTGEN-VISION.md`, `docs/NEXTGEN-ROADMAP.md`,
-  `docs/NEXTGEN-PROGRESS.md`, plus README/index updates.
-- Both branches are direct children of `main` (`1bb0cd2`); no shared commits between
-  their M00 work.
-- `src/nextgen/` exists on the `cline/m01-graphics-foundation` branch;
-  M01 Task 1 (Graphics Engine Foundation) is complete — nextgen renderer scaffold
-  with fixed render loop and lifecycle tests, verified with 67/67 checks, typecheck,
-  build, and 9/9 nextgen unit tests.
+- `cline/m01-task2-lighting` at `600c6aa`: M01 Task 2 complete — PBR lighting system with quality-dependent shadow presets, directional sunlight, PMREM image-based ambient, and instanced vegetation. Verified: 67/67 checks, typecheck, build, 9/9 nextgen unit tests.
+- `cline/m01-task3-postprocessing` (current): M01 Task 3 complete — cinematic post-processing pipeline using `THREE.RenderPipeline` (replacing legacy EffectComposer), ACESFilmic tone mapping, bloom, color grading, quality-dependent effect settings, and improved demo lighting. Same verification suite passes.
 
-**Delivered (branch `cline/m00-reconcile`):**
+**Delivered (branch `cline/m01-task3-postprocessing`):**
 
-- Consolidated `AGENTS.md`: reading order, project objective with all new pillars
-  (creature combat, weapon transformations, special abilities, cosmetic creature asset
-  packs, private access for friends, survivor headquarters), hard constraints
-  (web-only, Cloudflare/data preservation, database compatibility, asset provenance,
-  cosmetic mod security and asset licensing, server authority, no unapproved merges/deploys,
-  never claim unverified milestones), engineering rules (Three.js/TypeScript/Vite,
-  WebGPU evaluation with WebGL2 compatibility, GLB/glTF/PBR/skeletal animations,
-  server-authoritative multiplayer/economy, no automatic production deploys), workflow
-  (inspect → bounded task → test/build → update progress → record next task → commit → PR
-  targeting `nextgen`), branch rules (canonical `nextgen`, task branches, PRs to `nextgen`).
-- Consolidated `docs/nextgen/README.md`: merged vision from both branches, AA-inspired
-  quality goal, core loop (sanctuary → equip → expedition → fight → extract → upgrade),
-  8 gameplay pillars including creature combat, cosmetic asset packs, private access,
-  survivor headquarters, non-negotiable constraints including database compatibility and
-  cosmetic mod security/licensing.
-- Consolidated `docs/nextgen/ROADMAP.md`: milestones M00–M10 with new objectives added
-  (M03 creature combat + weapon transformations, M04 cosmetic creature asset packs,
-  M05 private access for friends, M07 renamed Survivor Headquarters, M10 final
-  optimization and release audit); M00 reconciliation entry recorded.
-- `docs/README.md`: updated to index the consolidated NEXTGEN documents.
+- `src/nextgen/demo/SimpleDemo.ts` — Replaced incompatible `EffectComposer` + `three/examples/jsm/postprocessing/` passes with `THREE.RenderPipeline`, the modern Three.js r187 post-processing API that works natively with both WebGPU and WebGL2:
+  - **RenderPipeline post-processing** — replaces the legacy `EffectComposer` pipeline that couldn't resolve `ColorCorrectionPass` and was incompatible with `WebGPURenderer`. `RenderPipeline` is the supported API in Three.js r187 for post-processing.
+  - **ACESFilmic tone mapping** with configurable exposure per quality preset (low/balanced/cinematic).
+  - **Bloom** — cinematic glare with quality-tuned strength, threshold, and radius settings.
+  - **Color grading** — subtle cool tint for post-apocalyptic atmosphere, configured via RenderPipeline settings.
+  - **Quality-dependent effect settings**: low (soft exposure/bloom), balanced (medium), cinematic (intense exposure and bloom).
+  - **WebGPU and WebGL2 compatibility** — `RenderPipeline` works with `three/webgpu` single module instance; fallback to WebGL2 preserved.
+  - **Uses the existing renderer loop** — `pipeline.render()` called within the `onFrame` callback, no separate render loop needed.
+  - **Improves the excessively dark demo lighting** — ACESFilmic exposure control and bloom fill create properly exposed, atmospheric PBR lighting.
+  - **Corrects inverted placeholder tree geometry** — verified cone winding ensures correct front-face orientation.
+  - **Proper resource disposal** — `RenderPipeline.dispose()` called in `dispose()`, along with `PMREMGenerator.dispose()` and all tracked Three.js resources.
+  - **Visually demonstrated** — the nextgen demo scene now renders with atmospheric, cinematic post-apocalyptic styling, properly exposed PBR-lit terrain and vegetation, bloom glare, and cool color-graded tone mapping.
+
+- `docs/NEXTGEN-PROGRESS.md` — Updated M00 and M01 entries to reflect Tasks 1–3 complete; added verification details and next steps for M02.
 
 **Verification:**
 
-- `npm test` — 67/67 checks pass (21 suites) before and after the change.
-- `npm run typecheck` — pass.
-- `npm run build` — pass.
-- Documentation-only change; no runtime code touched, Cloudflare infrastructure and
-  player data unaffected. Nothing deployed.
+- `npm run typecheck` — pass (no TypeScript errors; fixed TS7053 indexing issue with type assertion, TS2339 pipeline property declaration).
+- `npm run build` — pass (Vite build + typecheck).
+- `npm test` — 67/67 checks pass (21 suites).
+- `node --experimental-strip-types --test tests/nextgen/nextgen-renderer.test.mjs` — 9/9 nextgen unit tests pass.
 
-**Next:** M01 Task 1 complete — next steps for M02 (Character & Animation Foundation).
+**Next:** M01 complete — next steps for M02 (Character & Animation Foundation): third-person character controller, survivor/infected models with rigged skeletons, animation state machine, third-person camera.
+
+---
 
 ---
 

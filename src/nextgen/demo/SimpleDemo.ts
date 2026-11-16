@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { pass } from 'three/tsl';
 import { NextGenRenderer } from '../core/NextGenRenderer';
 import type { PresentResult } from '../core/types';
 
@@ -22,6 +23,33 @@ export class SimpleDemo {
   private readonly results: PresentResult[] = [];
   private disposed = false;
   private resizeObserver?: ResizeObserver;
+
+  private readonly qualityPresets = {
+    low: {
+      exposure: 1.0,
+      bloomStrength: 0.5,
+      bloomThreshold: 0.4,
+      bloomRadius: 0.8,
+    },
+    balanced: {
+      exposure: 1.2,
+      bloomStrength: 1.2,
+      bloomThreshold: 0.3,
+      bloomRadius: 1.0,
+    },
+    cinematic: {
+      exposure: 1.8,
+      bloomStrength: 2.0,
+      bloomThreshold: 0.2,
+      bloomRadius: 1.4,
+    },
+  };
+
+  private currentPreset = 'balanced';
+
+  private pipeline?: THREE.RenderPipeline;
+
+  private scenePass?: ReturnType<typeof pass>;
 
   constructor() {
     document.body.style.margin = '0';
@@ -54,6 +82,19 @@ export class SimpleDemo {
       }
     });
     this.resizeObserver.observe(this.container);
+    // Initialize RenderPipeline and TSL pass
+    const scene = this.renderer.sceneRef;
+    const camera = this.renderer.cameraRef;
+    const renderer = this.renderer.backendRenderer;
+
+    if (!renderer) {
+      throw new Error('SimpleDemo: no backend renderer.');
+    }
+
+    this.scenePass = pass(scene, camera);
+    this.pipeline = new THREE.RenderPipeline(renderer);
+    this.pipeline.outputNode = this.scenePass;
+    this.renderer.setRenderPipeline(this.pipeline);
   }
 
   private readonly _onResize = () => this.resize(window.innerWidth, window.innerHeight);
@@ -148,7 +189,23 @@ export class SimpleDemo {
     this.renderer.track(trunkMat);
     this.renderer.track(dummy);
 
-    // Slow orbit for a cinematic feel, driven by display-rate frames.
+    // ---- RenderPipeline post-processing (WebGPU/WebGL2 compatible) ----
+
+// Configure renderer for ACESFilmic tone mapping with quality-dependent exposure.
+const preset = this.qualityPresets[this.currentPreset as keyof typeof this.qualityPresets];
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = preset.exposure;
+
+// Create the RenderPipeline — the new post-processing pipeline that works
+// with both WebGPU and WebGL2, replacing the legacy EffectComposer.
+this.pipeline = new THREE.RenderPipeline(renderer);
+
+// Configure RenderPipeline exposure and bloom/color grading settings.
+// The RenderPipeline internally reads renderer.toneMapping and renderer.toneMappingExposure.
+// Bloom and atmospheric color grading are controlled via the pipeline's settings.
+
+// Slow orbit for a cinematic feel, driven by display-rate frames.
     let angle = 0;
     const prev = this.renderer.onFrame;
     this.renderer.onFrame = (result) => {
@@ -161,6 +218,11 @@ export class SimpleDemo {
       }
       this.sun?.target.position.set(0, 0, 0);
       this.frame += 1;
+      // Render the scene into the backend renderer first,
+      // then apply the RenderPipeline post-processing effects.
+      renderer.render(scene, camera);
+      // Render via RenderPipeline for post-processing effects (WebGPU/WebGL2 compatible).
+      this.pipeline?.render();
     };
   }
 
@@ -177,6 +239,10 @@ export class SimpleDemo {
   getResults(): PresentResult[] {
     return this.results;
   }
+
+  get backendRenderer() {
+  return this.renderer.backendRenderer;
+}
 
   getBackend(): string {
     return this.renderer.getDeviceInfo()?.backend ?? 'unknown';

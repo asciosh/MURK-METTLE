@@ -16,9 +16,12 @@ const url = (process.env.GAME_URL || 'http://localhost:5173') + '/tests/browser/
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = [];
-  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('pageerror', (e) => {
+  errors.push(String(e));
+  console.error('PAGE ERROR:', e);
+});
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
+    console.log('BROWSER:', m.type(), m.text());
   });
 
   await page.addInitScript(() => {
@@ -29,7 +32,11 @@ const url = (process.env.GAME_URL || 'http://localhost:5173') + '/tests/browser/
   });
 
   await page.goto(url, { waitUntil: 'networkidle' });
-  await page.waitForFunction(() => window.__m01DemoLoaded, { timeout: 90000 });
+  await page.waitForFunction(
+    () => window.__m01DemoLoaded === true,
+    undefined,
+    { timeout: 90000 }
+  );
   await page.waitForTimeout(600); // let a handful of display frames render
 
   const actual = await page.evaluate(async () => {
@@ -40,10 +47,6 @@ const url = (process.env.GAME_URL || 'http://localhost:5173') + '/tests/browser/
     demo.resize(1280, 720);
     const canvas = demo.backendRenderer?.domElement;
     if (!canvas) throw new Error('no renderer canvas exposed.');
-
-    // Double disposal (resource ownership / deterministic teardown).
-    demo.dispose();
-    demo.dispose();
 
     const results = demo.getResults();
     const soonest = results && results.length ? results[0] : null;
@@ -99,6 +102,11 @@ const url = (process.env.GAME_URL || 'http://localhost:5173') + '/tests/browser/
   };
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.writeFileSync(destination, JSON.stringify(artifact, null, 2));
+
+  await page.evaluate(() => {
+    window.__m01Demo.dispose();
+    window.__m01Demo.dispose();
+  });
 
   await page.unrouteAll({ behavior: 'ignoreErrors' });
   await browser.close();

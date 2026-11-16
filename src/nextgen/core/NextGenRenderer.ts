@@ -110,10 +110,15 @@ export class NextGenRenderer {
   }
 
   private _render(): void {
-    const renderer = this.device.backendRenderer;
-    if (!renderer) return;
+  const renderer = this.device.backendRenderer;
+  if (!renderer) return;
+
+  if (this.pipeline) {
+    this.pipeline.render();
+  } else {
     renderer.render(this.scene, this.camera);
   }
+}
 
   resize(width: number, height: number): void {
     this.width = width;
@@ -169,5 +174,11 @@ export class NextGenRenderer {
     this.device.dispose();
     this.tracker.disposeAll();
     this.disposed = true;
+  }
+
+  private pipeline?: THREE.RenderPipeline;
+
+  setRenderPipeline(pipeline?: THREE.RenderPipeline): void {
+    this.pipeline = pipeline;
   }
 }
