@@ -17,6 +17,10 @@ Establish the permanent program documentation and working rules.
 - [x] `docs/NEXTGEN-PROGRESS.md` running log, started with M00 evidence.
 - [x] Permanent `nextgen` development branch created from `main`.
 - [x] Baseline verification recorded: `npm test`, `npm run typecheck`, `npm run build`.
+- [x] M00 reconciliation checkpoint: consolidated documentation from the `cline/m00-reconcile`
+      and `codex/nextgen-development` branches, added cosmetic mod security and asset
+      licensing rules, database compatibility rules, engineering rules, and the session
+      workflow; recorded M01 Task 1 as the next unfinished task.
 
 **Done when:** all documents exist, the branch is pushed, and the baseline checks pass
 on the `nextgen` line.
@@ -55,6 +59,8 @@ at the M01 perf budget.
 ## M03 — Combat & Survival Core ☐
 
 - [ ] Melee and firearm combat: hit detection, damage, stagger, feedback (VFX/audio).
+- [ ] Creature combat: creature attacks, special abilities, companion participation.
+- [ ] Weapon transformations: visual and functional weapon form changes.
 - [ ] Infected AI: spawning, senses, pursuit, attack, group pressure, difficulty scaling.
 - [ ] Survival rules on the nextgen client reusing `shared/survival.mjs` server-validated
       contracts (health, bandaging, downed/revive).
@@ -68,6 +74,8 @@ tests against the nextgen client.
 - [ ] Five original species re-presented with nextgen models, animation and habitats.
 - [ ] Capture/befriending gameplay, journal UI, evolution forms.
 - [ ] Companion behavior that participates in combat and survival.
+- [ ] Optional cosmetic creature asset packs imported locally in the browser
+  (original or appropriately licensed only, provenance recorded).
 
 **Done when:** collection state round-trips through existing cloud saves without schema
 changes.
@@ -77,6 +85,7 @@ changes.
 - [ ] Nextgen client against the unchanged room Durable Object protocol.
 - [ ] Remote player representation, interpolation, shared world state.
 - [ ] Server-validated co-op combat, revives and rewards.
+- [ ] Private access for friends.
 
 **Done when:** four browser clients share one room through the local Wrangler stack
 with the existing security tests passing.
@@ -90,7 +99,7 @@ with the existing security tests passing.
 **Done when:** a full deploy→objectives→extract loop is playable solo and in co-op with
 validated rewards.
 
-## M07 — Survivor Sanctuary ☐
+## M07 — Survivor Headquarters ☐
 
 - [ ] Hub base scene with upgradeable structures.
 - [ ] Base upgrade gameplay loop tied to mission earnings.
@@ -119,6 +128,8 @@ validated rewards.
 - [ ] Performance and memory soak tests on target hardware profiles.
 - [ ] Security review (mods, GLB, protocol abuse, session handling).
 - [ ] Four-player full-loop playtest checklist executed and recorded.
+- [ ] Final optimization and release audit: asset optimization, bundle size, render
+  profile verification, licensing provenance audit for all added assets.
 - [ ] Release candidate build and operator deployment handoff (deployment itself is a
       separate approved action).
 

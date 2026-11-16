@@ -16,4 +16,4 @@ Current guides:
 
 Engineering reports retain their original measurements and validation scope: [combat](COMBAT-FEEL.md), [world](WORLD-COMPOSITION.md), [performance](PERFORMANCE.md), [mod validation](modding/VALIDATION.md). Historical Android results in those reports do not imply current mobile support.
 
-[Archived version/setup notes](archive/README.md) describe older releases and must not be used as current deployment instructions. [Version changelogs](changelog) preserve release history. Current target: Windows PC, keyboard/mouse, browser and Tauri host.
+[Archived version/setup notes](archive/README.md) describe older releases and must not be used as current deployment instructions. [Version changelogs](changelog) preserve release history. Current target: browser-only web client; legacy Windows PC, keyboard/mouse, browser and Tauri host remain on the v0.27 line.
