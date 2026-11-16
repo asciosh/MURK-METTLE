@@ -6,6 +6,33 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-16 — M01 Task 4B: Vegetation & Environment Foundation
+
+**Status:** Complete.
+
+**Delivered:**
+- Deterministic procedural vegetation placement.
+- Pine trees, deciduous trees, bushes and grass.
+- Procedural rocks and fallen logs.
+- Instanced rendering and shared geometries.
+- Spatial chunking and distance culling.
+- Quality-dependent vegetation density.
+- Improved ambient lighting.
+- Terrain-following object placement.
+
+**Verification:**
+- Typecheck and build passed.
+- 67/67 legacy tests passed.
+- 27/27 NEXTGEN tests passed.
+- WebGL2 browser smoke test passed.
+- Manual visual inspection passed.
+
+**Known limitations:** Placeholder models, distance culling pop-in, performance benchmark pending.
+
+**Next:** M01 Task 5 — Performance Benchmark.
+
+---
+
 ## 2026-11-16 — M01: Graphics Engine Foundation — Tasks 1–4A Complete
 
 **Status:** M01 Tasks 1–3 complete — Graphics Engine Foundation with PBR lighting and RenderPipeline-based cinematic post-processing. All acceptance criteria verified.
@@ -55,7 +82,7 @@ what was done, how it was verified, and what remains. See the
   - Natural rolling hills, slopes and valleys via multi-octave noise
   - Elevations bounded between 0 and 20 metres
   - Efficient indexed geometry with correct vertex normals and bounding volumes
-  - `heightAt(x, z)` sampling matches rendered mesh surface (bilinear interpolation)
+  - `heightAt(x, z)` sampling matches rendered mesh surface (triangle interpolation)
   - Identical seeds generate identical terrain; different seeds produce different terrain
   - No external assets or paid dependencies
 
