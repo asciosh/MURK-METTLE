@@ -89,7 +89,12 @@ test('every client runtime module is reachable from the boot or static validatio
     }
   }
   await visit('src/main.ts');
-  const files = (await walk('src')).filter(f => /\.(ts|mjs)$/.test(f) && !f.endsWith('.d.ts'));
+  // src/nextgen/ is the sanctioned NEXTGEN graphics tree (see AGENTS.md and
+  // docs/nextgen/ROADMAP.md M01). It is intentionally not wired into the legacy
+  // src/main.ts boot graph yet, so exclude it from this legacy reachability check.
+  const files = (await walk('src'))
+    .filter(f => /\.(ts|mjs)$/.test(f) && !f.endsWith('.d.ts'))
+    .filter(f => !f.startsWith('src/nextgen/'));
   assert.deepEqual(files.filter(f => !visited.has(f)), []);
 });
 
