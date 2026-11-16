@@ -202,6 +202,9 @@ this.pipeline = new THREE.RenderPipeline(renderer);
       }
       this.sun?.target.position.set(0, 0, 0);
       this.frame += 1;
+      // Render the scene into the backend renderer first,
+      // then apply the RenderPipeline post-processing effects.
+      renderer.render(scene, camera);
       // Render via RenderPipeline for post-processing effects (WebGPU/WebGL2 compatible).
       this.pipeline?.render();
     };
