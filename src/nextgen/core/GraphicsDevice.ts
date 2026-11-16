@@ -65,64 +65,38 @@ export class GraphicsDevice {
     return this.info;
   }
   private async _init(): Promise<void> {
-    const canvas = this._canvas();
-    const { backend, webgpuAvailable, forceWebGL } = GraphicsDevice.detect(
-      this.options,
-    );
-    this.info.webgpuAvailable = webgpuAvailable;
+  const canvas = this._canvas();
 
-    if (backend === 'webgpu') {
-      try {
-        const renderer = new THREE.WebGPURenderer({
-          canvas,
-          antialias: this.options.antialias ?? true,
-        } as THREE.WebGPURendererParameters);
-        // Force async device selection now so WebGPU failures surface here rather
-        // than on the first rendered frame.
-        await renderer.init();
-        // The WebGPURenderer internally falls back to a WebGL2 backend when the
-        // adapter/device cannot be created, so confirm which backend is live.
-        const isWebGpuLive =
-          renderer.coordinateSystem === THREE.WebGPUCoordinateSystem;
-        if (isWebGpuLive) {
-          this.renderer = renderer;
-          this.info.backend = 'webgpu';
-          this.info.fallbackUsed = false;
-          this.info.deviceName = 'WebGPU adapter';
-          this._wireDeviceLoss(renderer);
-          return;
-        }
-        // WebGPURenderer fell back internally to WebGL 2.
-        renderer.dispose();
-        console.warn(
-          '[nextgen] WebGPU requested but a WebGL 2 backend is active instead.',
-        );
-      } catch (err) {
-        console.warn(
-          '[nextgen] WebGPU initialization failed; falling back to WebGL 2.',
-          err,
-        );
-      }
-    }
+  const { backend, webgpuAvailable, forceWebGL } =
+    GraphicsDevice.detect(this.options);
 
-    // WebGL 2 path (primary when WebGPU absent, or fallback after WebGPU failure).
-    // WebGLRenderer's type is not declared in the three/webgpu package, so we
-    // construct it through a cast; the value itself still comes from the single
-    // three/webgpu module (no duplicated Three.js module instances).
-    const WebGLRendererCtor = THREE as unknown as {
-      WebGLRenderer: new (canvas: HTMLCanvasElement, params?: unknown) => THREE.Renderer;
-    };
-    const renderer = new WebGLRendererCtor.WebGLRenderer(
-      canvas,
-      { antialias: this.options.antialias ?? true, preserveDrawingBuffer: false },
-    );
-    this.renderer = renderer;
-    this.info.backend = 'webgl2';
-    // Only a genuine fallback (WebGPU wanted but WebGL 2 used) sets this.
-    this.info.fallbackUsed = webgpuAvailable && !forceWebGL;
-    this.info.deviceName = this._readDeviceName(renderer);
-    this._wireContextLoss(renderer.domElement);
+  const renderer = new THREE.WebGPURenderer({
+    canvas,
+    antialias: this.options.antialias ?? true,
+    forceWebGL: forceWebGL || backend === 'webgl2',
+  });
+
+  await renderer.init();
+
+  this.renderer = renderer;
+
+  const isWebGpuLive =
+    renderer.coordinateSystem === THREE.WebGPUCoordinateSystem;
+
+  this.info.webgpuAvailable = webgpuAvailable;
+  this.info.backend = isWebGpuLive ? 'webgpu' : 'webgl2';
+  this.info.fallbackUsed = backend === 'webgpu' && !isWebGpuLive;
+
+  this.info.deviceName = isWebGpuLive
+    ? 'WebGPU adapter'
+    : this._readDeviceName(renderer);
+
+  if (isWebGpuLive) {
+    this._wireDeviceLoss(renderer);
+  } else {
+    this._wireContextLoss(canvas);
   }
+}
 
   private _canvas(): HTMLCanvasElement {
     if (this.options.canvas) return this.options.canvas;

@@ -1,7 +1,12 @@
 import { SimpleDemo } from './SimpleDemo';
 
 const demo = new SimpleDemo();
-void demo.mount().catch((err) => {
+void demo.mount().then(() => {
+  Object.assign(window, {
+    __m01Demo: demo,
+    __m01DemoLoaded: true,
+  });
+}).catch((err) => {
   console.error('nextgen demo failed to mount', err);
   const status = document.createElement('div');
   status.style.cssText =

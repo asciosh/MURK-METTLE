@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { pass } from 'three/tsl';
 import { NextGenRenderer } from '../core/NextGenRenderer';
 import type { PresentResult } from '../core/types';
 
@@ -48,6 +49,8 @@ export class SimpleDemo {
 
   private pipeline?: THREE.RenderPipeline;
 
+  private scenePass?: ReturnType<typeof pass>;
+
   constructor() {
     document.body.style.margin = '0';
     this.canvas = document.createElement('canvas');
@@ -79,6 +82,19 @@ export class SimpleDemo {
       }
     });
     this.resizeObserver.observe(this.container);
+    // Initialize RenderPipeline and TSL pass
+    const scene = this.renderer.sceneRef;
+    const camera = this.renderer.cameraRef;
+    const renderer = this.renderer.backendRenderer;
+
+    if (!renderer) {
+      throw new Error('SimpleDemo: no backend renderer.');
+    }
+
+    this.scenePass = pass(scene, camera);
+    this.pipeline = new THREE.RenderPipeline(renderer);
+    this.pipeline.outputNode = this.scenePass;
+    this.renderer.setRenderPipeline(this.pipeline);
   }
 
   private readonly _onResize = () => this.resize(window.innerWidth, window.innerHeight);
@@ -223,6 +239,10 @@ this.pipeline = new THREE.RenderPipeline(renderer);
   getResults(): PresentResult[] {
     return this.results;
   }
+
+  get backendRenderer() {
+  return this.renderer.backendRenderer;
+}
 
   getBackend(): string {
     return this.renderer.getDeviceInfo()?.backend ?? 'unknown';
