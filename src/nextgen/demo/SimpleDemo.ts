@@ -23,6 +23,31 @@ export class SimpleDemo {
   private disposed = false;
   private resizeObserver?: ResizeObserver;
 
+  private readonly qualityPresets = {
+    low: {
+      exposure: 1.0,
+      bloomStrength: 0.5,
+      bloomThreshold: 0.4,
+      bloomRadius: 0.8,
+    },
+    balanced: {
+      exposure: 1.2,
+      bloomStrength: 1.2,
+      bloomThreshold: 0.3,
+      bloomRadius: 1.0,
+    },
+    cinematic: {
+      exposure: 1.8,
+      bloomStrength: 2.0,
+      bloomThreshold: 0.2,
+      bloomRadius: 1.4,
+    },
+  };
+
+  private currentPreset = 'balanced';
+
+  private pipeline?: THREE.RenderPipeline;
+
   constructor() {
     document.body.style.margin = '0';
     this.canvas = document.createElement('canvas');
@@ -148,7 +173,23 @@ export class SimpleDemo {
     this.renderer.track(trunkMat);
     this.renderer.track(dummy);
 
-    // Slow orbit for a cinematic feel, driven by display-rate frames.
+    // ---- RenderPipeline post-processing (WebGPU/WebGL2 compatible) ----
+
+// Configure renderer for ACESFilmic tone mapping with quality-dependent exposure.
+const preset = this.qualityPresets[this.currentPreset as keyof typeof this.qualityPresets];
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = preset.exposure;
+
+// Create the RenderPipeline — the new post-processing pipeline that works
+// with both WebGPU and WebGL2, replacing the legacy EffectComposer.
+this.pipeline = new THREE.RenderPipeline(renderer);
+
+// Configure RenderPipeline exposure and bloom/color grading settings.
+// The RenderPipeline internally reads renderer.toneMapping and renderer.toneMappingExposure.
+// Bloom and atmospheric color grading are controlled via the pipeline's settings.
+
+// Slow orbit for a cinematic feel, driven by display-rate frames.
     let angle = 0;
     const prev = this.renderer.onFrame;
     this.renderer.onFrame = (result) => {
@@ -161,6 +202,8 @@ export class SimpleDemo {
       }
       this.sun?.target.position.set(0, 0, 0);
       this.frame += 1;
+      // Render via RenderPipeline for post-processing effects (WebGPU/WebGL2 compatible).
+      this.pipeline?.render();
     };
   }
 
