@@ -1,33 +1,78 @@
 name: Windows desktop test build
+
 on:
   workflow_dispatch:
     inputs:
       run_installer_smoke:
-        description: 'Explicitly run the unsigned installer smoke test on the disposable Windows runner'
+        description: 'Explicitly run the unsigned installer smoke test'
         type: boolean
         required: false
         default: false
   pull_request:
-    paths:
-      - 'desktop/**'
-      - 'src/**'
-      - 'shared/**'
-      - 'public/**'
-      - 'index.html'
-      - 'package*.json'
-      - 'tests/*.test.mjs'
-      - '.github/workflows/desktop-windows.yml'
+
 permissions:
   contents: read
+
 concurrency:
   group: desktop-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
 jobs:
-  nsis-test-build:
-    runs-on: windows-2022
-    timeout-minutes: 45
+  changes:
+    name: Determine desktop build requirement
+    runs-on: ubuntu-latest
+
+    outputs:
+      run_desktop: ${{ steps.scope.outputs.run_desktop }}
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check changed files
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "run_desktop=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git diff --no-renames --name-only -z \
+            "$BASE_SHA...$HEAD_SHA" \
+            > "$RUNNER_TEMP/changed-files"
+
+          run_desktop=false
+
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              src/nextgen/*|tests/nextgen/*|tests/browser/nextgen*|docs/*)
+                ;;
+              *)
+                run_desktop=true
+                break
+                ;;
+            esac
+          done < "$RUNNER_TEMP/changed-files"
+
+          echo "run_desktop=$run_desktop" >> "$GITHUB_OUTPUT"
+
+  nsis-test-build:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.run_desktop != 'false') }}
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -35,31 +80,38 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             desktop/package-lock.json
+
       - name: Browser regression suite and production build
         run: |
           npm ci
           npm test
           npm run typecheck
           npm run build
+
       - name: Desktop dependencies and launcher
         working-directory: desktop
         run: |
           npm ci
           npm run launcher:build
+
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
+
       - name: Rust formatting and release tests
         working-directory: desktop/src-tauri
         run: |
           cargo fmt --all --check
           cargo test --release --locked --lib --features custom-protocol
+
       - name: Build unsigned NSIS installer
         working-directory: desktop
         run: npm run build -- -- --locked
+
       - name: Install, launch and uninstall smoke test
         if: github.event_name == 'workflow_dispatch' && inputs.run_installer_smoke == true
         shell: pwsh
         run: ./desktop/tests/install-smoke.ps1
+
       - name: Upload actual installer (not a published release)
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
