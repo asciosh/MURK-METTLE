@@ -1,6 +1,11 @@
-# NEXTGEN Survivor Model
+# NEXTGEN Character Models
 
-## Sources
+These models are exclusive to NEXTGEN.
+Legacy character assets remain unchanged.
+
+## Survivor Model
+
+### Sources
 
 - Human mesh, textures, hair and clothing:
   MakeHuman Community MPFB 2.0.18 system assets.
@@ -11,7 +16,7 @@
   License: CC0 1.0.
   https://quaternius.itch.io/universal-animation-library
 
-## Production
+### Production
 
 Created in Blender 5.3 using the MPFB GameEngine rig.
 Animations retargeted to the survivor skeleton.
@@ -22,7 +27,7 @@ Exported as GLB with embedded textures, resized to 1024px
 and compressed using glTF Transform 4.5.0.
 Opaque material rendering corrected.
 
-## Animation mapping
+### Animation mapping
 
 | Game clip | Source animation |
 |---|---|
@@ -37,15 +42,58 @@ Opaque material rendering corrected.
 Animation playback is synchronized with gameplay movement.
 Character movement and physics remain controller-driven.
 
-## Asset specifications
+### Asset specifications
 
 - File: survivor.glb
 - Size: approximately 2.84 MiB
 - Triangles: 33,492
 - Skeletons: 1
+- Bones: 53
 - Meshes: 7
 - Animations: Idle, Walk, Run, JumpStart, JumpLoop, JumpLand, Dodge, Aim, PistolShoot, PistolReload, AimUp, AimDown
 - SHA256: A84155E775DAACD7A89496BE0FBC3E75B3038A3D61131BB30B092DE92F02AF8E
 
-This model is exclusive to NEXTGEN.
-The legacy survivor remains unchanged.
+## Infected Model
+
+### Sources
+
+- Human mesh, textures and clothing:
+  MakeHuman Community MPFB 2.0.18 system assets.
+  License: CC0 1.0.
+  https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html
+
+- Animations: Quaternius Universal Animation Library (Standard).
+  License: CC0 1.0.
+  https://quaternius.itch.io/universal-animation-library
+
+### Production
+
+Created in Blender 5.3 using the MPFB GameEngine rig.
+Animations retargeted to the infected skeleton.
+Exported as GLB with embedded 512px PNG textures.
+Redundant animation keyframes removed using glTF Transform.
+
+### Animation mapping
+
+| Game clip | Source animation |
+|---|---|
+| Idle | Idle_Loop |
+| Walk | Walk_Loop |
+| Run | Jog_Fwd_Loop |
+| Attack | Punch_Cross |
+| Hit | Hit_Chest |
+| Death | Death01 |
+
+The asset uses in-place animations for controller-driven movement.
+
+### Asset specifications
+
+- File: infected.glb
+- Size: approximately 3.62 MiB
+- Triangles: 32,728
+- Skeletons: 1
+- Bones: 53
+- Meshes: 7
+- Textures: 8
+- Animations: Idle, Walk, Run, Attack, Hit, Death
+- SHA256: C1641F954C123B01CB7B7B812D835CA0D9CA06B848A23DA8D51C62EE6DC318C1
