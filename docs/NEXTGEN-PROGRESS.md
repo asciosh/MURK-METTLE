@@ -6,6 +6,26 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-17 — M02 Task 4B: Pistol Animations
+
+**Status:** Complete.
+
+- Retargeted pistol shooting and reload animations.
+- Added independent upper-body weapon animation layer.
+- Preserved locomotion during weapon actions.
+- Added LMB shooting and R reload while aiming.
+- Jump and dodge interrupt weapon actions.
+- Enabled upward camera viewing with terrain protection.
+- Preserved existing animations and legacy gameplay.
+
+**Verification:**
+
+- 67 legacy tests passed.
+- 161 NEXTGEN tests passed.
+- Typecheck and production build passed.
+- Both browser smoke tests passed.
+- GLB validation: zero errors.
+
 ## 2026-11-17 — M02 Task 4A: Weapon Attachment
 
 **Status:** Complete.

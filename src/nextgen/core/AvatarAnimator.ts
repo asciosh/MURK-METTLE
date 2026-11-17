@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { WeaponPoseLayer } from './WeaponPoseLayer.ts';
 
 export type AvatarAnimation =
   | 'idle'
@@ -15,6 +16,8 @@ export interface AvatarMotion {
   airborne: boolean;
   dodging: boolean;
   aiming?: boolean;
+  shoot?: boolean;
+  reload?: boolean;
 }
 
 interface AimBone {
@@ -46,6 +49,11 @@ export class AvatarAnimator {
   private aimWeight = 0;
   private aimApplied = false;
 
+  private readonly weaponPose: WeaponPoseLayer;
+
+  private readonly weaponRotation =
+    new THREE.Quaternion();
+
   private current: THREE.AnimationAction | null = null;
   private activeClip: AvatarAnimation | null = null;
 
@@ -59,9 +67,17 @@ export class AvatarAnimator {
   ) {
     this.root = root;
     this.mixer = new THREE.AnimationMixer(root);
+    this.weaponPose = new WeaponPoseLayer(clips);
 
     for (const clip of clips) {
       const name = clip.name.trim().toLowerCase();
+
+      if (
+        name === 'pistolshoot' ||
+        name === 'pistolreload'
+      ) {
+        continue;
+      }
 
       if (name === 'aim') {
         this.prepareAimPose(clip);
@@ -132,45 +148,56 @@ export class AvatarAnimator {
   }
 
   private updateAim(
-    dtMs: number,
-    motion: AvatarMotion
-  ): void {
-    const locomotion =
-      this.activeClip === 'idle' ||
-      this.activeClip === 'walk' ||
-      this.activeClip === 'run';
+  dtMs: number,
+  motion: AvatarMotion
+): void {
+  const locomotion =
+    this.activeClip === 'idle' ||
+    this.activeClip === 'walk' ||
+    this.activeClip === 'run';
 
-    if (
-      !locomotion ||
-      motion.airborne ||
-      motion.dodging ||
-      this.aimBones.length === 0
-    ) {
-      this.aimWeight = 0;
-      return;
-    }
-
-    const step = dtMs / AIM_BLEND_MS;
-
-    this.aimWeight = motion.aiming
-      ? Math.min(1, this.aimWeight + step)
-      : Math.max(0, this.aimWeight - step);
-
-    if (this.aimWeight === 0) return;
-
-    for (const entry of this.aimBones) {
-      // Preserve the current locomotion pose.
-      entry.base.copy(entry.bone.quaternion);
-
-      // Blend only upper-body bone rotations.
-      entry.bone.quaternion.slerp(
-        entry.target,
-        this.aimWeight
-      );
-    }
-
-    this.aimApplied = true;
+  if (
+    !locomotion ||
+    motion.airborne ||
+    motion.dodging ||
+    this.aimBones.length === 0
+  ) {
+    this.aimWeight = 0;
+    this.weaponPose.cancel();
+    return;
   }
+
+  this.weaponPose.update(
+    dtMs,
+    motion.aiming === true,
+    motion.shoot === true,
+    motion.reload === true
+  );
+
+  const step = dtMs / AIM_BLEND_MS;
+
+  this.aimWeight = motion.aiming
+    ? Math.min(1, this.aimWeight + step)
+    : Math.max(0, this.aimWeight - step);
+
+  if (this.aimWeight === 0) return;
+
+  for (const entry of this.aimBones) {
+    entry.base.copy(entry.bone.quaternion);
+
+    const animated = this.weaponPose.sample(
+      entry.bone.name,
+      this.weaponRotation
+    );
+
+    entry.bone.quaternion.slerp(
+      animated ? this.weaponRotation : entry.target,
+      this.aimWeight
+    );
+  }
+
+  this.aimApplied = true;
+}
 
   private setAnimation(name: AvatarAnimation): void {
     if (this.disposed || this.activeClip === name) {
@@ -325,6 +352,10 @@ export class AvatarAnimator {
     return this.aimWeight;
   }
 
+  getWeaponAction() {
+  return this.weaponPose.getActiveAction();
+}
+
   dispose(): void {
     if (this.disposed) return;
 
@@ -332,6 +363,7 @@ export class AvatarAnimator {
 
     this.disposed = true;
     this.aimWeight = 0;
+    this.weaponPose.cancel();
 
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.root);

@@ -154,7 +154,8 @@ export class PlayerAvatar {
         activeClip: this.animator?.getActiveClip() ?? null,
         aimWeight: this.animator?.getAimWeight() ?? 0,
         weaponAttached: this.weapon !== null,
-        weaponVisible: this.weapon?.root.visible ?? false
+        weaponVisible: this.weapon?.root.visible ?? false,
+        weaponAction: this.animator?.getWeaponAction() ?? null
       };
     }
 

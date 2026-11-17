@@ -36,6 +36,9 @@ const url =
     assert.ok(model.clips.includes('Walk'));
     assert.ok(model.clips.includes('Run'));
     assert.ok(model.clips.includes('Aim'));
+    assert.ok(model.clips.includes('PistolShoot'));
+    assert.ok(model.clips.includes('PistolReload'));
+    assert.equal(model.weaponAction, null);
     assert.equal(model.aimWeight, 0);
     assert.equal(model.weaponAttached, true);
     assert.equal(model.weaponVisible, false);
@@ -143,6 +146,51 @@ await page.waitForFunction(
 );
 
 console.log('Upper-body walking aim: PASS');
+
+await page.mouse.down({ button: 'left' });
+await page.mouse.up({ button: 'left' });
+
+await page.waitForFunction(
+  () => {
+    const model = window.__m01Demo.getPlayerModelInfo();
+
+    return model.weaponAction === 'shoot' &&
+      model.activeClip === 'walk' &&
+      model.weaponVisible === true;
+  },
+  undefined,
+  { timeout: 15000 }
+);
+
+console.log('Pistol shooting: PASS');
+
+await page.waitForFunction(
+  () => window.__m01Demo
+    .getPlayerModelInfo().weaponAction === null
+);
+
+await page.keyboard.press('r');
+
+await page.waitForFunction(
+  () => {
+    const model = window.__m01Demo.getPlayerModelInfo();
+
+    return model.weaponAction === 'reload' &&
+      model.activeClip === 'walk' &&
+      model.weaponVisible === true;
+  },
+  undefined,
+  { timeout: 15000 }
+);
+
+console.log('Pistol reload while walking: PASS');
+
+await page.waitForFunction(
+  () => window.__m01Demo
+    .getPlayerModelInfo().weaponAction === null
+);
+
+console.log('Weapon animation recovery: PASS');
 
 await page.mouse.up({ button: 'right' });
 await page.keyboard.up('w');
