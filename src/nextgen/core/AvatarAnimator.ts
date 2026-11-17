@@ -14,6 +14,13 @@ export interface AvatarMotion {
   sprinting: boolean;
   airborne: boolean;
   dodging: boolean;
+  aiming?: boolean;
+}
+
+interface AimBone {
+  bone: THREE.Bone;
+  target: THREE.Quaternion;
+  base: THREE.Quaternion;
 }
 
 const ONE_SHOT_MS: Partial<Record<AvatarAnimation, number>> = {
@@ -22,12 +29,22 @@ const ONE_SHOT_MS: Partial<Record<AvatarAnimation, number>> = {
   dodge: 650
 };
 
+const AIM_BLEND_MS = 150;
+
+const AIM_BONE_PATTERN =
+  /^(spine_0[123]|neck_01|head|(clavicle|upperarm|lowerarm|hand)_[lr]|(thumb|index|middle|ring|pinky)_0[123]_[lr])$/i;
+
 export class AvatarAnimator {
   private readonly root: THREE.Object3D;
   private readonly mixer: THREE.AnimationMixer;
 
   private readonly actions =
     new Map<string, THREE.AnimationAction>();
+
+  private readonly aimBones: AimBone[] = [];
+
+  private aimWeight = 0;
+  private aimApplied = false;
 
   private current: THREE.AnimationAction | null = null;
   private activeClip: AvatarAnimation | null = null;
@@ -44,13 +61,115 @@ export class AvatarAnimator {
     this.mixer = new THREE.AnimationMixer(root);
 
     for (const clip of clips) {
+      const name = clip.name.trim().toLowerCase();
+
+      if (name === 'aim') {
+        this.prepareAimPose(clip);
+        continue;
+      }
+
       this.actions.set(
-        clip.name.trim().toLowerCase(),
+        name,
         this.mixer.clipAction(clip)
       );
     }
 
     this.setAnimation('idle');
+  }
+
+  private prepareAimPose(
+    clip: THREE.AnimationClip
+  ): void {
+    for (const track of clip.tracks) {
+      if (
+        !track.name.endsWith('.quaternion') ||
+        track.getValueSize() !== 4
+      ) {
+        continue;
+      }
+
+      const name = track.name.slice(
+        0,
+        -'.quaternion'.length
+      );
+
+      if (!AIM_BONE_PATTERN.test(name)) continue;
+
+      const bone = this.root.getObjectByName(name);
+
+      if (!(bone instanceof THREE.Bone)) continue;
+
+      const target = new THREE.Quaternion(
+        track.values[0],
+        track.values[1],
+        track.values[2],
+        track.values[3]
+      );
+
+      if (
+        !target.toArray().every(Number.isFinite) ||
+        target.lengthSq() < 0.000001
+      ) {
+        continue;
+      }
+
+      this.aimBones.push({
+        bone,
+        target: target.normalize(),
+        base: bone.quaternion.clone()
+      });
+    }
+  }
+
+  private restoreBasePose(): void {
+    if (!this.aimApplied) return;
+
+    for (const entry of this.aimBones) {
+      entry.bone.quaternion.copy(entry.base);
+    }
+
+    this.aimApplied = false;
+  }
+
+  private updateAim(
+    dtMs: number,
+    motion: AvatarMotion
+  ): void {
+    const locomotion =
+      this.activeClip === 'idle' ||
+      this.activeClip === 'walk' ||
+      this.activeClip === 'run';
+
+    if (
+      !locomotion ||
+      motion.airborne ||
+      motion.dodging ||
+      this.aimBones.length === 0
+    ) {
+      this.aimWeight = 0;
+      return;
+    }
+
+    const step = dtMs / AIM_BLEND_MS;
+
+    this.aimWeight = motion.aiming
+      ? Math.min(1, this.aimWeight + step)
+      : Math.max(0, this.aimWeight - step);
+
+    if (this.aimWeight === 0) return;
+
+    for (const entry of this.aimBones) {
+      // Preserve the current locomotion pose.
+      entry.base.copy(entry.bone.quaternion);
+
+      // Blend only upper-body bone rotations.
+      entry.bone.quaternion.slerp(
+        entry.target,
+        this.aimWeight
+      );
+    }
+
+    this.aimApplied = true;
   }
 
   private setAnimation(name: AvatarAnimation): void {
@@ -126,6 +245,10 @@ export class AvatarAnimator {
       ? Math.max(0, Math.min(100, deltaTimeMs))
       : 0;
 
+    // Remove the previous overlay before evaluating
+    // the base animation again. Prevents pose drift.
+    this.restoreBasePose();
+
     if (
       motion.dodging ||
       (
@@ -171,19 +294,26 @@ export class AvatarAnimator {
 
     this.wasAirborne = motion.airborne;
 
-  if (
-    this.current &&
-    (this.activeClip === 'walk' || this.activeClip === 'run')
-  ) {
-    const referenceSpeed =
-      this.activeClip === 'walk' ? 5.8 : 8.8;
+    if (
+      this.current &&
+      (this.activeClip === 'walk' ||
+        this.activeClip === 'run')
+    ) {
+      const referenceSpeed =
+        this.activeClip === 'walk' ? 5.8 : 8.8;
 
-    this.current.setEffectiveTimeScale(
-      Math.max(0.15, Math.min(1.5, motion.speed / referenceSpeed))
-    );
-  }
+      this.current.setEffectiveTimeScale(
+        Math.max(
+          0.15,
+          Math.min(1.5, motion.speed / referenceSpeed)
+        )
+      );
+    }
 
     this.mixer.update(dtMs / 1000);
+
+    this.updateAim(dtMs, motion);
+
     this.elapsedMs += dtMs;
   }
 
@@ -191,14 +321,22 @@ export class AvatarAnimator {
     return this.activeClip;
   }
 
+  getAimWeight(): number {
+    return this.aimWeight;
+  }
+
   dispose(): void {
     if (this.disposed) return;
 
+    this.restoreBasePose();
+
     this.disposed = true;
+    this.aimWeight = 0;
 
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.root);
 
+    this.aimBones.length = 0;
     this.actions.clear();
     this.current = null;
     this.activeClip = null;

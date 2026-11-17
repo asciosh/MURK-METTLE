@@ -40,12 +40,12 @@ Character movement and physics remain controller-driven.
 ## Asset specifications
 
 - File: survivor.glb
-- Size: approximately 2.70 MiB
+- Size: approximately 2.73 MiB
 - Triangles: 33,492
 - Skeletons: 1
 - Meshes: 7
-- Animations: 7
-- SHA256: 2A3177F625D1F21656E19718D1005D6EE5148C0CFD6658AAC7BEE3CBBE3E1AED
+- Animations: Idle, Walk, Run, JumpStart, JumpLoop, JumpLand, Dodge, Aim
+- SHA256: 1D6D81680453F7C26D6E00087C7BA8013F915DB9EADA6925E5D2B2F0164853F0
 
 This model is exclusive to NEXTGEN.
 The legacy survivor remains unchanged.

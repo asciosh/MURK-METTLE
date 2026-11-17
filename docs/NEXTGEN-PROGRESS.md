@@ -6,6 +6,26 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-17 — M02 Task 3B: Upper-Body Aim Animation
+
+**Status:** Complete.
+
+- Retargeted the Quaternius pistol aiming pose.
+- Integrated masked upper-body skeletal blending.
+- Preserved independent lower-body locomotion.
+- Added smooth 150 ms aim transitions.
+- Preserved jump, landing and dodge animation priority.
+- Added aim-layer telemetry and automated verification.
+- Preserved all seven existing animation tracks and legacy gameplay.
+
+**Verification:**
+
+- Typecheck and production build passed.
+- 67 legacy tests passed.
+- 147 NEXTGEN tests passed.
+- Avatar and playable browser smoke tests passed.
+- GLB validation: zero errors.
+
 ## 2026-11-17 - M02 Task 3A: Aim Mode & Camera Zoom
 
 **Status:** Complete.

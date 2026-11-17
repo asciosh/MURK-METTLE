@@ -138,14 +138,15 @@ export class PlayerAvatar {
     return true;
     }
 
-    getModelInfo() {
+  getModelInfo() {
     return {
-        status: this.modelStatus,
-        clips: this.model.getClips().map(clip => clip.name),
-        skinned: this.model.hasSkeleton,
-        activeClip: this.animator?.getActiveClip() ?? null
+      status: this.modelStatus,
+      clips: this.model.getClips().map(clip => clip.name),
+      skinned: this.model.hasSkeleton,
+      activeClip: this.animator?.getActiveClip() ?? null,
+      aimWeight: this.animator?.getAimWeight() ?? 0
     };
-    }
+  }
 
     animate(
     deltaTimeMs: number,
