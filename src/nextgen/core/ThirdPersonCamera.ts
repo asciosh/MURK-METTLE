@@ -55,6 +55,10 @@ export class ThirdPersonCamera {
     );
   }
 
+  getAimPitch(): number {
+    return -this.pitch;
+  }
+
   getOrientation(): CameraOrientation {
     return {
       front: [
