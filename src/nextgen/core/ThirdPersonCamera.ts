@@ -17,7 +17,7 @@ export class ThirdPersonCamera {
   static readonly TARGET_HEIGHT = 1.35;
   static readonly SENSITIVITY = 0.0025;
   static readonly FOLLOW_SPEED = 12;
-  static readonly MIN_PITCH = 0.1;
+  static readonly MIN_PITCH = -0.65;
   static readonly MAX_PITCH = 1.2;
   static readonly CLEARANCE = 0.3;
   static readonly FOV = 58;

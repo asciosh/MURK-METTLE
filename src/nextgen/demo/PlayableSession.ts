@@ -23,6 +23,8 @@ export class PlayableSession {
 
   private previousPosition: [number, number, number];
   private aimPressed = false;
+  private shootPressed = false;
+  private reloadPressed = false;
 
   private disposed = false;
 
@@ -104,6 +106,15 @@ export class PlayableSession {
   private readonly onKeyDown = (event: KeyboardEvent) => {
     if (!this.isLocked()) return;
 
+    if (event.code === 'KeyR') {
+      if (!event.repeat && this.aimPressed) {
+        this.reloadPressed = true;
+      }
+
+      event.preventDefault();
+      return;
+    }
+
     if (
       this.keyboard.keyDown(
         event.code,
@@ -132,16 +143,17 @@ export class PlayableSession {
   };
 
 private readonly onMouseDown = (event: MouseEvent) => {
-  if (
-    this.disposed ||
-    !this.isLocked() ||
-    event.button !== 2
-  ) {
-    return;
+  if (this.disposed || !this.isLocked()) return;
+
+  if (event.button === 2) {
+    event.preventDefault();
+    this.aimPressed = true;
   }
 
-  event.preventDefault();
-  this.aimPressed = true;
+  if (event.button === 0 && this.aimPressed) {
+    event.preventDefault();
+    this.shootPressed = true;
+  }
 };
 
 private readonly onMouseUp = (event: MouseEvent) => {
@@ -156,6 +168,9 @@ private readonly onContextMenu = (event: MouseEvent) => {
 
 private clearAim(): void {
   this.aimPressed = false;
+  this.shootPressed = false;
+  this.reloadPressed = false;
+
   this.controller.resetAim();
   this.state.aiming = false;
 }
@@ -188,13 +203,21 @@ private readonly onReset = () => {
         ? distance / (deltaTimeMs / 1000)
         : 0;
 
+    const aiming =
+      this.state.aiming && this.isLocked();
+
     this.avatar.animate(deltaTimeMs, {
       speed,
       sprinting: this.state.sprinting,
       airborne: this.state.airborne,
       dodging: this.state.dodging,
-      aiming: this.state.aiming && this.isLocked()
+      aiming,
+      shoot: aiming && this.shootPressed,
+      reload: aiming && this.reloadPressed
     });
+
+    this.shootPressed = false;
+    this.reloadPressed = false;
     }
 
   present(
