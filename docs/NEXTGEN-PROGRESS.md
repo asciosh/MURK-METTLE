@@ -6,6 +6,24 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-17 — M02 Task 1A: Character Controller Foundation
+
+**Status:** Complete.
+
+**Delivered:**
+- Deterministic camera-relative movement.
+- Analog movement and diagonal normalization.
+- Configurable spawn and character radius.
+- Terrain boundary collision and height following.
+- Character facing direction.
+- Invalid input protection and bounded simulation steps.
+- Independent position and facing snapshots.
+- 20 dedicated character controller tests.
+
+**Next:** M02 Task 1B — Sprint, Stamina and Dodge.
+
+---
+
 ## 2026-11-17 — M01: Final Acceptance Review Complete
 
 **Status:** M01 complete. All milestone acceptance criteria met.
