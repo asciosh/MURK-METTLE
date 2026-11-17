@@ -22,6 +22,7 @@ export class PlayableSession {
   private state: CharacterControllerResult;
 
   private previousPosition: [number, number, number];
+  private aimPressed = false;
 
   private disposed = false;
 
@@ -56,6 +57,13 @@ export class PlayableSession {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onReset);
+    window.addEventListener('mousedown', this.onMouseDown, true);
+    window.addEventListener('mouseup', this.onMouseUp, true);
+
+    this.canvas.addEventListener(
+      'contextmenu',
+      this.onContextMenu
+    );
 
     document.addEventListener(
       'mousemove',
@@ -123,9 +131,39 @@ export class PlayableSession {
     );
   };
 
-  private readonly onReset = () => {
-    this.keyboard.reset();
-  };
+private readonly onMouseDown = (event: MouseEvent) => {
+  if (
+    this.disposed ||
+    !this.isLocked() ||
+    event.button !== 2
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  this.aimPressed = true;
+};
+
+private readonly onMouseUp = (event: MouseEvent) => {
+  if (event.button === 2) {
+    this.clearAim();
+  }
+};
+
+private readonly onContextMenu = (event: MouseEvent) => {
+  event.preventDefault();
+};
+
+private clearAim(): void {
+  this.aimPressed = false;
+  this.controller.resetAim();
+  this.state.aiming = false;
+}
+
+private readonly onReset = () => {
+  this.keyboard.reset();
+  this.clearAim();
+};
 
     step(deltaTimeMs: number): void {
     if (this.disposed) return;
@@ -133,9 +171,12 @@ export class PlayableSession {
     this.previousPosition = [...this.state.position];
 
     this.state = this.controller.update(
-        deltaTimeMs,
-        this.keyboard.read(),
-        this.followCamera.getOrientation()
+      deltaTimeMs,
+      {
+        ...this.keyboard.read(),
+        aim: this.aimPressed && this.isLocked()
+      },
+      this.followCamera.getOrientation()
     );
 
     const distance = Math.hypot(
@@ -183,14 +224,19 @@ export class PlayableSession {
       facing: this.state.facing
     });
 
-    const pose = this.followCamera.update(
-      deltaTimeMs,
-      position,
-      this.terrain
-    );
+  const pose = this.followCamera.update(
+    deltaTimeMs,
+    position,
+    this.terrain,
+    this.isLocked() && this.state.aiming
+  );
 
     this.camera.position.set(...pose.position);
     this.camera.lookAt(...pose.target);
+    if (this.camera.fov !== pose.fov) {
+      this.camera.fov = pose.fov;
+      this.camera.updateProjectionMatrix();
+    }
     this.hud.update(this.state, this.isLocked());
   }
 
@@ -206,6 +252,10 @@ export class PlayableSession {
     };
   }
 
+  getCameraFov(): number {
+  return this.camera.fov;
+}
+
   dispose(): void {
     if (this.disposed) return;
 
@@ -216,6 +266,16 @@ export class PlayableSession {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onReset);
+
+    window.removeEventListener('mousedown', this.onMouseDown, true);
+    window.removeEventListener('mouseup', this.onMouseUp, true);
+
+    this.canvas.removeEventListener(
+      'contextmenu',
+      this.onContextMenu
+    );
+
+    this.clearAim();
 
     document.removeEventListener(
       'mousemove',

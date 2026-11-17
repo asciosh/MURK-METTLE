@@ -6,6 +6,31 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-17 - M02 Task 3A: Aim Mode & Camera Zoom
+
+**Status:** Complete.
+
+- Added right-mouse hold-to-aim controls.
+- Added smooth camera zoom from 5.5m to 3m.
+- Added FOV transition from 58 to 45 degrees.
+- Added over-the-shoulder aiming with lateral terrain collision.
+- Added centered aiming crosshair.
+- Character faces the camera aim direction while aiming.
+- Preserved jump and dodge direction behavior.
+- Aim resets on pointer lock loss, window blur and release.
+- Preserved existing animations, movement and legacy gameplay.
+
+**Verification:**
+
+- Typecheck and production build passed.
+- 67 legacy tests passed.
+- 139 NEXTGEN tests passed.
+- 12 new aim-specific tests passed.
+- Avatar and playable browser smoke tests passed.
+- Manual aim and camera verification passed.
+
+---
+
 ## 2026-11-17 - M02 Task 2C: Action Animations
 
 **Status:** Complete.
