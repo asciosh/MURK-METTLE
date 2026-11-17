@@ -47,6 +47,10 @@ export class PlayableSession {
 
     scene.add(this.avatar.root);
 
+    void this.avatar.loadModel(
+    `${import.meta.env.BASE_URL}models/survivor.glb`
+    );
+
     this.canvas.addEventListener('click', this.onClick);
 
     window.addEventListener('keydown', this.onKeyDown);
@@ -123,17 +127,33 @@ export class PlayableSession {
     this.keyboard.reset();
   };
 
-  step(deltaTimeMs: number): void {
+    step(deltaTimeMs: number): void {
     if (this.disposed) return;
 
     this.previousPosition = [...this.state.position];
 
     this.state = this.controller.update(
-      deltaTimeMs,
-      this.keyboard.read(),
-      this.followCamera.getOrientation()
+        deltaTimeMs,
+        this.keyboard.read(),
+        this.followCamera.getOrientation()
     );
-  }
+
+    const distance = Math.hypot(
+        this.state.position[0] - this.previousPosition[0],
+        this.state.position[2] - this.previousPosition[2]
+    );
+
+    const speed = deltaTimeMs > 0
+        ? distance / (deltaTimeMs / 1000)
+        : 0;
+
+    this.avatar.animate(deltaTimeMs, {
+        speed,
+        sprinting: this.state.sprinting,
+        airborne: this.state.airborne,
+        dodging: this.state.dodging
+    });
+    }
 
   present(
     deltaTimeMs: number,
@@ -173,6 +193,10 @@ export class PlayableSession {
     this.camera.lookAt(...pose.target);
     this.hud.update(this.state, this.isLocked());
   }
+
+  getModelInfo() {
+    return this.avatar.getModelInfo();
+    }
 
   getState(): CharacterControllerResult {
     return {

@@ -327,6 +327,10 @@ async mount(): Promise<void> {
     return this.lastResult;
   }
 
+  getPlayerModelInfo() {
+    return this.session?.getModelInfo();
+  }
+
   getPlayerState() {
     return this.session?.getState();
   }

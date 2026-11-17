@@ -6,6 +6,19 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+### M02 Task 2A — GLB Model and Animation Foundation
+
+Status: COMPLETE
+
+- Reused original bundled survivor GLB.
+- Automatic model height normalization and ground alignment.
+- Idle, Walk and Run animation blending.
+- Procedural fallback when model loading fails.
+- Avatar browser smoke: PASS.
+- Playable browser smoke: PASS.
+- Existing model uses rigid node animation; skeletal model pending.
+- Legacy gameplay and asset manifest unchanged.
+
 ### M02 Task 1C — Playable Character
 
 Status: COMPLETE

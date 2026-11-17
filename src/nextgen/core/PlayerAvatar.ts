@@ -1,5 +1,10 @@
 import * as THREE from 'three/webgpu';
+import { SurvivorModel } from './SurvivorModel.ts';
 import type { CharacterControllerResult } from './CharacterController.ts';
+import {
+  AvatarAnimator,
+  type AvatarMotion
+} from './AvatarAnimator.ts';
 
 export class PlayerAvatar {
   readonly root = new THREE.Group();
@@ -11,6 +16,13 @@ export class PlayerAvatar {
     new Set<THREE.Material>();
 
   private disposed = false;
+
+  private readonly model = new SurvivorModel();
+  private animator: AvatarAnimator | null = null;
+
+    private modelStatus:
+    'placeholder' | 'loading' | 'ready' | 'fallback'
+    = 'placeholder';
 
   constructor() {
     this.root.name = 'NEXTGEN Player';
@@ -89,6 +101,59 @@ export class PlayerAvatar {
     this.root.add(mesh);
   }
 
+    async loadModel(url: string): Promise<boolean> {
+    if (this.disposed) return false;
+
+    if (this.model.loaded) return true;
+
+    if (this.modelStatus === 'loading') {
+        return false;
+    }
+
+    this.modelStatus = 'loading';
+
+    const loaded = await this.model.load(url);
+
+    if (this.disposed) return false;
+
+    if (!loaded) {
+        this.modelStatus = 'fallback';
+        return false;
+    }
+
+    // Hide the procedural placeholder.
+    for (const part of this.root.children) {
+        part.visible = false;
+    }
+
+    this.root.add(this.model.root);
+
+    this.animator = new AvatarAnimator(
+    this.model.root,
+    this.model.getClips()
+    );
+
+    this.modelStatus = 'ready';
+
+    return true;
+    }
+
+    getModelInfo() {
+    return {
+        status: this.modelStatus,
+        clips: this.model.getClips().map(clip => clip.name),
+        skinned: this.model.hasSkeleton,
+        activeClip: this.animator?.getActiveClip() ?? null
+    };
+    }
+
+    animate(
+    deltaTimeMs: number,
+    motion: AvatarMotion
+    ): void {
+    this.animator?.update(deltaTimeMs, motion);
+    }
+
   update(
     state: Pick<
       CharacterControllerResult,
@@ -116,6 +181,10 @@ export class PlayerAvatar {
     if (this.disposed) return;
 
     this.disposed = true;
+    this.animator?.dispose();
+    this.animator = null;
+
+    this.model.dispose();
 
     this.root.removeFromParent();
 
