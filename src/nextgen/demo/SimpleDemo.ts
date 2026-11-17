@@ -7,6 +7,7 @@ import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { TerrainGenerator } from '../core/TerrainGenerator';
 import { TerrainMaterial } from '../core/TerrainMaterial';
 import { VegetationRenderer } from '../core/VegetationRenderer';
+import { PlayableSession } from './PlayableSession';
 
 /**
  * Independent graphics demonstration scene (M01 checkpoint).
@@ -30,6 +31,7 @@ export class SimpleDemo {
   private disposed = false;
   private resizeObserver?: ResizeObserver;
   private vegetation?: VegetationRenderer;
+  private session?: PlayableSession;
 
   private readonly qualityPresets = {
     low: {
@@ -64,7 +66,7 @@ export class SimpleDemo {
   private readonly bloomRadius = uniform(1.0);
   private readonly bloomThreshold = uniform(0.3);
 
-  constructor() {
+  constructor(private readonly playable = false) {
     document.body.style.margin = '0';
     this.canvas = document.createElement('canvas');
     this.canvas.style.display = 'block';
@@ -253,6 +255,39 @@ async mount(): Promise<void> {
       );
     }
 
+      if (this.playable) {
+    const session = new PlayableSession(
+      scene,
+      camera,
+      this.canvas,
+      terrain
+    );
+
+    this.session = session;
+
+    this.renderer.onSimulationStep = (dtMs) => {
+      session.step(dtMs);
+    };
+
+    this.renderer.onBeforeRender = (dtMs, alpha) => {
+      session.present(dtMs, alpha);
+
+      this.vegetation?.update(
+        camera.position.x,
+        camera.position.z
+      );
+
+      if (this.sun) {
+        const [x, y, z] = session.getState().position;
+
+        this.sun.position.set(x - 30, y + 45, z + 25);
+        this.sun.target.position.set(x, y, z);
+      }
+    };
+
+    return;
+  }
+
     // Camera orbit above the actual heightfield.
     let angle = 0;
     const prev = this.renderer.onFrame;
@@ -290,6 +325,10 @@ async mount(): Promise<void> {
 
   getLastResult(): PresentResult | undefined {
     return this.lastResult;
+  }
+
+  getPlayerState() {
+    return this.session?.getState();
   }
 
   getResults(): PresentResult[] {
@@ -414,6 +453,13 @@ private applyShadowPreset(): void {
       this.pipeline.dispose();
       this.pipeline = undefined;
     }
+    this.renderer.stop();
+    this.renderer.onSimulationStep = undefined;
+    this.renderer.onBeforeRender = undefined;
+
+    this.session?.dispose();
+    this.session = undefined;
+
     this.renderer.dispose();
     this.container.remove();
     document.body.style.margin = '';

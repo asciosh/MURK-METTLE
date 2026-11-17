@@ -59,6 +59,10 @@ export class SimulationClock {
     return { alpha: this.alpha, steps, tick: this.fixedSteps };
   }
 
+  getFixedDt(): number {
+  return this.fixedDt;
+}
+
   getAlpha(): number {
     return this.alpha;
   }
