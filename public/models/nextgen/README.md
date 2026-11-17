@@ -15,18 +15,37 @@
 
 Created in Blender 5.3 using the MPFB GameEngine rig.
 Animations retargeted to the survivor skeleton.
+Jump arm poses and ground alignment refined.
+Dodge ground clearance corrected.
+
 Exported as GLB with embedded textures, resized to 1024px
 and compressed using glTF Transform 4.5.0.
+Opaque material rendering corrected.
+
+## Animation mapping
+
+| Game clip | Source animation |
+|---|---|
+| Idle | Idle_Loop |
+| Walk | Jog_Fwd_Loop |
+| Run | Sprint_Loop |
+| JumpStart | Jump_Start |
+| JumpLoop | Jump_Loop |
+| JumpLand | Jump_Land |
+| Dodge | Roll |
+
+Animation playback is synchronized with gameplay movement.
+Character movement and physics remain controller-driven.
 
 ## Asset specifications
 
 - File: survivor.glb
-- Size: approximately 2.49 MiB
+- Size: approximately 2.70 MiB
 - Triangles: 33,492
 - Skeletons: 1
 - Meshes: 7
-- Animations: Idle, Walk, Run
-- SHA256: FAD8435EB6AD24C03B16B15A5F74CE735C5E38C0E7551AAA020E159D4F61BC16
+- Animations: 7
+- SHA256: 2A3177F625D1F21656E19718D1005D6EE5148C0CFD6658AAC7BEE3CBBE3E1AED
 
 This model is exclusive to NEXTGEN.
 The legacy survivor remains unchanged.

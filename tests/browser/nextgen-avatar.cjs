@@ -35,6 +35,10 @@ const url =
     assert.ok(model.clips.includes('Idle'));
     assert.ok(model.clips.includes('Walk'));
     assert.ok(model.clips.includes('Run'));
+    assert.ok(model.clips.includes('JumpStart'));
+    assert.ok(model.clips.includes('JumpLoop'));
+    assert.ok(model.clips.includes('JumpLand'));
+    assert.ok(model.clips.includes('Dodge'));
     assert.equal(model.skinned, true);
 
     assert.equal(model.activeClip, 'idle');
@@ -94,6 +98,88 @@ const url =
     );
 
     console.log('Return to idle: PASS');
+
+    // Record animation transitions across rendered frames.
+    await page.evaluate(() => {
+      window.__avatarClipHistory = [];
+
+      const sample = () => {
+        const clip =
+          window.__m01Demo.getPlayerModelInfo().activeClip;
+
+        const history = window.__avatarClipHistory;
+
+        if (clip && history.at(-1) !== clip) {
+          history.push(clip);
+        }
+
+        window.__avatarClipObserver =
+          requestAnimationFrame(sample);
+      };
+
+      sample();
+    });
+
+    // Verify the complete jump sequence.
+    await page.keyboard.down('Space');
+
+    await page.waitForFunction(
+      () => window.__avatarClipHistory.includes('jumpstart'),
+      undefined,
+      { timeout: 15000 }
+    );
+
+    await page.keyboard.up('Space');
+
+    await page.waitForFunction(
+      () => {
+        const history = window.__avatarClipHistory;
+
+        return history.includes('jumpland') &&
+          history.at(-1) === 'idle';
+      },
+      undefined,
+      { timeout: 30000 }
+    );
+
+    const jumpHistory = await page.evaluate(
+      () => window.__avatarClipHistory
+    );
+
+    assert.ok(
+      jumpHistory.indexOf('jumpstart') <
+      jumpHistory.indexOf('jumploop')
+    );
+
+    assert.ok(
+      jumpHistory.indexOf('jumploop') <
+      jumpHistory.indexOf('jumpland')
+    );
+
+    console.log('Jump sequence: PASS', jumpHistory);
+
+    // Verify dodge and visual recovery.
+    await page.keyboard.down('Control');
+
+    await page.waitForFunction(
+      () => window.__avatarClipHistory.includes('dodge'),
+      undefined,
+      { timeout: 15000 }
+    );
+
+    await page.keyboard.up('Control');
+
+    await page.waitForFunction(
+      () => window.__avatarClipHistory.at(-1) === 'idle',
+      undefined,
+      { timeout: 30000 }
+    );
+
+    await page.evaluate(() => {
+      cancelAnimationFrame(window.__avatarClipObserver);
+    });
+
+    console.log('Dodge and recovery: PASS');
 
     await page.evaluate(() => {
       window.__m01Demo.dispose();

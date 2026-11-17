@@ -1,6 +1,13 @@
 import * as THREE from 'three/webgpu';
 
-export type AvatarAnimation = 'idle' | 'walk' | 'run';
+export type AvatarAnimation =
+  | 'idle'
+  | 'walk'
+  | 'run'
+  | 'jumpstart'
+  | 'jumploop'
+  | 'jumpland'
+  | 'dodge';
 
 export interface AvatarMotion {
   speed: number;
@@ -8,6 +15,12 @@ export interface AvatarMotion {
   airborne: boolean;
   dodging: boolean;
 }
+
+const ONE_SHOT_MS: Partial<Record<AvatarAnimation, number>> = {
+  jumpstart: 350,
+  jumpland: 350,
+  dodge: 650
+};
 
 export class AvatarAnimator {
   private readonly root: THREE.Object3D;
@@ -18,6 +31,9 @@ export class AvatarAnimator {
 
   private current: THREE.AnimationAction | null = null;
   private activeClip: AvatarAnimation | null = null;
+
+  private elapsedMs = 0;
+  private wasAirborne = false;
   private disposed = false;
 
   constructor(
@@ -52,22 +68,52 @@ export class AvatarAnimator {
       }
     }
 
-    next
-      .reset()
-      .setEffectiveTimeScale(1)
-      .setEffectiveWeight(1)
-      .play();
+    const duration = ONE_SHOT_MS[name];
+
+    next.reset();
+
+    if (duration !== undefined) {
+      next.setLoop(THREE.LoopOnce, 1);
+      next.clampWhenFinished = true;
+
+      next.setEffectiveTimeScale(
+        next.getClip().duration / (duration / 1000)
+      );
+    } else {
+      next.setLoop(THREE.LoopRepeat, Infinity);
+      next.clampWhenFinished = false;
+      next.setEffectiveTimeScale(1);
+    }
+
+    next.setEffectiveWeight(1).play();
 
     if (this.current && this.current !== next) {
+      const actionTransition =
+        duration !== undefined ||
+        (this.activeClip !== null &&
+          ONE_SHOT_MS[this.activeClip] !== undefined);
+
       next.crossFadeFrom(
         this.current,
-        0.18,
+        actionTransition ? 0.08 : 0.18,
         false
       );
     }
 
     this.current = next;
     this.activeClip = name;
+    this.elapsedMs = 0;
+  }
+
+  private locomotion(motion: AvatarMotion): AvatarAnimation {
+    if (
+      !Number.isFinite(motion.speed) ||
+      motion.speed < 0.05
+    ) {
+      return 'idle';
+    }
+
+    return motion.sprinting ? 'run' : 'walk';
   }
 
   update(
@@ -76,25 +122,69 @@ export class AvatarAnimator {
   ): void {
     if (this.disposed) return;
 
-    if (motion.airborne || motion.dodging) {
-      // Temporary fallback until dedicated clips exist.
-      this.setAnimation('idle');
-    } else if (
-      !Number.isFinite(motion.speed) ||
-      motion.speed < 0.05
-    ) {
-      this.setAnimation('idle');
-    } else if (motion.sprinting) {
-      this.setAnimation('run');
-    } else {
-      this.setAnimation('walk');
-    }
-
-    const dt = Number.isFinite(deltaTimeMs)
-      ? Math.max(0, Math.min(100, deltaTimeMs)) / 1000
+    const dtMs = Number.isFinite(deltaTimeMs)
+      ? Math.max(0, Math.min(100, deltaTimeMs))
       : 0;
 
-    this.mixer.update(dt);
+    if (
+      motion.dodging ||
+      (
+        !motion.airborne &&
+        this.activeClip === 'dodge' &&
+        this.elapsedMs < 650
+      )
+    ) {
+      this.setAnimation(
+        this.actions.has('dodge') ? 'dodge' : 'idle'
+      );
+    } else if (motion.airborne) {
+      const startingJump =
+        !this.wasAirborne ||
+        (
+          this.activeClip === 'jumpstart' &&
+          this.elapsedMs < 350
+        );
+
+      if (startingJump && this.actions.has('jumpstart')) {
+        this.setAnimation('jumpstart');
+      } else {
+        this.setAnimation(
+          this.actions.has('jumploop')
+            ? 'jumploop'
+            : 'idle'
+        );
+      }
+    } else if (
+      this.actions.has('jumpland') &&
+      (
+        this.wasAirborne ||
+        (
+          this.activeClip === 'jumpland' &&
+          this.elapsedMs < 350
+        )
+      )
+    ) {
+      this.setAnimation('jumpland');
+    } else {
+      this.setAnimation(this.locomotion(motion));
+    }
+
+    this.wasAirborne = motion.airborne;
+
+  if (
+    this.current &&
+    (this.activeClip === 'walk' || this.activeClip === 'run')
+  ) {
+    const referenceSpeed =
+      this.activeClip === 'walk' ? 5.8 : 8.8;
+
+    this.current.setEffectiveTimeScale(
+      Math.max(0.15, Math.min(1.5, motion.speed / referenceSpeed))
+    );
+  }
+
+    this.mixer.update(dtMs / 1000);
+    this.elapsedMs += dtMs;
   }
 
   getActiveClip(): AvatarAnimation | null {
