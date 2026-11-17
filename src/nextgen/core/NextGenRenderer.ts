@@ -33,6 +33,7 @@ export class NextGenRenderer {
   private readonly camera: THREE.PerspectiveCamera;
 
   private running = false;
+  private graphicsLost = false;
   private disposed = false;
   private width = 0;
   private height = 0;
@@ -45,6 +46,16 @@ export class NextGenRenderer {
     this.clock = new SimulationClock();
     this.tracker = new ResourceTracker();
     this.instrumentation = new PerfInstrumentation();
+
+    const handleGraphicsLoss = () => {
+    if (this.disposed || this.graphicsLost) return;
+
+    this.graphicsLost = true;
+    this.stop();
+  };
+
+  this.device.onDeviceLost(handleGraphicsLoss);
+  this.device.onContextLost(handleGraphicsLoss);
 
     this.scene = this.tracker.track(new THREE.Scene());
     this.camera = this.tracker.track(new THREE.PerspectiveCamera(58, 1, 0.1, 1000));
@@ -69,7 +80,7 @@ export class NextGenRenderer {
 
   /** Start the display-rate render loop. No-op if already running. */
   start(): void {
-    if (this.running || this.disposed) return;
+    if (this.running || this.disposed || this.graphicsLost) return;
     const renderer = this.device.backendRenderer;
     if (!renderer) {
       throw new Error('NextGenRenderer: cannot start before init().');
@@ -86,7 +97,7 @@ export class NextGenRenderer {
   }
 
   private _tick(time: number): void {
-    if (this.disposed) return;
+    if (this.disposed || this.graphicsLost || !this.running) return;
 
     this.clock.tick(time);
     this._render();

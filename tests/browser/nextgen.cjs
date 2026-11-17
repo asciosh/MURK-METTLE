@@ -103,10 +103,136 @@ const url = (process.env.GAME_URL || 'http://localhost:5173') + '/tests/browser/
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.writeFileSync(destination, JSON.stringify(artifact, null, 2));
 
-  await page.evaluate(() => {
-    window.__m01Demo.dispose();
-    window.__m01Demo.dispose();
+// Verify runtime quality switching.
+const presets = [
+  { id: 'low', shadows: false, resolution: 512, exposure: 1.0 },
+  { id: 'balanced', shadows: true, resolution: 1024, exposure: 1.2 },
+  { id: 'cinematic', shadows: true, resolution: 2048, exposure: 1.8 },
+  { id: 'balanced', shadows: true, resolution: 1024, exposure: 1.2 },
+];
+
+for (const preset of presets) {
+  const timestamp = await page.evaluate((id) => {
+    const demo = window.__m01Demo;
+    const previous = demo.getLastResult().timestampMs;
+
+    demo.setQuality(id);
+
+    return previous;
+  }, preset.id);
+
+  await page.waitForFunction(
+    previous => window.__m01Demo.getLastResult().timestampMs > previous,
+    timestamp,
+    { timeout: 60000 }
+  );
+
+  const state = await page.evaluate(() => {
+    const demo = window.__m01Demo;
+
+    return {
+      quality: demo.currentPreset,
+      shadows: demo.backendRenderer.shadowMap.enabled,
+      sunCastsShadow: demo.sun.castShadow,
+      shadowResolution: demo.sun.shadow.mapSize.x,
+      exposure: demo.backendRenderer.toneMappingExposure,
+      bloomStrength: demo.bloomNode.strength.value,
+      drawCalls: demo.getLastResult().drawCalls,
+      triangles: demo.getLastResult().triangles,
+    };
   });
+
+console.log('Expected quality settings:', preset);
+console.log('Actual quality settings:', state);
+
+  if (
+    state.quality !== preset.id ||
+    state.shadows !== preset.shadows ||
+    state.sunCastsShadow !== preset.shadows ||
+    state.shadowResolution !== preset.resolution ||
+    state.exposure !== preset.exposure
+  ) {
+    throw new Error(`Quality preset failed: ${preset.id}`);
+  }
+
+  console.log(`Quality ${preset.id}: PASS`, state);
+}
+
+// Verify that resizing updates the drawing buffer.
+await page.evaluate(() => {
+  const demo = window.__m01Demo;
+  const renderer = demo.backendRenderer;
+  const canvas = renderer.domElement;
+  const ratio = renderer.getPixelRatio();
+
+  demo.resize(960, 540);
+
+  if (
+    canvas.width !== Math.floor(960 * ratio) ||
+    canvas.height !== Math.floor(540 * ratio)
+  ) {
+    throw new Error('Renderer resize failed.');
+  }
+
+  demo.resize(1280, 720);
+});
+
+console.log('Renderer resize: PASS');
+
+// Trigger a real WebGL context loss.
+if (actual.backend === 'webgl2') {
+  const lastTimestamp = await page.evaluate(async () => {
+    const demo = window.__m01Demo;
+    const canvas = demo.backendRenderer.domElement;
+    const gl = canvas.getContext('webgl2');
+    const extension = gl?.getExtension('WEBGL_lose_context');
+
+    if (!extension) {
+      throw new Error('WEBGL_lose_context unavailable.');
+    }
+
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Context loss event not received.'));
+      }, 5000);
+
+      canvas.addEventListener('webglcontextlost', () => {
+        clearTimeout(timeout);
+        resolve();
+      }, { once: true });
+
+      extension.loseContext();
+    });
+
+    return demo.getLastResult().timestampMs;
+  });
+
+  await page.waitForTimeout(2000);
+
+  const currentTimestamp = await page.evaluate(() =>
+    window.__m01Demo.getLastResult().timestampMs
+  );
+
+  if (currentTimestamp !== lastTimestamp) {
+    throw new Error('Renderer continued after context loss.');
+  }
+
+  console.log('WebGL context loss: PASS');
+}
+
+// Verify idempotent disposal.
+await page.evaluate(() => {
+  const demo = window.__m01Demo;
+
+  demo.dispose();
+  demo.dispose();
+
+  if (demo.backendRenderer !== null) {
+    throw new Error('Renderer was not released.');
+  }
+});
+
+console.log('Renderer disposal: PASS');
 
   await page.unrouteAll({ behavior: 'ignoreErrors' });
   await browser.close();
