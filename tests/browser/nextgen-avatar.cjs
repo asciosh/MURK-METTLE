@@ -35,6 +35,8 @@ const url =
     assert.ok(model.clips.includes('Idle'));
     assert.ok(model.clips.includes('Walk'));
     assert.ok(model.clips.includes('Run'));
+    assert.ok(model.clips.includes('Aim'));
+    assert.equal(model.aimWeight, 0);
     assert.ok(model.clips.includes('JumpStart'));
     assert.ok(model.clips.includes('JumpLoop'));
     assert.ok(model.clips.includes('JumpLand'));
@@ -98,6 +100,53 @@ const url =
     );
 
     console.log('Return to idle: PASS');
+
+    // Upper-body aim layer.
+await page.mouse.down({ button: 'right' });
+
+await page.waitForFunction(
+  () => {
+    const model = window.__m01Demo.getPlayerModelInfo();
+
+    return model.aimWeight >= 0.99 &&
+      model.activeClip === 'idle';
+  },
+  undefined,
+  { timeout: 15000 }
+);
+
+console.log('Upper-body idle aim: PASS');
+
+await page.keyboard.down('w');
+
+await page.waitForFunction(
+  () => {
+    const model = window.__m01Demo.getPlayerModelInfo();
+
+    return model.activeClip === 'walk' &&
+      model.aimWeight >= 0.99;
+  },
+  undefined,
+  { timeout: 15000 }
+);
+
+console.log('Upper-body walking aim: PASS');
+
+await page.mouse.up({ button: 'right' });
+await page.keyboard.up('w');
+
+await page.waitForFunction(
+  () => {
+    const model = window.__m01Demo.getPlayerModelInfo();
+
+    return model.aimWeight === 0 &&
+      model.activeClip === 'idle';
+  },
+  undefined,
+  { timeout: 15000 }
+);
+
+console.log('Aim blend recovery: PASS');
 
     // Record animation transitions across rendered frames.
     await page.evaluate(() => {

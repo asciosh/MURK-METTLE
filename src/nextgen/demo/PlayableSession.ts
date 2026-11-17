@@ -189,10 +189,11 @@ private readonly onReset = () => {
         : 0;
 
     this.avatar.animate(deltaTimeMs, {
-        speed,
-        sprinting: this.state.sprinting,
-        airborne: this.state.airborne,
-        dodging: this.state.dodging
+      speed,
+      sprinting: this.state.sprinting,
+      airborne: this.state.airborne,
+      dodging: this.state.dodging,
+      aiming: this.state.aiming && this.isLocked()
     });
     }
 
