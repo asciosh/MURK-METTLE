@@ -91,11 +91,7 @@ export class GraphicsDevice {
     ? 'WebGPU adapter'
     : this._readDeviceName(renderer);
 
-  if (isWebGpuLive) {
-    this._wireDeviceLoss(renderer);
-  } else {
-    this._wireContextLoss(canvas);
-  }
+  this._wireGraphicsLoss(renderer, isWebGpuLive);
 }
 
   private _canvas(): HTMLCanvasElement {
@@ -131,25 +127,29 @@ export class GraphicsDevice {
     }
   }
 
-  private _wireDeviceLoss(renderer: THREE.Renderer): void {
-    const backend = renderer as unknown as {
-      device?: { lost: Promise<unknown> };
-      info?: { backend?: string };
-    };
-    if (backend.device?.lost) {
-      backend.device.lost.then(() => {
-        for (const handler of this.deviceLostHandlers) handler();
-      });
-    }
-  }
+  private _wireGraphicsLoss(
+  renderer: THREE.Renderer,
+  isWebGpuLive: boolean
+): void {
+  const originalHandler = renderer.onDeviceLost.bind(renderer);
+  let notified = false;
 
-  private _wireContextLoss(canvas: HTMLCanvasElement): void {
-    const handler = () => {
-      for (const h of this.contextLostHandlers) h();
-    };
-    canvas.addEventListener('webglcontextlost', handler, { passive: true });
-    canvas.addEventListener('webglcontextrestored', handler, { passive: true });
-  }
+  renderer.onDeviceLost = (info) => {
+    if (this.disposed || notified) return;
+
+    notified = true;
+
+    originalHandler(info);
+
+    const handlers = isWebGpuLive
+      ? this.deviceLostHandlers
+      : this.contextLostHandlers;
+
+    for (const handler of handlers) {
+      handler();
+    }
+  };
+}
 
   /** The live Three renderer backend (WebGPU or WebGL 2), or null before init. */
   get backendRenderer(): THREE.Renderer | null {
@@ -190,12 +190,17 @@ export class GraphicsDevice {
     this.contextLostHandlers.add(handler);
   }
 
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.initPromise = null;
-    this.renderer?.dispose();
-    this.renderer = null;
-  }
+dispose(): void {
+  if (this.disposed) return;
+
+  this.disposed = true;
+  this.initPromise = null;
+
+  this.deviceLostHandlers.clear();
+  this.contextLostHandlers.clear();
+
+  this.renderer?.dispose();
+  this.renderer = null;
+}
 }
 

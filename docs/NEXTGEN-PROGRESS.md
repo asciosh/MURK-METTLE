@@ -6,6 +6,46 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-17 — M01: Final Acceptance Review Complete
+
+**Status:** M01 complete. All milestone acceptance criteria met.
+
+**Delivered:**
+- Unified WebGPU and WebGL2 device-loss notification handling.
+- Safe render-loop shutdown on graphics device loss.
+- Improved renderer disposal.
+- Runtime switching between Low, Balanced and Cinematic presets.
+- Dynamic shadow resolution and coverage.
+- Correct TSL bloom uniform updates.
+- Bloom and color grading bypass on Low.
+- Browser verification of quality switching, resize,
+  WebGL context loss and idempotent disposal.
+
+**Final hardware benchmark:**
+- GPU: Intel Arc (Xe-LPG), native WebGPU.
+- Resolution: 1920 × 1080, Balanced preset.
+- Duration: 30 seconds.
+- Average FPS: 60.
+- Mean frame time: 16.67 ms.
+- P95 frame time: 16.8 ms.
+- P99 frame time: 16.9 ms.
+- Worst frame time: 17.2 ms.
+- Frames over 25 ms: 0.
+- Peak draw calls: 299.
+- Peak triangles: 155301.
+
+**Verification:**
+- Legacy tests: 67/67 pass.
+- NEXTGEN tests: 34/34 pass.
+- Typecheck and build: pass.
+- WebGL2 browser smoke: pass.
+- All three graphics presets: pass.
+- Native WebGPU hardware benchmark: pass.
+
+**Next:** M02 Task 1 — Third-person character controller.
+
+---
+
 ## 2026-11-17 — M01 Task 5: Performance Benchmark Complete
 
 **Status:** Performance budget achieved on hardware-accelerated WebGPU.

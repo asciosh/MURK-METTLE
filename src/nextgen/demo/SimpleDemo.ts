@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { pass, vec3, vec4 } from 'three/tsl';
+import { pass, vec3, vec4, uniform } from 'three/tsl';
 import { NextGenRenderer } from '../core/NextGenRenderer';
 import type { PresentResult } from '../core/types';
 import { qualityId } from '../../../shared/render-profile.mjs';
@@ -60,6 +60,10 @@ export class SimpleDemo {
 
   private bloomNode?: ReturnType<typeof bloom>;
 
+  private readonly bloomStrength = uniform(1.2);
+  private readonly bloomRadius = uniform(1.0);
+  private readonly bloomThreshold = uniform(0.3);
+
   constructor() {
     document.body.style.margin = '0';
     this.canvas = document.createElement('canvas');
@@ -102,7 +106,12 @@ async mount(): Promise<void> {
 
   const sceneColor = this.scenePass.getTextureNode('output');
 
-  this.bloomNode = bloom(sceneColor, 1.0, 0.8, 0.3);
+  this.bloomNode = bloom(
+  sceneColor,
+  this.bloomStrength,
+  this.bloomRadius,
+  this.bloomThreshold
+);
 
   const combined = sceneColor.add(this.bloomNode);
 
@@ -111,7 +120,7 @@ async mount(): Promise<void> {
     sceneColor.a
   );
 
-  this.setQualityPreset('balanced');
+  this.setQuality('balanced');
   this.renderer.setRenderPipeline(this.pipeline);
 
   this.renderer.start();
@@ -138,27 +147,13 @@ async mount(): Promise<void> {
     const renderer = this.renderer.backendRenderer;
     if (!renderer) throw new Error('SimpleDemo: no backend renderer.');
 
-    // Quality-dependent shadow presets (low/balanced/cinematic).
-    const shadowPreset = 'balanced';
-    const shadowConfig = {
-      low: { resolution: 512, cameraFar: 100, distance: 30 },
-      balanced: { resolution: 1024, cameraFar: 200, distance: 60 },
-      cinematic: { resolution: 2048, cameraFar: 300, distance: 100 },
-    }[shadowPreset];
-
-    // Directional sunlight with quality-dependent shadow configuration.
     this.sun = new THREE.DirectionalLight(0xffdda9, 2.5);
     this.sun.position.set(-20, 30, 15);
-    this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(shadowConfig.resolution, shadowConfig.resolution);
-    this.sun.shadow.camera.near = 1;
-    this.sun.shadow.camera.far = shadowConfig.cameraFar;
-    this.sun.shadow.camera.left = -shadowConfig.distance;
-    this.sun.shadow.camera.right = shadowConfig.distance;
-    this.sun.shadow.camera.top = shadowConfig.distance;
-    this.sun.shadow.camera.bottom = -shadowConfig.distance;
+
     scene.add(this.renderer.track(this.sun));
     scene.add(this.sun.target);
+
+    this.applyShadowPreset();
 
     // PBR image-based ambient via PMREM (cinematic lighting foundation).
     const envScene = new THREE.Scene();
@@ -324,51 +319,90 @@ async mount(): Promise<void> {
   }
 
   /** Set the quality preset and update ALL renderer + pipeline settings. */
-  setQuality(id: string): void {
-    this.currentPreset = qualityId(id);
-    const preset = this.qualityPresets[this.currentPreset as keyof typeof this.qualityPresets];
+ setQuality(id: string): void {
+  this.currentPreset = qualityId(id);
 
-    // Update renderer exposure
-    const renderer = this.renderer.backendRenderer;
-    if (renderer) {
-      renderer.toneMappingExposure = preset.exposure;
-    }
+  const preset = this.qualityPresets[
+    this.currentPreset as keyof typeof this.qualityPresets
+  ];
 
-    // Update RenderPipeline bloom and exposure settings
-    if (this.pipeline) {
-      // @ts-expect-error — RenderPipeline accepts bloom configuration properties
-      this.pipeline.bloomStrength = preset.bloomStrength;
-      // @ts-expect-error — RenderPipeline accepts bloom configuration properties
-      this.pipeline.bloomThreshold = preset.bloomThreshold;
-      // @ts-expect-error — RenderPipeline accepts bloom configuration properties
-      this.pipeline.bloomRadius = preset.bloomRadius;
-    }
+  this.renderer.setQuality(this.currentPreset);
+  this.vegetation?.setQuality(this.currentPreset);
+  this.applyShadowPreset();
 
-    // Forward to NextGenRenderer quality for downstream compatibility
-    this.renderer.setQuality(this.currentPreset);
-    this.vegetation?.setQuality(this.currentPreset);
+  const renderer = this.renderer.backendRenderer;
+
+  if (renderer) {
+    renderer.toneMappingExposure = preset.exposure;
   }
 
-  /** Apply a quality preset directly, updating renderer and pipeline settings. */
-  private setQualityPreset(id: keyof typeof this.qualityPresets): void {
-    const preset = this.qualityPresets[id];
+  this.bloomStrength.value = preset.bloomStrength;
+  this.bloomRadius.value = Math.min(1, preset.bloomRadius);
+  this.bloomThreshold.value = preset.bloomThreshold;
 
-    // Update renderer exposure
-    const renderer = this.renderer.backendRenderer;
-    if (renderer) {
-      renderer.toneMappingExposure = preset.exposure;
-    }
+  if (this.pipeline && this.scenePass && this.bloomNode) {
+    const sceneColor = this.scenePass.getTextureNode('output');
 
-    // Update TSL bloom node settings
-    if (this.bloomNode) {
-      // @ts-expect-error — BloomNode accepts strength, radius, threshold properties
-      this.bloomNode.strength = preset.bloomStrength;
-      // @ts-expect-error — BloomNode accepts strength, radius, threshold properties
-      this.bloomNode.threshold = preset.bloomThreshold;
-      // @ts-expect-error — BloomNode accepts strength, radius, threshold properties
-      this.bloomNode.radius = preset.bloomRadius;
-    }
+    const color = this.currentPreset === 'low'
+      ? sceneColor
+      : sceneColor.add(this.bloomNode);
+
+    const tint = this.currentPreset === 'low'
+      ? vec3(1, 1, 1)
+      : vec3(0.96, 1.0, 1.04);
+
+    this.pipeline.outputNode = vec4(
+      color.rgb.mul(tint),
+      sceneColor.a
+    );
+
+    this.pipeline.needsUpdate = true;
   }
+}
+
+private applyShadowPreset(): void {
+  if (!this.sun) return;
+
+  const configs = {
+    low: {
+      resolution: 512,
+      cameraFar: 100,
+      distance: 30,
+    },
+    balanced: {
+      resolution: 1024,
+      cameraFar: 200,
+      distance: 60,
+    },
+    cinematic: {
+      resolution: 2048,
+      cameraFar: 300,
+      distance: 100,
+    },
+  };
+
+  const config = configs[
+    this.currentPreset as keyof typeof configs
+  ];
+
+  this.sun.castShadow = this.currentPreset !== 'low';
+
+  const shadow = this.sun.shadow;
+
+  shadow.mapSize.set(config.resolution, config.resolution);
+  shadow.camera.near = 1;
+  shadow.camera.far = config.cameraFar;
+  shadow.camera.left = -config.distance;
+  shadow.camera.right = config.distance;
+  shadow.camera.top = config.distance;
+  shadow.camera.bottom = -config.distance;
+
+  shadow.camera.updateProjectionMatrix();
+
+  shadow.map?.setSize(config.resolution, config.resolution);
+
+  shadow.needsUpdate = true;
+}
 
   dispose(): void {
     if (this.disposed) return;
