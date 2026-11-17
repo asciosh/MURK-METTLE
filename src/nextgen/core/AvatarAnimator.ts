@@ -18,6 +18,7 @@ export interface AvatarMotion {
   aiming?: boolean;
   shoot?: boolean;
   reload?: boolean;
+  aimPitch?: number;
 }
 
 interface AimBone {
@@ -33,6 +34,8 @@ const ONE_SHOT_MS: Partial<Record<AvatarAnimation, number>> = {
 };
 
 const AIM_BLEND_MS = 150;
+const AIM_UP_LIMIT = 1.49;
+const AIM_DOWN_LIMIT = 1.548;
 
 const AIM_BONE_PATTERN =
   /^(spine_0[123]|neck_01|head|(clavicle|upperarm|lowerarm|hand)_[lr]|(thumb|index|middle|ring|pinky)_0[123]_[lr])$/i;
@@ -48,6 +51,17 @@ export class AvatarAnimator {
 
   private aimWeight = 0;
   private aimApplied = false;
+
+  private aimPitch = 0;
+
+  private readonly aimUp =
+    new Map<string, THREE.Quaternion>();
+
+  private readonly aimDown =
+    new Map<string, THREE.Quaternion>();
+
+  private readonly pitchRotation = new THREE.Quaternion();
+  private readonly weaponDelta = new THREE.Quaternion();
 
   private readonly weaponPose: WeaponPoseLayer;
 
@@ -71,6 +85,15 @@ export class AvatarAnimator {
 
     for (const clip of clips) {
       const name = clip.name.trim().toLowerCase();
+
+      if (name === 'aimup' || name === 'aimdown') {
+        this.preparePitchPose(
+          clip,
+          name === 'aimup' ? this.aimUp : this.aimDown
+        );
+
+        continue;
+      }
 
       if (
         name === 'pistolshoot' ||
@@ -137,6 +160,43 @@ export class AvatarAnimator {
     }
   }
 
+  private preparePitchPose(
+  clip: THREE.AnimationClip,
+  poses: Map<string, THREE.Quaternion>
+): void {
+  for (const track of clip.tracks) {
+    if (
+      !track.name.endsWith('.quaternion') ||
+      track.getValueSize() !== 4
+    ) {
+      continue;
+    }
+
+    const name = track.name.slice(
+      0,
+      -'.quaternion'.length
+    );
+
+    if (!AIM_BONE_PATTERN.test(name)) continue;
+
+    const rotation = new THREE.Quaternion(
+      track.values[0],
+      track.values[1],
+      track.values[2],
+      track.values[3]
+    );
+
+    if (
+      !rotation.toArray().every(Number.isFinite) ||
+      rotation.lengthSq() < 0.000001
+    ) {
+      continue;
+    }
+
+    poses.set(name, rotation.normalize());
+  }
+}
+
   private restoreBasePose(): void {
     if (!this.aimApplied) return;
 
@@ -163,6 +223,7 @@ export class AvatarAnimator {
     this.aimBones.length === 0
   ) {
     this.aimWeight = 0;
+    this.aimPitch = 0;
     this.weaponPose.cancel();
     return;
   }
@@ -180,18 +241,67 @@ export class AvatarAnimator {
     ? Math.min(1, this.aimWeight + step)
     : Math.max(0, this.aimWeight - step);
 
-  if (this.aimWeight === 0) return;
+  if (this.aimWeight === 0) {
+    this.aimPitch = 0;
+    return;
+  }
+
+  if (motion.aiming) {
+    const pitch = motion.aimPitch ?? 0;
+
+    const requested = Number.isFinite(pitch)
+      ? THREE.MathUtils.clamp(
+          pitch,
+          -AIM_DOWN_LIMIT,
+          AIM_UP_LIMIT
+        )
+      : 0;
+
+    const alpha = 1 - Math.exp(-18 * dtMs / 1000);
+
+    this.aimPitch +=
+      (requested - this.aimPitch) * alpha;
+  }
 
   for (const entry of this.aimBones) {
     entry.base.copy(entry.bone.quaternion);
+
+    this.pitchRotation.copy(entry.target);
+
+    const verticalPose = this.aimPitch >= 0
+      ? this.aimUp.get(entry.bone.name)
+      : this.aimDown.get(entry.bone.name);
+
+    if (verticalPose) {
+      const limit = this.aimPitch >= 0
+        ? AIM_UP_LIMIT
+        : AIM_DOWN_LIMIT;
+
+      this.pitchRotation.slerp(
+        verticalPose,
+        Math.min(1, Math.abs(this.aimPitch) / limit)
+      );
+    }
 
     const animated = this.weaponPose.sample(
       entry.bone.name,
       this.weaponRotation
     );
 
+    if (animated) {
+      // Apply weapon animation relative to neutral aim.
+      this.weaponDelta
+        .copy(entry.target)
+        .invert()
+        .multiply(this.weaponRotation);
+
+      this.pitchRotation
+        .multiply(this.weaponDelta)
+        .normalize();
+    }
+
     entry.bone.quaternion.slerp(
-      animated ? this.weaponRotation : entry.target,
+      this.pitchRotation,
       this.aimWeight
     );
   }
@@ -352,6 +462,10 @@ export class AvatarAnimator {
     return this.aimWeight;
   }
 
+  getAimPitch(): number {
+  return this.aimPitch;
+}
+
   getWeaponAction() {
   return this.weaponPose.getActiveAction();
 }
@@ -363,6 +477,9 @@ export class AvatarAnimator {
 
     this.disposed = true;
     this.aimWeight = 0;
+    this.aimPitch = 0;
+    this.aimUp.clear();
+    this.aimDown.clear();
     this.weaponPose.cancel();
 
     this.mixer.stopAllAction();

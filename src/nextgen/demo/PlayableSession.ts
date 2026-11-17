@@ -212,6 +212,7 @@ private readonly onReset = () => {
       airborne: this.state.airborne,
       dodging: this.state.dodging,
       aiming,
+      aimPitch: this.followCamera.getAimPitch(),
       shoot: aiming && this.shootPressed,
       reload: aiming && this.reloadPressed
     });

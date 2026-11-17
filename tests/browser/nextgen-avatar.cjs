@@ -36,6 +36,8 @@ const url =
     assert.ok(model.clips.includes('Walk'));
     assert.ok(model.clips.includes('Run'));
     assert.ok(model.clips.includes('Aim'));
+    assert.ok(model.clips.includes('AimUp'));
+    assert.ok(model.clips.includes('AimDown'));
     assert.ok(model.clips.includes('PistolShoot'));
     assert.ok(model.clips.includes('PistolReload'));
     assert.equal(model.weaponAction, null);
@@ -130,6 +132,47 @@ await page.waitForFunction(
 );
 
 console.log('Upper-body idle aim: PASS');
+
+// Look upward.
+await page.evaluate(() => {
+  document.dispatchEvent(new MouseEvent('mousemove', {
+    movementY: -1000
+  }));
+});
+
+await page.waitForFunction(
+  () => window.__m01Demo
+    .getPlayerModelInfo().aimPitch > 0.3
+);
+
+console.log('Vertical aim upward: PASS');
+
+// Look downward.
+await page.evaluate(() => {
+  document.dispatchEvent(new MouseEvent('mousemove', {
+    movementY: 1000
+  }));
+});
+
+await page.waitForFunction(
+  () => window.__m01Demo
+    .getPlayerModelInfo().aimPitch < -0.5
+);
+
+console.log('Vertical aim downward: PASS');
+
+// Restore a level camera.
+await page.evaluate(() => {
+  document.dispatchEvent(new MouseEvent('mousemove', {
+    movementY: -480
+  }));
+});
+
+await page.waitForFunction(
+  () => Math.abs(
+    window.__m01Demo.getPlayerModelInfo().aimPitch
+  ) < 0.05
+);
 
 await page.keyboard.down('w');
 

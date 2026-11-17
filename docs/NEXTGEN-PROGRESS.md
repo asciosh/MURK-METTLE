@@ -6,6 +6,24 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-17 — M02 Task 4C: Vertical Aim Animation
+
+**Status:** Complete.
+
+- Retargeted upward and downward pistol aiming poses.
+- Integrated smooth camera-driven vertical skeletal blending.
+- Preserved locomotion and weapon recoil at different aim angles.
+- Preserved all ten existing animation tracks.
+- Added eight regression tests and browser verification.
+
+**Verification:**
+
+- 67 legacy tests passed.
+- 169 NEXTGEN tests passed.
+- Both browser smoke tests passed.
+- Typecheck and production build passed.
+- GLB validation: zero errors.
+
 ## 2026-11-17 — M02 Task 4B: Pistol Animations
 
 **Status:** Complete.

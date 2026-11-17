@@ -153,6 +153,7 @@ export class PlayerAvatar {
         skinned: this.model.hasSkeleton,
         activeClip: this.animator?.getActiveClip() ?? null,
         aimWeight: this.animator?.getAimWeight() ?? 0,
+        aimPitch: this.animator?.getAimPitch() ?? 0,
         weaponAttached: this.weapon !== null,
         weaponVisible: this.weapon?.root.visible ?? false,
         weaponAction: this.animator?.getWeaponAction() ?? null
