@@ -132,6 +132,90 @@ const url =
 
     console.log('Jump and landing: PASS');
 
+    // AIM ACTIVATION
+const crosshair = page.locator('.aim-crosshair');
+
+assert.equal(await crosshair.count(), 1);
+assert.ok(await crosshair.isHidden());
+assert.equal((await state()).aiming, false);
+
+await page.mouse.down({ button: 'right' });
+
+await page.waitForFunction(
+  () =>
+    window.__m01Demo.getPlayerState().aiming &&
+    window.__m01Demo.getCameraFov() < 57,
+  undefined,
+  { timeout: 30000 }
+);
+
+assert.ok(await crosshair.isVisible());
+
+const bounds = await crosshair.boundingBox();
+
+assert.ok(bounds);
+assert.ok(Math.abs(bounds.x + bounds.width / 2 - 640) < 2);
+assert.ok(Math.abs(bounds.y + bounds.height / 2 - 360) < 2);
+
+console.log('Aim activation and camera zoom: PASS');
+
+// AIM RELEASE
+await page.mouse.up({ button: 'right' });
+
+await page.waitForFunction(
+  () =>
+    !window.__m01Demo.getPlayerState().aiming &&
+    window.__m01Demo.getCameraFov() > 57,
+  undefined,
+  { timeout: 30000 }
+);
+
+assert.ok(await crosshair.isHidden());
+
+console.log('Aim release: PASS');
+
+// POINTER LOCK RESET
+await page.mouse.down({ button: 'right' });
+
+await page.waitForFunction(
+  () => window.__m01Demo.getPlayerState().aiming,
+  undefined,
+  { timeout: 30000 }
+);
+
+await page.evaluate(() => {
+  document.exitPointerLock();
+});
+
+await page.waitForFunction(
+  () =>
+    document.pointerLockElement === null &&
+    !window.__m01Demo.getPlayerState().aiming &&
+    window.__m01Demo.getCameraFov() > 57,
+  undefined,
+  { timeout: 30000 }
+);
+
+await page.mouse.up({ button: 'right' });
+
+assert.ok(await crosshair.isHidden());
+
+console.log('Aim reset on pointer lock loss: PASS');
+
+// CONTEXT MENU
+const contextMenuAllowed = await page.evaluate(() => {
+  return document.querySelector('canvas').dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true
+    })
+  );
+});
+
+assert.equal(contextMenuAllowed, false);
+
+console.log('Context menu suppression: PASS');
+
     // HUD
     assert.equal(
       await page.getByText('STAMINA', {

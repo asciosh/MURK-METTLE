@@ -335,6 +335,10 @@ async mount(): Promise<void> {
     return this.session?.getState();
   }
 
+  getCameraFov() {
+  return this.session?.getCameraFov();
+}
+
   getResults(): PresentResult[] {
     return this.results;
   }

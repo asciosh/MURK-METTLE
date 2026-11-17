@@ -8,6 +8,7 @@ export class PlayableHud {
   private readonly value = document.createElement('div');
   private readonly status = document.createElement('div');
   private readonly prompt = document.createElement('div');
+  private readonly crosshair = document.createElement('div');
 
   constructor() {
     this.root.style.cssText = `
@@ -72,6 +73,24 @@ export class PlayableHud {
       text-align:center;
     `;
 
+    this.crosshair.className = 'aim-crosshair';
+    this.crosshair.setAttribute('aria-hidden', 'true');
+    this.crosshair.textContent = '+';
+
+  this.crosshair.style.cssText = `
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%, -50%);
+    font-size:26px;
+    font-weight:bold;
+    line-height:1;
+    color:rgba(255,255,255,0.9);
+    text-shadow:0 0 4px #000;
+    pointer-events:none;
+    display:none;
+  `;
+
     track.appendChild(this.fill);
 
     panel.append(
@@ -81,7 +100,11 @@ export class PlayableHud {
       this.status
     );
 
-    this.root.append(panel, this.prompt);
+    this.root.append(
+      panel,
+      this.prompt,
+      this.crosshair
+    );
 
     document.body.appendChild(this.root);
   }
@@ -111,8 +134,11 @@ export class PlayableHud {
       'READY';
 
     this.prompt.textContent = locked
-      ? 'WASD · Shift Sprint · Ctrl Dodge · Space Jump · Esc Release'
+      ? 'WASD | Shift Sprint | Ctrl Dodge | Space Jump | RMB Aim | Esc Release'
       : 'CLICK TO PLAY';
+
+    this.crosshair.style.display =
+      locked && state.aiming ? 'block' : 'none';
   }
 
   dispose(): void {

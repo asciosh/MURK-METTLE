@@ -13,6 +13,7 @@ export interface CharacterInput {
   sprint?: boolean;
   dodge?: boolean;
   jump?: boolean;
+  aim?: boolean;
 }
 
 export interface CameraOrientation {
@@ -29,6 +30,7 @@ export interface CharacterControllerResult
   dodgeCooldownMs: number;
   airborne: boolean;
   verticalVelocity: number;
+  aiming: boolean;
 }
 
 export interface CharacterControllerOptions {
@@ -68,6 +70,7 @@ export class CharacterController {
   private dodgeRemainingMs = 0;
   private dodgeCooldownMs = 0;
   private dodgeDirection: [number, number] = [0, -1];
+  private aiming = false;
 
   constructor(options: CharacterControllerOptions) {
     const size = options.terrain.size;
@@ -123,6 +126,10 @@ export class CharacterController {
     return [...this.facing];
   }
 
+  resetAim(): void {
+    this.aiming = false;
+  }
+
   update(
     deltaTime: number,
     input: CharacterInput,
@@ -138,6 +145,7 @@ export class CharacterController {
     if (dtMs === 0) return this.snapshot();
 
     const movement = this.getMovement(input, camera);
+    this.aiming = input.aim === true;
 
     const dodgePressed =
       input.dodge === true && !this.dodgeHeld;
@@ -190,6 +198,26 @@ this.jumpHeld = input.jump === true;
       input,
       movement
     );
+
+        if (
+      this.aiming &&
+      this.dodgeRemainingMs === 0 &&
+      !this.jump.isAirborne() &&
+      camera.front.every(Number.isFinite)
+    ) {
+      const length = Math.hypot(
+        camera.front[0],
+        camera.front[2]
+      );
+
+      if (Number.isFinite(length) && length > 0.000001) {
+        this.facing = [
+          camera.front[0] / length,
+          0,
+          camera.front[2] / length
+        ];
+      }
+    }
 
     return this.snapshot();
   }
@@ -442,6 +470,7 @@ private snapshot(): CharacterControllerResult {
     dodgeCooldownMs: this.dodgeCooldownMs,
     airborne: this.jump.isAirborne(),
     verticalVelocity: this.jump.getVelocity(),
+    aiming: this.aiming,
     ...this.stamina.getState()
   };
 }
