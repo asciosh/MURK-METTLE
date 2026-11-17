@@ -37,6 +37,8 @@ const url =
     assert.ok(model.clips.includes('Run'));
     assert.ok(model.clips.includes('Aim'));
     assert.equal(model.aimWeight, 0);
+    assert.equal(model.weaponAttached, true);
+    assert.equal(model.weaponVisible, false);
     assert.ok(model.clips.includes('JumpStart'));
     assert.ok(model.clips.includes('JumpLoop'));
     assert.ok(model.clips.includes('JumpLand'));
@@ -67,7 +69,15 @@ const url =
 
     console.log('Walk animation: PASS');
 
+    await page.keyboard.up('w');
+
+    await page.waitForFunction(
+      () => window.__m01Demo
+        .getPlayerModelInfo().activeClip === 'idle'
+    );
+
     await page.keyboard.down('Shift');
+    await page.keyboard.down('w');
 
     try {
     await page.waitForFunction(
@@ -109,7 +119,8 @@ await page.waitForFunction(
     const model = window.__m01Demo.getPlayerModelInfo();
 
     return model.aimWeight >= 0.99 &&
-      model.activeClip === 'idle';
+      model.activeClip === 'idle' &&
+      model.weaponVisible === true;
   },
   undefined,
   { timeout: 15000 }
@@ -124,7 +135,8 @@ await page.waitForFunction(
     const model = window.__m01Demo.getPlayerModelInfo();
 
     return model.activeClip === 'walk' &&
-      model.aimWeight >= 0.99;
+      model.aimWeight >= 0.99 &&
+      model.weaponVisible === true;
   },
   undefined,
   { timeout: 15000 }
@@ -140,7 +152,8 @@ await page.waitForFunction(
     const model = window.__m01Demo.getPlayerModelInfo();
 
     return model.aimWeight === 0 &&
-      model.activeClip === 'idle';
+      model.activeClip === 'idle' &&
+      model.weaponVisible === false;
   },
   undefined,
   { timeout: 15000 }

@@ -6,6 +6,26 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-17 — M02 Task 4A: Weapon Attachment
+
+**Status:** Complete.
+
+- Created an original procedural pistol model.
+- Attached the pistol to the survivor's right-hand bone.
+- Calibrated grip alignment against the Aim animation.
+- Added a muzzle attachment point.
+- Integrated weapon visibility with aim blending.
+- Added deterministic resource disposal.
+- Preserved the existing survivor GLB and legacy gameplay.
+
+**Verification:**
+
+- 67 legacy tests passed.
+- 152 NEXTGEN tests passed.
+- Typecheck and production build passed.
+- Avatar and playable browser smoke tests passed.
+- Manual grip alignment verified.
+
 ## 2026-11-17 — M02 Task 3B: Upper-Body Aim Animation
 
 **Status:** Complete.
