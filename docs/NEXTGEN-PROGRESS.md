@@ -6,6 +6,25 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-17 — M02 Task 2B: Skeletal Survivor
+
+**Status:** Complete.
+
+- Integrated a realistic female survivor with skeletal animations.
+- Retargeted Idle, Walk and Run animations.
+- Optimized GLB from 16.34 MiB to 2.49 MiB.
+- Corrected opaque material rendering.
+- Documented CC0 asset provenance.
+- Preserved the legacy game and procedural fallback.
+
+**Verification:**
+
+- Typecheck and production build passed.
+- 67 legacy tests passed.
+- 119 NEXTGEN tests passed.
+- Avatar and playable browser smoke tests passed.
+- GLB validation: zero errors.
+
 ### M02 Task 2A — GLB Model and Animation Foundation
 
 Status: COMPLETE

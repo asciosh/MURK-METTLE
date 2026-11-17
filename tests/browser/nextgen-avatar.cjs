@@ -35,6 +35,7 @@ const url =
     assert.ok(model.clips.includes('Idle'));
     assert.ok(model.clips.includes('Walk'));
     assert.ok(model.clips.includes('Run'));
+    assert.equal(model.skinned, true);
 
     assert.equal(model.activeClip, 'idle');
 
@@ -62,12 +63,23 @@ const url =
 
     await page.keyboard.down('Shift');
 
+    try {
     await page.waitForFunction(
-      () => window.__m01Demo
+        () => window.__m01Demo
         .getPlayerModelInfo().activeClip === 'run',
-      undefined,
-      { timeout: 90000 }
+        undefined,
+        { timeout: 15000 }
     );
+    } catch (error) {
+    console.log('Run diagnostics:', await page.evaluate(() => ({
+        locked: document.pointerLockElement !== null,
+        visibility: document.visibilityState,
+        player: window.__m01Demo.getPlayerState(),
+        model: window.__m01Demo.getPlayerModelInfo()
+    })));
+
+    throw error;
+    }
 
     console.log('Run animation: PASS');
 
@@ -97,7 +109,7 @@ const url =
     });
 
     await fallback.route(
-      '**/models/survivor.glb',
+      '**/models/nextgen/survivor.glb',
       route => route.fulfill({
         status: 404,
         body: 'Model unavailable'

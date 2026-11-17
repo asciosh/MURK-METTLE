@@ -48,7 +48,7 @@ export class PlayableSession {
     scene.add(this.avatar.root);
 
     void this.avatar.loadModel(
-    `${import.meta.env.BASE_URL}models/survivor.glb`
+    `${import.meta.env.BASE_URL}models/nextgen/survivor.glb`
     );
 
     this.canvas.addEventListener('click', this.onClick);
