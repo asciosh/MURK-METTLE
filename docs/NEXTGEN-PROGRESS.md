@@ -6,6 +6,31 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-17 - M02 Task 2C: Action Animations
+
+**Status:** Complete.
+
+- Added JumpStart, JumpLoop, JumpLand and Dodge animations.
+- Refined jogging and sprinting animation selection.
+- Synchronized locomotion playback with actual movement speed.
+- Corrected jump arm poses and animated ground alignment.
+- Reduced excessive dodge elevation.
+- Added visual dodge recovery without changing gameplay physics.
+- Preserved the procedural fallback and legacy gameplay.
+- Optimized the seven-animation GLB to 2.70 MiB.
+
+**Verification:**
+
+- Typecheck and production build passed.
+- 67 legacy tests passed.
+- 127 NEXTGEN tests passed.
+- Avatar and playable browser smoke tests passed.
+- Complete jump sequence verified in browser.
+- Dodge and recovery verified in browser.
+- Manual visual verification passed.
+
+---
+
 ## 2026-11-17 — M02 Task 2B: Skeletal Survivor
 
 **Status:** Complete.
