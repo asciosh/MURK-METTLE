@@ -6,6 +6,21 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+### M02 Task 1C — Playable Character
+
+Status: COMPLETE
+
+- WASD keyboard input.
+- Third-person mouse camera with terrain collision protection.
+- Fixed-timestep character simulation and render interpolation.
+- Procedural placeholder survivor.
+- Sprint, dodge and jump controls.
+- Live stamina HUD.
+- Independent playable demo mode.
+- Playable browser smoke: PASS.
+- Original graphics browser smoke: PASS.
+- Legacy gameplay and server protocols unchanged.
+
 ### M02 Task 1B — Advanced Character Movement
 
 Status: COMPLETE

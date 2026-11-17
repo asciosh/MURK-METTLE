@@ -27,7 +27,17 @@ export class NextGenRenderer {
   private readonly clock: SimulationClock;
   private readonly tracker: ResourceTracker;
   private readonly instrumentation: PerfInstrumentation;
+
   onFrame?: (result: PresentResult) => void;
+
+  onSimulationStep?: (deltaTimeMs: number) => void;
+
+  onBeforeRender?: (
+    deltaTimeMs: number,
+    alpha: number
+  ) => void;
+
+  private lastPresentationTime: number | null = null;
 
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
@@ -93,13 +103,34 @@ export class NextGenRenderer {
   stop(): void {
     if (!this.running) return;
     this.running = false;
+    this.lastPresentationTime = null;
     this.device.backendRenderer?.setAnimationLoop(null);
   }
 
   private _tick(time: number): void {
     if (this.disposed || this.graphicsLost || !this.running) return;
 
-    this.clock.tick(time);
+    const simulation = this.clock.tick(time);
+
+    if (this.onSimulationStep) {
+      for (let i = 0; i < simulation.steps; i++) {
+        this.onSimulationStep(this.clock.getFixedDt());
+      }
+    }
+
+    const deltaMs = this.lastPresentationTime === null
+      ? 0
+      : time - this.lastPresentationTime;
+
+    this.lastPresentationTime = time;
+
+    this.onBeforeRender?.(
+      Number.isFinite(deltaMs)
+        ? Math.max(0, Math.min(100, deltaMs))
+        : 0,
+      simulation.alpha
+    );
+
     this._render();
 
     const frameMs = this.instrumentation.record(time);

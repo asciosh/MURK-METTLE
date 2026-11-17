@@ -1,6 +1,10 @@
 import { SimpleDemo } from './SimpleDemo';
 
-const demo = new SimpleDemo();
+const demo = new SimpleDemo(
+  new URLSearchParams(window.location.search)
+    .get('mode') === 'playable'
+)
+
 void demo.mount().then(() => {
   Object.assign(window, {
     __m01Demo: demo,
