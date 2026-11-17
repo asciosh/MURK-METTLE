@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { SurvivorModel } from './SurvivorModel.ts';
 import type { CharacterControllerResult } from './CharacterController.ts';
+import { PistolProp } from './PistolProp.ts';
 import {
   AvatarAnimator,
   type AvatarMotion
@@ -19,6 +20,7 @@ export class PlayerAvatar {
 
   private readonly model = new SurvivorModel();
   private animator: AvatarAnimator | null = null;
+  private weapon: PistolProp | null = null;
 
     private modelStatus:
     'placeholder' | 'loading' | 'ready' | 'fallback'
@@ -133,26 +135,38 @@ export class PlayerAvatar {
     this.model.getClips()
     );
 
+    const hand = this.model.root.getObjectByName('hand_r');
+
+    if (hand instanceof THREE.Bone) {
+      this.weapon = new PistolProp(hand);
+    }
+
     this.modelStatus = 'ready';
 
     return true;
     }
 
-  getModelInfo() {
-    return {
-      status: this.modelStatus,
-      clips: this.model.getClips().map(clip => clip.name),
-      skinned: this.model.hasSkeleton,
-      activeClip: this.animator?.getActiveClip() ?? null,
-      aimWeight: this.animator?.getAimWeight() ?? 0
-    };
-  }
+    getModelInfo() {
+      return {
+        status: this.modelStatus,
+        clips: this.model.getClips().map(clip => clip.name),
+        skinned: this.model.hasSkeleton,
+        activeClip: this.animator?.getActiveClip() ?? null,
+        aimWeight: this.animator?.getAimWeight() ?? 0,
+        weaponAttached: this.weapon !== null,
+        weaponVisible: this.weapon?.root.visible ?? false
+      };
+    }
 
     animate(
-    deltaTimeMs: number,
-    motion: AvatarMotion
+      deltaTimeMs: number,
+      motion: AvatarMotion
     ): void {
-    this.animator?.update(deltaTimeMs, motion);
+      this.animator?.update(deltaTimeMs, motion);
+
+      this.weapon?.update(
+        this.animator?.getAimWeight() ?? 0
+      );
     }
 
   update(
@@ -184,6 +198,9 @@ export class PlayerAvatar {
     this.disposed = true;
     this.animator?.dispose();
     this.animator = null;
+
+    this.weapon?.dispose();
+    this.weapon = null;
 
     this.model.dispose();
 
