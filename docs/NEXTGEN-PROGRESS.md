@@ -6,6 +6,23 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+### M02 Task 1B — Advanced Character Movement
+
+Status: COMPLETE
+
+- Sprint with stamina consumption and regeneration.
+- Exhaustion and recovery.
+- Directional dodge with stamina cost and cooldown.
+- Jump physics with gravity and terrain-aware landing.
+- Airborne directional movement.
+- Protection against repeated and incompatible actions.
+- Local simulation only; server protocols unchanged.
+
+Verification:
+- Legacy tests: 67/67 PASS.
+- NEXTGEN tests: 92/92 PASS.
+- Typecheck and production build: PASS.
+
 ## 2026-11-17 — M02 Task 1A: Character Controller Foundation
 
 **Status:** Complete.
