@@ -25,7 +25,7 @@ Establish the permanent program documentation and working rules.
 **Done when:** all documents exist, the branch is pushed, and the baseline checks pass
 on the `nextgen` line.
 
-## M01 — Graphics Engine Foundation ☐
+## M01 — Graphics Engine Foundation ◐ (in progress)
 
 A modern rendering base that visibly outclasses the legacy client while keeping the
 legacy game runnable.
@@ -35,11 +35,11 @@ legacy game runnable.
 - [ ] Physically based lighting: sun/sky, image-based ambient, shadow strategy with
       quality presets.
 - [ ] Post-processing stack (tonemapping, bloom, color grading) toggleable per preset.
-- [ ] Terrain and environment foundation: heightfield terrain, material system,
+- [x] Terrain and environment foundation: heightfield terrain, material system,
       instanced vegetation/props with distance culling.
-- [ ] Performance budget: stable ≥60 FPS at 1080p on Balanced preset hardware profile,
+- [x] Performance budget: stable ≥60 FPS at 1080p on Balanced preset hardware profile,
       measured with a reproducible benchmark, not estimated.
-- [ ] Automated checks: renderer unit tests plus a browser smoke fixture.
+- [x] Automated checks: renderer unit tests plus a browser smoke fixture.
 
 **Done when:** a nextgen scene renders PBR-lit terrain/vegetation at the perf budget
 with tests and a recorded benchmark.

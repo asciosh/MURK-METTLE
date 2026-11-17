@@ -6,6 +6,49 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-17 — M01 Task 5: Performance Benchmark Complete
+
+**Status:** Performance budget achieved on hardware-accelerated WebGPU.
+
+**Delivered:**
+- Accurate frame timing and frame timestamps.
+- Correct per-frame draw-call instrumentation.
+- Frame-rate-independent camera orbit.
+- Reproducible 1080p Balanced hardware benchmark.
+- Five-second warm-up and 30-second measurement.
+- JSON benchmark reports with GPU identification.
+- Seven additional performance instrumentation tests.
+
+**Hardware benchmark:**
+- Browser: Microsoft Edge 157, Windows.
+- GPU: Intel Arc (Xe-LPG).
+- Backend: native WebGPU, no software fallback.
+- Resolution: 1920 × 1080, pixel ratio 1.
+- Quality: Balanced, shadows enabled.
+- Measurement: 30.02 seconds, 1802 frames.
+- Average FPS: 60.00.
+- Mean frame time: 16.67 ms.
+- P95: 16.8 ms.
+- P99: 16.9 ms.
+- Worst frame: 18.3 ms.
+- Frames exceeding 25 ms: 0.
+- Peak draw calls: 299.
+- Peak triangles: 155301.
+
+**Verification:**
+- Typecheck: pass.
+- Legacy tests: 67/67 pass.
+- NEXTGEN tests: 34/34 pass.
+- Production build: pass.
+- WebGL2 fallback browser smoke: pass.
+- Native WebGPU hardware benchmark: pass.
+- Git diff check: pass.
+
+**Next:** M01 final acceptance review, then M02 —
+Character & Animation Foundation.
+
+---
+
 ## 2026-11-16 — M01 Task 4B: Vegetation & Environment Foundation
 
 **Status:** Complete.

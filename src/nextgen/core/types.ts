@@ -31,6 +31,7 @@ export interface RendererOptions {
 export interface PresentResult {
   backend: GraphicsBackend;
   frameMs: number;
+  timestampMs: number;
   drawCalls: number;
   triangles: number;
   geometries: number;

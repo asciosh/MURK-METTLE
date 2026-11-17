@@ -26,6 +26,7 @@ export class SimpleDemo {
   private frame = 0;
   private lastResult?: PresentResult;
   private readonly results: PresentResult[] = [];
+  private benchmarkFrames: PresentResult[] | null = null;
   private disposed = false;
   private resizeObserver?: ResizeObserver;
   private vegetation?: VegetationRenderer;
@@ -73,6 +74,7 @@ export class SimpleDemo {
     this.renderer.onFrame = (result) => {
       this.lastResult = result;
       this.results.push(result);
+      this.benchmarkFrames?.push(result);
       if (this.results.length > 600) this.results.shift();
     };
   }
@@ -280,7 +282,7 @@ async mount(): Promise<void> {
     this.renderer.onFrame = (result) => {
       prev?.(result);
 
-      angle += 0.005;
+      angle += result.frameMs * 0.0003;
       updateCamera();
 
       this.frame++;
@@ -289,8 +291,6 @@ async mount(): Promise<void> {
 
   resize(width: number, height: number): void {
     this.renderer.resize(width, height);
-    this.canvas.width = Math.max(1, Math.floor(width));
-    this.canvas.height = Math.max(1, Math.floor(height));
   }
 
   getLastResult(): PresentResult | undefined {
@@ -299,6 +299,16 @@ async mount(): Promise<void> {
 
   getResults(): PresentResult[] {
     return this.results;
+  }
+
+  startBenchmarkCapture(): void {
+    this.benchmarkFrames = [];
+  }
+
+  finishBenchmarkCapture(): PresentResult[] {
+    const results = this.benchmarkFrames ?? [];
+    this.benchmarkFrames = null;
+    return results;
   }
 
   get backendRenderer() {

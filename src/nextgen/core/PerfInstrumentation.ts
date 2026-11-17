@@ -19,18 +19,32 @@ export class PerfInstrumentation {
   private frame = 0;
   private disposed = false;
 
-  record(now: number): void {
-    if (this.disposed) return;
-    if (this.last !== null) {
-      const dt = now - this.last;
-      if (dt > 0 && dt < 2000) {
-        this.samples.push(dt);
-        if (this.samples.length > 120) this.samples.shift();
+record(now: number): number {
+  if (this.disposed || !Number.isFinite(now)) {
+    return 0;
+  }
+
+  let frameMs = 0;
+
+  if (this.last !== null) {
+    const dt = now - this.last;
+
+    if (dt > 0 && dt < 2000) {
+      frameMs = dt;
+
+      this.samples.push(dt);
+
+      if (this.samples.length > 120) {
+        this.samples.shift();
       }
     }
-    this.last = now;
-    this.frame += 1;
   }
+
+  this.last = now;
+  this.frame += 1;
+
+  return frameMs;
+}
 
   summary(): PerfSummary {
     if (this.samples.length === 0) {

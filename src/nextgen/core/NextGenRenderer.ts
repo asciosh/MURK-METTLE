@@ -87,25 +87,27 @@ export class NextGenRenderer {
 
   private _tick(time: number): void {
     if (this.disposed) return;
-    // Advance the fixed-timestep simulation clock. The demo scene is purely
-    // visual and does not yet consume the simulation alpha, but advancing keeps
-    // the deterministic clock state (accumulator/catch-up) consistent.
-    this.clock.tick(time);
 
+    this.clock.tick(time);
     this._render();
-    this.instrumentation.record(time);
+
+    const frameMs = this.instrumentation.record(time);
 
     const renderer = this.device.backendRenderer;
     if (!renderer) return;
+
     const info = renderer.info;
+
     const result: PresentResult = {
       backend: this.deviceInfo?.backend ?? 'unknown',
-      frameMs: 0,
-      drawCalls: info.render.calls,
+      frameMs,
+      timestampMs: time,
+      drawCalls: info.render.drawCalls,
       triangles: info.render.triangles,
       geometries: info.memory.geometries,
       textures: info.memory.textures,
     };
+
     this.onFrame?.(result);
   }
 
