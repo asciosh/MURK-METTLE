@@ -12,6 +12,7 @@ import { PlayerAvatar } from '../core/PlayerAvatar';
 import { InfectedController } from '../core/InfectedController';
 import { InfectedModelPool } from '../core/InfectedModel';
 import { InfectedAvatar } from '../core/InfectedAvatar';
+import { selectSurvivorSkin, selectInfectedSkin, infectedSkinForSpawn, characterSkinFile, type SurvivorSkin, type InfectedSkin } from '../core/CharacterSkins';
 import { TerrainGenerator } from '../core/TerrainGenerator';
 import { PlayableHud } from './PlayableHud';
 import {
@@ -19,7 +20,10 @@ import {
   CombatController
 } from '../core/CombatController';
 
-import { findShotTarget } from '../core/ShotQuery';
+import { findShotTarget, findMeleeTarget } from '../core/ShotQuery';
+import { LootField, type LootItem } from '../core/LootField';
+import { PickupController, PICKUP } from '../core/PickupController';
+import { CombatFeedback } from '../core/CombatFeedback';
 import {
   HordeDirector,
   createWaveSpawns,
@@ -30,7 +34,11 @@ export class PlayableSession {
   private readonly keyboard = new KeyboardInput();
   private followCamera = new ThirdPersonCamera();
   private readonly avatar = new PlayerAvatar();
-  private readonly infectedPool = new InfectedModelPool();
+  private readonly infectedPools = new Map<InfectedSkin, InfectedModelPool>();
+  private readonly infectedLoads = new Map<InfectedSkin, Promise<boolean>>();
+  private readonly infectedVariants = new Map<InfectedAvatar, InfectedSkin>();
+  private survivorVariant: SurvivorSkin = selectSurvivorSkin(new URLSearchParams(window.location.search).get('skin'));
+  private readonly infectedSelection = selectInfectedSkin(new URLSearchParams(window.location.search).get('infected'));
   private readonly infected: InfectedAvatar[] = [];
   private infectedAttackHits = 0;
   private readonly hud = new PlayableHud();
@@ -48,6 +56,19 @@ export class PlayableSession {
   private aimPressed = false;
   private shootPressed = false;
   private reloadPressed = false;
+  private meleePressed = false;
+  private bandagePressed = false;
+  private pickupPressed = false;
+  private inventoryOpen = false;
+  private readonly loot = new LootField();
+  private readonly pickup = new PickupController();
+  private pickupFacing: [number, number, number] | null = null;
+  private lootNotice = '';
+  private lootNoticeMs = 0;
+  private readonly canCollectLoot = (item: Readonly<LootItem>) =>
+    this.combat.pickupCapacity(item.kind) > 0;
+  private readonly feedback = new CombatFeedback();
+  private readonly muzzlePosition = new THREE.Vector3();
 
   private disposed = false;
 
@@ -74,10 +95,10 @@ export class PlayableSession {
     this.previousPosition = [...this.state.position];
 
     scene.add(this.avatar.root);
+    scene.add(this.loot.root);
+    scene.add(this.feedback.root);
 
-    void this.avatar.loadModel(
-      `${import.meta.env.BASE_URL}models/nextgen/survivor.glb`
-    ).then(loaded => {
+    void this.loadSelectedSurvivor().then(loaded => {
       if (!loaded || this.disposed) return;
 
       const timing = this.avatar.getWeaponTiming();
@@ -89,16 +110,6 @@ export class PlayableSession {
     });
 
   this.spawnWave();
-
-  void this.infectedPool.load(
-    `${import.meta.env.BASE_URL}models/nextgen/infected.glb`
-  ).then(loaded => {
-    if (!loaded || this.disposed) return;
-
-    for (const infected of this.infected) {
-      infected.attachModel(this.infectedPool);
-    }
-  });
 
     this.canvas.addEventListener('click', this.onClick);
 
@@ -131,7 +142,31 @@ export class PlayableSession {
     this.present(0, 1);
   }
 
+  private async loadSelectedSurvivor(): Promise<boolean> {
+    const url = (skin: SurvivorSkin) => `${import.meta.env.BASE_URL}models/nextgen/${characterSkinFile('survivor', skin)}`;
+    const loaded = await this.avatar.loadModel(url(this.survivorVariant));
+    if (loaded || this.disposed || this.survivorVariant === 'classic') return loaded;
+    this.survivorVariant = 'classic';
+    return this.avatar.loadModel(url('classic'));
+  }
+
+  private async attachInfectedVariant(enemy: InfectedAvatar, skin: InfectedSkin): Promise<void> {
+    if (this.disposed || !this.infected.includes(enemy)) return;
+    this.infectedVariants.set(enemy, skin);
+    let pool = this.infectedPools.get(skin);
+    if (!pool) {
+      pool = new InfectedModelPool();
+      this.infectedPools.set(skin, pool);
+      this.infectedLoads.set(skin, pool.load(`${import.meta.env.BASE_URL}models/nextgen/${characterSkinFile('infected', skin)}`));
+    }
+    const loaded = await this.infectedLoads.get(skin);
+    if (this.disposed || !this.infected.includes(enemy)) return;
+    if (loaded && enemy.attachModel(pool)) return;
+    if (skin !== 'classic') await this.attachInfectedVariant(enemy, 'classic');
+  }
+
   private clearInfected(): void {
+    this.infectedVariants.clear();
   for (const enemy of this.infected) {
     enemy.dispose();
   }
@@ -156,7 +191,7 @@ private spawnWave(): void {
         wave
       );
 
-  for (const spawn of spawns) {
+  for (const [index, spawn] of spawns.entries()) {
     const enemy = new InfectedAvatar(
       new InfectedController({
         terrain: this.terrain,
@@ -168,7 +203,7 @@ private spawnWave(): void {
     this.scene.add(enemy.root);
 
     // Reuse the already loaded shared model.
-    enemy.attachModel(this.infectedPool);
+    void this.attachInfectedVariant(enemy, infectedSkinForSpawn(this.infectedSelection, wave, index));
   }
 }
 
@@ -203,6 +238,14 @@ restart(): void {
   );
 
   this.horde.reset();
+  this.loot.clear();
+  this.pickup.cancel();
+  this.pickupFacing = null;
+  this.avatar.setHeldLoot(null);
+  this.lootNotice = '';
+  this.lootNoticeMs = 0;
+  this.feedback.reset();
+  this.inventoryOpen = false;
   this.infectedAttackHits = 0;
 
   this.spawnWave();
@@ -240,6 +283,7 @@ getHordeInfo() {
   }
 
   private readonly onClick = () => {
+    if (!this.disposed && !this.benchmark) this.feedback.unlockAudio();
     if (
       this.disposed ||
       !this.combat.alive ||
@@ -273,6 +317,17 @@ getHordeInfo() {
     }
 
     if (!this.isLocked() || !this.combat.alive) return;
+
+    if (['KeyF', 'KeyH', 'KeyE', 'KeyI'].includes(event.code)) {
+      if (!event.repeat) {
+        if (event.code === 'KeyF') this.meleePressed = true;
+        if (event.code === 'KeyH') this.bandagePressed = true;
+        if (event.code === 'KeyE') this.pickupPressed = true;
+        if (event.code === 'KeyI') this.inventoryOpen = !this.inventoryOpen;
+      }
+      event.preventDefault();
+      return;
+    }
 
     if (event.code === 'KeyR') {
       if (!event.repeat && this.aimPressed) {
@@ -344,8 +399,15 @@ private clearAim(): void {
 }
 
 private readonly onReset = () => {
+  this.pickup.cancel();
+  this.pickupFacing = null;
+  this.avatar.setHeldLoot(null);
   this.keyboard.reset();
   this.clearAim();
+  this.meleePressed = false;
+  this.bandagePressed = false;
+  this.pickupPressed = false;
+  this.combat.interruptActions();
 };
 
 private readonly onPointerLockChange = () => {
@@ -389,28 +451,74 @@ private fireShot(): void {
   const enemy = this.infected[target];
 
   if (enemy.damage(COMBAT.bulletDamage)) {
-    this.combat.recordHit(
-      enemy.getState().health === 0
-    );
+    const killed = enemy.getState().health === 0;
+    this.combat.recordHit(killed);
+    this.feedback.impact(enemy.getState().position, this.state.position, false);
+    if (killed) this.dropLoot(enemy);
   }
+}
+
+private dropLoot(enemy: InfectedAvatar): void {
+  const position = enemy.getState().position;
+  const ground = this.terrain.heightAt(position[0], position[2]);
+  if (!Number.isFinite(ground)) return;
+  const bandage = this.combat.getState().kills % 2 === 0;
+  this.loot.spawn(bandage ? 'bandage' : 'ammo', bandage ? 1 : 12,
+    [position[0], ground, position[2]]);
+}
+
+private meleeStrike(): void {
+  const target = findMeleeTarget(this.state.position, this.state.facing,
+    this.infected.map(enemy => enemy.getState()), COMBAT.meleeRange,
+    (x, z) => this.terrain.heightAt(x, z));
+  if (target === null) return;
+  const enemy = this.infected[target];
+  if (enemy.damage(COMBAT.meleeDamage)) {
+    const killed = enemy.getState().health === 0;
+    this.combat.recordMeleeHit(killed);
+    this.feedback.impact(enemy.getState().position, this.state.position, true);
+    if (killed) this.dropLoot(enemy);
+  }
+}
+
+private showLootNotice(message: string): void {
+  this.lootNotice = message;
+  this.lootNoticeMs = 1800;
+}
+
+private cancelPickup(): void {
+  const collected = this.pickup.getState().collected;
+  this.pickup.cancel();
+  this.avatar.setHeldLoot(null);
+  if (!collected) this.showLootNotice('PICKUP INTERRUPTED');
 }
 
 step(deltaTimeMs: number): void {
   if (this.disposed) return;
+  const lootDt = Number.isFinite(deltaTimeMs) ? Math.max(0, deltaTimeMs) : 0;
+  this.lootNoticeMs = Math.max(0, this.lootNoticeMs - lootDt);
 
   this.previousPosition = [...this.state.position];
+  const characterInput = this.keyboard.read();
+  const movingInput = characterInput.forward !== 0 || characterInput.strafe !== 0 ||
+    characterInput.jump || characterInput.dodge;
+  const competingInput = movingInput || this.aimPressed || this.shootPressed ||
+    this.reloadPressed || this.meleePressed || this.bandagePressed;
+  if (competingInput && this.pickup.active) this.cancelPickup();
+  if (movingInput || this.aimPressed) this.pickupFacing = null;
 
   if (this.combat.alive) {
     this.state = this.controller.update(
       deltaTimeMs,
       {
-        ...this.keyboard.read(),
+        ...characterInput,
         aim: this.aimPressed && this.isLocked()
       },
       this.followCamera.getOrientation()
     );
   }
 
+  if (this.pickupFacing) this.state.facing = [...this.pickupFacing];
   const distance = Math.hypot(
     this.state.position[0] - this.previousPosition[0],
     this.state.position[2] - this.previousPosition[2]
@@ -428,20 +536,38 @@ step(deltaTimeMs: number): void {
   const weaponReady =
     this.avatar.getWeaponAction() === null;
 
+  const actionAllowed = this.combat.alive &&
+    this.avatar.getActiveClip() !== 'hit' &&
+    !this.state.airborne && !this.state.dodging;
+
   const combat = this.combat.step(deltaTimeMs, {
     enabled:
-      aiming &&
+      !this.pickup.active && aiming &&
       this.avatar.getActiveClip() !== 'hit' &&
       !this.state.airborne &&
       !this.state.dodging,
 
     shoot: this.shootPressed && weaponReady,
-    reload: this.reloadPressed && weaponReady
+    reload: this.reloadPressed && weaponReady,
+    melee: this.meleePressed && weaponReady,
+    bandage: this.bandagePressed && weaponReady,
+    actionAllowed: actionAllowed && !this.pickup.active,
+    aiming,
+    moving: distance > 0.001 || characterInput.forward !== 0 ||
+      characterInput.strafe !== 0 || characterInput.jump || characterInput.dodge
   });
 
   if (combat.shot) {
+    this.feedback.shot();
     this.fireShot();
   }
+  if (combat.meleeStarted) this.feedback.sound('swing');
+  if (combat.reloadStarted) this.feedback.sound('reload');
+  if (combat.healStarted) this.feedback.sound('bandage');
+  if (combat.healed > 0) this.feedback.sound('healed');
+
+  if (combat.meleeHit) this.meleeStrike();
+
 
   const healthBefore = this.combat.getState().health;
 
@@ -473,6 +599,57 @@ step(deltaTimeMs: number): void {
     }
   }
 
+  const damaged = this.combat.getState().health < healthBefore ||
+    (this.benchmark && totalDamage > 0);
+  if (damaged) this.feedback.damage();
+  // Contact comes after damage resolution: an interrupted reach never transfers loot.
+  const inventory = this.combat.getState();
+  if (damaged || !actionAllowed || !this.combat.alive || !this.isLocked()) {
+    if (this.pickup.active) this.cancelPickup();
+  }
+  if (this.pickupPressed && this.combat.alive && !this.pickup.active) {
+    if (damaged || !actionAllowed || competingInput || aiming || distance > 0.001 ||
+        inventory.healing || inventory.reloading || inventory.meleeCooldownMs > 0 ||
+        !weaponReady) {
+      this.showLootNotice('STOP TO COLLECT');
+    } else {
+      const near = this.loot.nearby(this.state.position, this.canCollectLoot);
+      if (!near) this.showLootNotice('NO LOOT NEARBY');
+      else if (!this.canCollectLoot(near)) this.showLootNotice(
+        near.kind === 'ammo' ? 'AMMO RESERVE FULL' : 'BANDAGES FULL');
+      else {
+        const dx = near.position[0] - this.state.position[0];
+        const dz = near.position[2] - this.state.position[2];
+        if (Math.hypot(dx, dz, near.position[1] - this.state.position[1]) > PICKUP.reach) {
+          this.showLootNotice('MOVE CLOSER TO LOOT');
+        } else if (this.pickup.begin(near.id, near.kind)) {
+          const length = Math.hypot(dx, dz);
+          if (length > 0.08) {
+            this.pickupFacing = [dx / length, 0, dz / length];
+            this.state.facing = [...this.pickupFacing];
+          }
+          this.showLootNotice('COLLECTING...');
+        }
+      }
+    }
+  }
+  const contact = this.pickup.advance(deltaTimeMs);
+  if (contact !== null) {
+    const picked = this.loot.collectById(contact, this.state.position, (kind, amount) =>
+      kind === 'ammo' ? this.combat.addReserveAmmo(amount) : this.combat.addBandages(amount),
+      PICKUP.reach);
+    if (picked.status === 'collected') {
+      this.pickup.markCollected();
+      this.showLootNotice('+' + picked.amount +
+        (picked.kind === 'ammo' ? ' AMMO' : (picked.amount === 1 ? ' BANDAGE' : ' BANDAGES')));
+      this.feedback.sound('pickup');
+    } else {
+      this.pickup.cancel();
+      this.showLootNotice(picked.status === 'full'
+        ? (picked.kind === 'ammo' ? 'AMMO RESERVE FULL' : 'BANDAGES FULL')
+        : 'LOOT NO LONGER AVAILABLE');
+    }
+  }
   // Animate using the updated combat state.
   this.avatar.animate(deltaTimeMs, {
     speed: this.combat.alive ? speed : 0,
@@ -483,15 +660,14 @@ step(deltaTimeMs: number): void {
     aimPitch: this.followCamera.getAimPitch(),
     shoot: this.combat.alive && combat.shot,
     reload: this.combat.alive && combat.reloadStarted,
-    hit:
-      this.combat.alive &&
-      (
-        this.combat.getState().health < healthBefore ||
-        (this.benchmark && totalDamage > 0)
-      ),
+    melee: this.combat.alive && combat.meleeStarted,
+    healing: this.combat.alive && this.combat.getState().healing,
+    pickingUp: this.pickup.active,
+    hit: this.combat.alive && damaged,
     dead: !this.combat.alive
   });
 
+  this.avatar.setHeldLoot(this.pickup.heldKind);
   separateInfected(this.infected, deltaTimeMs);
 
   if (!this.training && this.combat.alive) {
@@ -511,6 +687,9 @@ step(deltaTimeMs: number): void {
 
   this.shootPressed = false;
   this.reloadPressed = false;
+  this.meleePressed = false;
+  this.bandagePressed = false;
+  this.pickupPressed = false;
 }
 
 
@@ -541,6 +720,9 @@ step(deltaTimeMs: number): void {
       position,
       facing: this.state.facing
     });
+    const muzzle = this.feedback.needsMuzzle &&
+      this.avatar.getMuzzlePosition(this.muzzlePosition) ? this.muzzlePosition : null;
+    this.feedback.update(deltaTimeMs, muzzle);
 
   const pose = this.followCamera.update(
     deltaTimeMs,
@@ -559,12 +741,16 @@ step(deltaTimeMs: number): void {
       this.state,
       this.isLocked(),
       this.combat.getState(),
-      this.getHordeInfo()
+      this.getHordeInfo(),
+      this.loot.nearby(position, this.canCollectLoot),
+      this.inventoryOpen,
+      this.lootNoticeMs > 0 ? this.lootNotice : '',
+      this.pickup.active
     );
   }
 
   getModelInfo() {
-    return this.avatar.getModelInfo();
+    return { ...this.avatar.getModelInfo(), variant: this.survivorVariant };
     }
 
   getState(): CharacterControllerResult {
@@ -579,14 +765,19 @@ getCombatInfo() {
   return {
     ...this.combat.getState(),
     training: this.training,
-    benchmark: this.benchmark
+    benchmark: this.benchmark,
+    inventoryOpen: this.inventoryOpen
   };
 }
+
+  getLootInfo() { return this.loot.getState(); }
+  getPickupInfo() { return this.pickup.getState(); }
 
   getInfectedInfo() {
   return this.infected.map(enemy => ({
     ...enemy.getState(),
-    ...enemy.getModelInfo()
+    ...enemy.getModelInfo(),
+    variant: this.infectedVariants.get(enemy) ?? 'classic'
   }));
 }
 
@@ -645,7 +836,11 @@ damageInfected(index: number, amount: number): boolean {
     }
 
     this.clearInfected();
-    this.infectedPool.dispose();
+    for (const pool of this.infectedPools.values()) pool.dispose();
+    this.infectedPools.clear();
+    this.infectedLoads.clear();
+    this.loot.dispose();
+    this.feedback.dispose();
     this.avatar.dispose();
     this.hud.dispose();
   }

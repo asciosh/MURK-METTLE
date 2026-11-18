@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { SurvivorModel } from './SurvivorModel.ts';
 import type { CharacterControllerResult } from './CharacterController.ts';
 import { PistolProp } from './PistolProp.ts';
+import type { LootKind } from './LootField.ts';
 import {
   AvatarAnimator,
   type AvatarMotion
@@ -21,6 +22,8 @@ export class PlayerAvatar {
   private readonly model = new SurvivorModel();
   private animator: AvatarAnimator | null = null;
   private weapon: PistolProp | null = null;
+  private heldAmmo: THREE.Mesh | null = null;
+  private heldBandage: THREE.Mesh | null = null;
 
     private modelStatus:
     'placeholder' | 'loading' | 'ready' | 'fallback'
@@ -139,6 +142,7 @@ export class PlayerAvatar {
 
     if (hand instanceof THREE.Bone) {
       this.weapon = new PistolProp(hand);
+      this.createHeldLoot(hand);
     }
 
     this.modelStatus = 'ready';
@@ -164,6 +168,39 @@ getWeaponAction() {
   return this.animator?.getWeaponAction() ?? null;
 }
 
+private createHeldLoot(hand: THREE.Bone): void {
+  const ammoGeometry = new THREE.BoxGeometry(0.09, 0.105, 0.052);
+  const ammoMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb08b43, roughness: 0.85
+  });
+  const bandageGeometry = new THREE.CylinderGeometry(0.035, 0.035, 0.095, 10);
+  const bandageMaterial = new THREE.MeshStandardMaterial({
+    color: 0xdeddd0, roughness: 0.95
+  });
+  this.geometries.add(ammoGeometry); this.geometries.add(bandageGeometry);
+  this.materials.add(ammoMaterial); this.materials.add(bandageMaterial);
+  this.heldAmmo = new THREE.Mesh(ammoGeometry, ammoMaterial);
+  this.heldBandage = new THREE.Mesh(bandageGeometry, bandageMaterial);
+  this.heldAmmo.name = 'Held loot ammo';
+  this.heldBandage.name = 'Held loot bandage';
+  this.heldAmmo.position.set(0, .065, .013);
+  this.heldBandage.position.copy(this.heldAmmo.position);
+  this.heldBandage.rotation.z = Math.PI / 2;
+  hand.add(this.heldAmmo, this.heldBandage);
+  this.setHeldLoot(null);
+}
+
+setHeldLoot(kind: LootKind | null): void {
+  if (this.heldAmmo) this.heldAmmo.visible = kind === 'ammo';
+  if (this.heldBandage) this.heldBandage.visible = kind === 'bandage';
+}
+
+getMuzzlePosition(target: THREE.Vector3): boolean {
+  if (this.disposed || !this.weapon?.root.visible) return false;
+  this.weapon.getMuzzlePosition(target);
+  return true;
+}
+
 getActiveClip() {
   return this.animator?.getActiveClip() ?? null;
 }
@@ -177,6 +214,8 @@ getActiveClip() {
         aimWeight: this.animator?.getAimWeight() ?? 0,
         aimPitch: this.animator?.getAimPitch() ?? 0,
         weaponAttached: this.weapon !== null,
+        backpackAttached: !!this.model.root.getObjectByName('SurvivalBackpack'),
+        heldLoot: this.heldAmmo?.visible ? 'ammo' : this.heldBandage?.visible ? 'bandage' : null,
         weaponVisible: this.weapon?.root.visible ?? false,
         weaponAction: this.animator?.getWeaponAction() ?? null
       };
@@ -226,6 +265,9 @@ getActiveClip() {
     this.weapon?.dispose();
     this.weapon = null;
 
+    this.heldAmmo?.removeFromParent();
+    this.heldBandage?.removeFromParent();
+    this.heldAmmo = this.heldBandage = null;
     this.model.dispose();
 
     this.root.removeFromParent();

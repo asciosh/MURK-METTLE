@@ -1,18 +1,32 @@
+import {
+  SURVIVAL, newVitals, beginHealing, cancelHealing, stepVitals
+} from '../../../shared/survival.mjs';
+
 export const COMBAT = Object.freeze({
   maxHealth: 100,
   magazineCapacity: 12,
   reserveAmmo: 48,
+  reserveCapacity: 72,
   bulletDamage: 34,
   range: 35,
   fireIntervalMs: 350,
   reloadMs: 1600,
-  infectedDamage: 12
+  infectedDamage: 12,
+  meleeDamage: 25,
+  meleeRange: 2,
+  meleeWindupMs: 180,
+  meleeCooldownMs: 650
 });
 
 export interface CombatInput {
   enabled: boolean;
   shoot: boolean;
   reload: boolean;
+  melee?: boolean;
+  bandage?: boolean;
+  moving?: boolean;
+  actionAllowed?: boolean;
+  aiming?: boolean;
 }
 
 export class CombatController {
@@ -30,6 +44,12 @@ export class CombatController {
   private shotsFired = 0;
   private shotsHit = 0;
   private kills = 0;
+  private readonly vitals = newVitals();
+  private clockMs = 0;
+  private meleeRemainingMs = 0;
+  private meleeCooldown = 0;
+  private meleeAttacks = 0;
+  private meleeHits = 0;
 
   get alive(): boolean {
     return this.health > 0;
@@ -54,7 +74,11 @@ export class CombatController {
   step(deltaTimeMs: number, input: CombatInput) {
     const result = {
       shot: false,
-      reloadStarted: false
+      reloadStarted: false,
+      meleeStarted: false,
+      meleeHit: false,
+      healStarted: false,
+      healed: 0
     };
 
     const dt = Number.isFinite(deltaTimeMs)
@@ -63,6 +87,8 @@ export class CombatController {
 
     if (dt === 0) return result;
 
+    this.clockMs += dt;
+    this.meleeCooldown = Math.max(0, this.meleeCooldown - dt);
     this.cooldown = Math.max(0, this.cooldown - dt);
 
     this.damageGraceRemainingMs = Math.max(
@@ -70,7 +96,57 @@ export class CombatController {
       this.damageGraceRemainingMs - dt
     );
 
-    if (!this.alive || !input.enabled) {
+    if (!this.alive) {
+      cancelHealing(this.vitals);
+      this.meleeRemainingMs = 0;
+      this.reloadRemainingMs = 0;
+      return result;
+    }
+
+    const allowed = input.actionAllowed !== false;
+    const interruptHeal = !allowed || input.moving || input.aiming ||
+      input.shoot || input.reload || input.melee;
+
+    if (interruptHeal) cancelHealing(this.vitals);
+
+    if (input.bandage && !interruptHeal &&
+        !this.meleeRemainingMs && !this.meleeCooldown && !this.reloadRemainingMs) {
+      result.healStarted = beginHealing(this.vitals, this.health, this.clockMs);
+    }
+
+    // Reuse the authoritative shared heal timer with simulation time, not wall time.
+    const heal = stepVitals(this.vitals, dt / 1000, this.clockMs,
+      { moving: input.moving === true });
+    if (heal > 0) {
+      const before = this.health;
+      this.health = Math.min(COMBAT.maxHealth, this.health + heal);
+      result.healed = this.health - before;
+    }
+    if (this.vitals.healEndsAt || result.healed > 0) {
+      this.reloadRemainingMs = 0;
+      return result;
+    }
+
+    if (this.meleeRemainingMs > 0) {
+      if (!allowed) {
+        this.meleeRemainingMs = 0;
+      } else {
+        this.meleeRemainingMs = Math.max(0, this.meleeRemainingMs - dt);
+        result.meleeHit = this.meleeRemainingMs === 0;
+      }
+      return result;
+    }
+
+    if (input.melee && allowed && this.meleeCooldown === 0 &&
+        this.cooldown === 0 && this.reloadRemainingMs === 0) {
+      this.meleeRemainingMs = COMBAT.meleeWindupMs;
+      this.meleeCooldown = COMBAT.meleeCooldownMs;
+      this.meleeAttacks++;
+      result.meleeStarted = true;
+      return result;
+    }
+
+    if (!input.enabled || !allowed || this.meleeCooldown > 0) {
       this.reloadRemainingMs = 0;
       return result;
     }
@@ -131,6 +207,8 @@ export class CombatController {
       return false;
     }
 
+    cancelHealing(this.vitals);
+    this.meleeRemainingMs = 0;
     this.health = Math.max(0, this.health - amount);
 
     this.damageGraceRemainingMs = Number.isFinite(graceMs)
@@ -152,6 +230,38 @@ export class CombatController {
     }
   }
 
+  recordMeleeHit(killed: boolean): void {
+    this.meleeHits++;
+    if (killed) this.kills++;
+  }
+
+  interruptActions(): void {
+    cancelHealing(this.vitals);
+    this.meleeRemainingMs = 0;
+    this.reloadRemainingMs = 0;
+  }
+
+  pickupCapacity(kind: 'ammo' | 'bandage'): number {
+    if (!this.alive) return 0;
+    return kind === 'ammo'
+      ? Math.max(0, COMBAT.reserveCapacity - this.reserve)
+      : Math.max(0, SURVIVAL.bandages - this.vitals.bandages);
+  }
+
+  addReserveAmmo(amount: number): number {
+    if (!this.alive || !Number.isSafeInteger(amount) || amount <= 0) return 0;
+    const accepted = Math.min(amount, this.pickupCapacity('ammo'));
+    this.reserve += accepted;
+    return accepted;
+  }
+
+  addBandages(amount: number): number {
+    if (!this.alive || !Number.isSafeInteger(amount) || amount <= 0) return 0;
+    const accepted = Math.min(amount, this.pickupCapacity('bandage'));
+    this.vitals.bandages += accepted;
+    return accepted;
+  }
+
   rewardWave(): void {
   if (!this.alive) return;
 
@@ -160,10 +270,7 @@ export class CombatController {
     this.health + 20
   );
 
-  this.reserve = Math.min(
-    COMBAT.reserveAmmo,
-    this.reserve + 24
-  );
+  this.reserve = Math.max(this.reserve, Math.min(COMBAT.reserveAmmo, this.reserve + 24));
 }
 
   getState() {
@@ -174,12 +281,21 @@ export class CombatController {
       ammo: this.ammo,
       magazineCapacity: COMBAT.magazineCapacity,
       reserve: this.reserve,
+      reserveCapacity: COMBAT.reserveCapacity,
       reloading: this.reloadRemainingMs > 0,
       reloadRemainingMs: this.reloadRemainingMs,
       shotsFired: this.shotsFired,
       shotsHit: this.shotsHit,
       fireCooldownMs: this.cooldown,
-      kills: this.kills
+      kills: this.kills,
+      bandages: this.vitals.bandages,
+      maxBandages: SURVIVAL.bandages,
+      healing: this.vitals.healEndsAt > 0,
+      healRemainingMs: Math.max(0, this.vitals.healEndsAt - this.clockMs),
+      meleeAttacks: this.meleeAttacks,
+      meleeHits: this.meleeHits,
+      meleeRemainingMs: this.meleeRemainingMs,
+      meleeCooldownMs: this.meleeCooldown
     };
   }
 }

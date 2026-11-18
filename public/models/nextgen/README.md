@@ -12,7 +12,7 @@ Legacy character assets remain unchanged.
   License: CC0 1.0.
   https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html
 
-- Animations: Quaternius Universal Animation Library (Standard).
+- Animations: Idle, Walk, Run, JumpStart, JumpLoop, JumpLand, Dodge, Aim, PistolShoot, PistolReload, AimUp, AimDown, Hit, Death, Melee, Bandage, Pickup
   License: CC0 1.0.
   https://quaternius.itch.io/universal-animation-library
 
@@ -45,13 +45,17 @@ Character movement and physics remain controller-driven.
 ### Asset specifications
 
 - File: survivor.glb
-- Size: approximately 2.84 MiB
-- Triangles: 33,492
+- Size: approximately 3.23 MiB
+- Triangles: 39,720
 - Skeletons: 1
 - Bones: 53
-- Meshes: 7
+- Meshes: 8 (7 skinned character meshes, 1 rigid backpack)
 - Animations: Idle, Walk, Run, JumpStart, JumpLoop, JumpLand, Dodge, Aim, PistolShoot, PistolReload, AimUp, AimDown
-- SHA256: A84155E775DAACD7A89496BE0FBC3E75B3038A3D61131BB30B092DE92F02AF8E
+- SHA256: 9503F2C6E300512F9DC0DACC4A02CDD28F6EAC238FE816DD84611AC803BCCA8A
+
+### M03 pickup and backpack
+
+Pickup: Quaternius Universal Animation Library (CC0), Fixing_Kneeling retargeted with authored reach, grasp, lift and stow at 1.35s. The original procedural canvas backpack is parented to spine_03; all previous survivor geometry and clips retained. Contact is at 450ms, stow at 1100ms.
 
 ## Infected Model
 
@@ -102,3 +106,9 @@ The asset uses in-place animations for controller-driven movement.
 - Textures: 8
 - Animations: 14, including Hit and Death.
 - SHA256: 792DCD134EAE93D1FBED9026B6D4BCF4E6B310BD500D0AEE376C9E4E6E4E6334
+
+## Optional cosmetic character variants
+
+Four survivor and four infected variants are stored in `variants/`. They reuse the existing 53-bone skeletons and complete animation sets, with original authored gear, material and texture variations based on the existing CC0 assets. No gameplay attributes differ. See `variants/manifest.json` for hashes, triangle counts and clip names.
+
+Demo options: `?mode=playable&skin=ranger&infected=mixed`. Survivor: ranger, medic, scavenger, sentinel. Infected: withered, ashen, ravager, feral or mixed. Omit parameters for the original baseline.

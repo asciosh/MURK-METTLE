@@ -353,7 +353,10 @@ getCombatInfo() {
   return this.session?.getCombatInfo();
 }
 
-getInfectedInfo() {
+  getLootInfo() { return this.session?.getLootInfo() ?? []; }
+  getPickupInfo() { return this.session?.getPickupInfo(); }
+
+  getInfectedInfo() {
   return this.session?.getInfectedInfo() ?? [];
 }
 

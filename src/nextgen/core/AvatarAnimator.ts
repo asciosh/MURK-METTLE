@@ -10,7 +10,10 @@ export type AvatarAnimation =
   | 'jumpland'
   |  'dodge'
   | 'hit'
-  | 'death';
+  | 'death'
+  | 'melee'
+  | 'bandage'
+  | 'pickup';
 
 export interface AvatarMotion {
   speed: number;
@@ -23,6 +26,9 @@ export interface AvatarMotion {
   aimPitch?: number;
   hit?: boolean;
   dead?: boolean;
+  melee?: boolean;
+  healing?: boolean;
+  pickingUp?: boolean;
 }
 
 interface AimBone {
@@ -36,7 +42,10 @@ const ONE_SHOT_MS: Partial<Record<AvatarAnimation, number>> = {
   jumpland: 350,
   dodge: 650,
   hit: 333,
-  death: 2375
+  death: 2375,
+  melee: 650,
+  bandage: 2600,
+  pickup: 1350
 };
 
 const AIM_BLEND_MS = 150;
@@ -409,6 +418,23 @@ export class AvatarAnimator {
       this.elapsedMs < 333
     ) {
       // Finish the current hit reaction.
+    } else if (
+      motion.pickingUp && !motion.airborne && !motion.dodging &&
+      this.actions.has('pickup')
+    ) {
+      this.setAnimation('pickup');
+    } else if (
+      motion.healing && !motion.airborne && !motion.dodging &&
+      this.actions.has('bandage')
+    ) {
+      this.setAnimation('bandage');
+    } else if (
+      !motion.airborne && !motion.dodging &&
+      this.actions.has('melee') &&
+      (motion.melee ||
+        (this.activeClip === 'melee' && this.elapsedMs < 650))
+    ) {
+      this.setAnimation('melee', motion.melee === true);
     } else if (
       motion.dodging ||
       (

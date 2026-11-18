@@ -170,3 +170,38 @@ export function findShotTarget(
 
   return nearest;
 }
+
+// The legacy melee cone is retained, but visibility uses the NEXTGEN terrain.
+export function findMeleeTarget(
+  position: Vec3,
+  facing: Vec3,
+  targets: readonly ShotTarget[],
+  range: number,
+  heightAt: (x: number, z: number) => number
+): number | null {
+  if (!position.every(Number.isFinite) || !facing.every(Number.isFinite) ||
+      !Number.isFinite(range) || range <= 0 || range > 10) return null;
+  const length = Math.hypot(facing[0], facing[2]);
+  if (length < 0.000001) return null;
+  let nearest: number | null = null;
+  let best = range;
+  targets.forEach((target, index) => {
+    if (!Number.isFinite(target.health) || target.health <= 0 ||
+        !target.position.every(Number.isFinite) ||
+        Math.abs(target.position[1] - position[1]) > 1) return;
+    const dx = target.position[0] - position[0];
+    const dz = target.position[2] - position[2];
+    const distance = Math.hypot(dx, dz);
+    if (distance > best || (nearest !== null && distance === best)) return;
+    if (distance > 0.001 && (dx * facing[0] + dz * facing[2]) /
+        (length * distance) < -0.15) return;
+    if (terrainBlocked(
+      [position[0], position[1] + 1, position[2]],
+      [target.position[0], target.position[1] + 1, target.position[2]],
+      heightAt
+    )) return;
+    nearest = index;
+    best = distance;
+  });
+  return nearest;
+}

@@ -3,6 +3,8 @@ import type {
 } from '../core/CharacterController';
 import type { CombatState } from '../core/CombatController';
 import type { HordeState } from '../core/HordeDirector';
+import type { LootItem } from '../core/LootField';
+import { PICKUP } from '../core/PickupController';
 
 export class PlayableHud {
   private readonly root = document.createElement('div');
@@ -14,6 +16,9 @@ export class PlayableHud {
   private readonly health = document.createElement('div');
   private readonly ammunition = document.createElement('div');
   private readonly hordeStatus = document.createElement('div');
+  private readonly inventory = document.createElement('div');
+  private readonly lootPrompt = document.createElement('div');
+  private readonly lootToast = document.createElement('div');
 
   constructor() {
     this.root.style.cssText = `
@@ -122,6 +127,8 @@ this.hordeStatus.style.cssText = `
   white-space:pre-line;
 `;
 
+  this.inventory.style.cssText = 'margin-top:12px;font-size:13px;white-space:pre-line;color:#d3dfc8';
+  this.lootPrompt.style.cssText = 'margin-top:8px;font-size:13px;color:#f3db90';
   panel.append(
     this.health,
     title,
@@ -129,14 +136,18 @@ this.hordeStatus.style.cssText = `
     track,
     this.status,
     this.ammunition,
-    this.hordeStatus
+    this.hordeStatus,
+    this.inventory,
+    this.lootPrompt
   );
 
-    this.root.append(
-      panel,
-      this.prompt,
-      this.crosshair
-    );
+    this.lootPrompt.className = 'nextgen-loot-prompt';
+    this.lootToast.className = 'nextgen-loot-toast';
+    this.lootToast.style.cssText =
+      'position:absolute;left:50%;bottom:22%;transform:translateX(-50%);' +
+      'padding:10px 18px;background:rgba(10,18,15,.90);border:1px solid #728b65;' +
+      'border-radius:6px;font-weight:bold;font-size:16px;display:none;white-space:nowrap';
+    this.root.append(panel, this.prompt, this.crosshair, this.lootToast);
 
     document.body.appendChild(this.root);
   }
@@ -145,7 +156,11 @@ this.hordeStatus.style.cssText = `
     state: CharacterControllerResult,
     locked: boolean,
     combat: CombatState,
-    horde: HordeState & { training: boolean }
+    horde: HordeState & { training: boolean },
+    loot: LootItem | null = null,
+    inventoryOpen = false,
+    lootNotice = '',
+    pickingUp = false
   ): void {
     const fraction = Math.max(
       0,
@@ -190,6 +205,35 @@ this.hordeStatus.style.cssText = `
       ? `WAVE ${horde.wave} CLEARED\nNEXT WAVE IN ${Math.ceil(horde.countdownMs / 1000)}s\nKILLS ${horde.kills}`
       : `WAVE ${horde.wave}\nINFECTED ${horde.living} / ${horde.total}\nKILLS ${horde.kills}`;
 
+  this.inventory.textContent = combat.healing
+    ? 'BANDAGING ' + (combat.healRemainingMs / 1000).toFixed(1) + 's'
+    : 'BANDAGES ' + combat.bandages + ' / ' + combat.maxBandages;
+  if (combat.meleeRemainingMs > 0) this.inventory.textContent += '\nMELEE WINDUP';
+  if (inventoryOpen) {
+    this.inventory.textContent += '\nINVENTORY\nPistol ammunition: ' + combat.ammo +
+      ' loaded / ' + combat.reserve + '/' + combat.reserveCapacity + ' reserve\nMelee hits: ' + combat.meleeHits;
+  }
+  this.lootPrompt.textContent = '';
+  if (loot && combat.alive) {
+    const room = loot.kind === 'ammo'
+      ? combat.reserveCapacity - combat.reserve
+      : combat.maxBandages - combat.bandages;
+    const amount = Math.min(loot.amount, Math.max(0, room));
+    this.lootPrompt.textContent = amount > 0
+      ? 'E: Take ' + amount + ' ' +
+        (loot.kind === 'ammo' ? 'rounds' : (amount === 1 ? 'bandage' : 'bandages'))
+      : (loot.kind === 'ammo' ? 'AMMO RESERVE FULL' : 'BANDAGES FULL');
+    this.lootPrompt.style.color = amount > 0 ? '#f3db90' : '#eaa5a5';
+    const distance = Math.hypot(loot.position[0] - state.position[0],
+      loot.position[1] - state.position[1], loot.position[2] - state.position[2]);
+    if (amount > 0 && distance > PICKUP.reach) this.lootPrompt.textContent = 'MOVE CLOSER TO LOOT';
+    if (pickingUp) this.lootPrompt.textContent = 'COLLECTING...';
+  }
+  const message = combat.alive ? lootNotice : '';
+  this.lootToast.textContent = message;
+  this.lootToast.style.display = message ? 'block' : 'none';
+  this.lootToast.style.color = message.startsWith('+') ? '#9ef5b5' : '#f3db90';
+
   this.prompt.style.color = '#fff';
 
   if (!combat.alive) {
@@ -198,7 +242,7 @@ this.hordeStatus.style.cssText = `
     this.crosshair.style.display = 'none';
   } else if (locked) {
     this.prompt.textContent =
-      'WASD | Shift Sprint | Ctrl Dodge | Space Jump | RMB Aim | LMB Fire | R Reload';
+      'WASD | Shift Sprint | Ctrl Dodge | Space Jump | RMB Aim | LMB Fire | R Reload | F Melee | H Bandage | E Loot | I Inventory';
   }
   }
 
