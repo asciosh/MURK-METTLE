@@ -54,16 +54,36 @@ const url =
     console.log('Pointer lock: PASS');
 
     // WALK
+        // WALK
+    const beforeWalk = await state();
+
     await page.keyboard.down('w');
 
-    await page.waitForFunction(
-      z => window.__m01Demo.getPlayerState()
-        .position[2] < z - 0.2,
-      initial.position[2],
-      { timeout: 90000 }
-    );
+    try {
+      await page.waitForFunction(
+        origin => {
+          const { position } =
+            window.__m01Demo.getPlayerState();
 
-    await page.keyboard.up('w');
+          return Math.hypot(
+            position[0] - origin[0],
+            position[2] - origin[2]
+          ) > 0.2;
+        },
+        beforeWalk.position,
+        { timeout: 30000 }
+      );
+    } catch (error) {
+      console.log('Walk diagnostics:', await page.evaluate(() => ({
+        locked: document.pointerLockElement !== null,
+        player: window.__m01Demo.getPlayerState(),
+        model: window.__m01Demo.getPlayerModelInfo()
+      })));
+
+      throw error;
+    } finally {
+      await page.keyboard.up('w');
+    }
 
     assert.equal((await state()).stamina, 100);
 

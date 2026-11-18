@@ -72,6 +72,8 @@ Created in Blender 5.3 using the MPFB GameEngine rig.
 Animations retargeted to the infected skeleton.
 Exported as GLB with embedded 512px PNG textures.
 Redundant animation keyframes removed using glTF Transform.
+Original two-arm zombie attack animation authored in Blender.
+Opaque material rendering corrected; eyebrow and eyelash transparency preserved.
 
 ### Animation mapping
 
@@ -80,7 +82,7 @@ Redundant animation keyframes removed using glTF Transform.
 | Idle | Idle_Loop |
 | Walk | Walk_Loop |
 | Run | Jog_Fwd_Loop |
-| Attack | Punch_Cross |
+| Attack | Original zombie lunge (Blender) |
 | Hit | Hit_Chest |
 | Death | Death01 |
 
@@ -89,11 +91,11 @@ The asset uses in-place animations for controller-driven movement.
 ### Asset specifications
 
 - File: infected.glb
-- Size: approximately 3.62 MiB
+- Size: approximately 3.61 MiB
 - Triangles: 32,728
 - Skeletons: 1
 - Bones: 53
 - Meshes: 7
 - Textures: 8
 - Animations: Idle, Walk, Run, Attack, Hit, Death
-- SHA256: C1641F954C123B01CB7B7B812D835CA0D9CA06B848A23DA8D51C62EE6DC318C1
+- SHA256: BA45A8CC7558B0E347C764B8997ADA40B9F7FEE2471FF33DAFBF76B253E3B71E

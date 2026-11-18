@@ -339,6 +339,18 @@ async mount(): Promise<void> {
   return this.session?.getCameraFov();
 }
 
+getInfectedInfo() {
+  return this.session?.getInfectedInfo() ?? [];
+}
+
+getInfectedAttackHits(): number {
+  return this.session?.getInfectedAttackHits() ?? 0;
+}
+
+damageInfected(index: number, amount: number) {
+  return this.session?.damageInfected(index, amount);
+}
+
   getResults(): PresentResult[] {
     return this.results;
   }
