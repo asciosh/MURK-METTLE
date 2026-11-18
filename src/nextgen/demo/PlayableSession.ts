@@ -20,19 +20,28 @@ import {
 } from '../core/CombatController';
 
 import { findShotTarget } from '../core/ShotQuery';
+import {
+  HordeDirector,
+  createWaveSpawns,
+  separateInfected
+} from '../core/HordeDirector';
 
 export class PlayableSession {
   private readonly keyboard = new KeyboardInput();
-  private readonly followCamera = new ThirdPersonCamera();
+  private followCamera = new ThirdPersonCamera();
   private readonly avatar = new PlayerAvatar();
   private readonly infectedPool = new InfectedModelPool();
   private readonly infected: InfectedAvatar[] = [];
   private infectedAttackHits = 0;
   private readonly hud = new PlayableHud();
-  private readonly combat = new CombatController();
+  private combat = new CombatController();
   private readonly shotDirection = new THREE.Vector3();
+  private readonly horde = new HordeDirector(
+  SURVIVAL.waveDelay,
+  SURVIVAL.maxEnemies
+);
 
-  private readonly controller: CharacterController;
+  private controller: CharacterController;
   private state: CharacterControllerResult;
 
   private previousPosition: [number, number, number];
@@ -43,7 +52,7 @@ export class PlayableSession {
   private disposed = false;
 
   constructor(
-    scene: THREE.Scene,
+    private readonly scene: THREE.Scene,
     private readonly camera: THREE.PerspectiveCamera,
     private readonly canvas: HTMLCanvasElement,
     private readonly terrain: TerrainGenerator,
@@ -78,19 +87,7 @@ export class PlayableSession {
       );
     });
 
-      const enemy = new InfectedAvatar(
-    new InfectedController({
-      terrain,
-      spawn: {
-        x: this.state.position[0],
-        z: this.state.position[2] - 12
-      }
-    })
-  );
-
-  this.infected.push(enemy);
-
-  scene.add(enemy.root);
+  this.spawnWave();
 
   void this.infectedPool.load(
     `${import.meta.env.BASE_URL}models/nextgen/infected.glb`
@@ -133,6 +130,110 @@ export class PlayableSession {
     this.present(0, 1);
   }
 
+  private clearInfected(): void {
+  for (const enemy of this.infected) {
+    enemy.dispose();
+  }
+
+  this.infected.length = 0;
+}
+
+private spawnWave(): void {
+  this.clearInfected();
+
+  const wave = this.horde.getState(0, 0).wave;
+
+  const spawns = this.training
+    ? [{
+        x: this.state.position[0],
+        z: this.state.position[2] - 12
+      }]
+    : createWaveSpawns(
+        this.state.position,
+        this.terrain,
+        this.horde.spawnCount,
+        wave
+      );
+
+  for (const spawn of spawns) {
+    const enemy = new InfectedAvatar(
+      new InfectedController({
+        terrain: this.terrain,
+        spawn
+      })
+    );
+
+    this.infected.push(enemy);
+    this.scene.add(enemy.root);
+
+    // Reuse the already loaded shared model.
+    enemy.attachModel(this.infectedPool);
+  }
+}
+
+restart(): void {
+  if (this.disposed || this.combat.alive) return;
+
+  this.onReset();
+
+  this.followCamera = new ThirdPersonCamera();
+
+  this.controller = new CharacterController({
+    speed: SURVIVAL.walkSpeed,
+    radius: 0.4,
+    terrain: this.terrain
+  });
+
+  this.state = this.controller.update(
+    0,
+    this.keyboard.read(),
+    this.followCamera.getOrientation()
+  );
+
+  this.previousPosition = [...this.state.position];
+
+  this.combat = new CombatController();
+
+  const timing = this.avatar.getWeaponTiming();
+
+  this.combat.configureWeapon(
+    timing.shootMs,
+    timing.reloadMs
+  );
+
+  this.horde.reset();
+  this.infectedAttackHits = 0;
+
+  this.spawnWave();
+
+  this.avatar.animate(16, {
+    speed: 0,
+    sprinting: false,
+    airborne: false,
+    dodging: false,
+    aiming: false,
+    aimPitch: 0,
+    shoot: false,
+    reload: false
+  });
+
+  this.present(0, 1);
+}
+
+getHordeInfo() {
+  const living = this.infected.filter(
+    enemy => enemy.getState().health > 0
+  ).length;
+
+  return {
+    ...this.horde.getState(
+      living,
+      this.infected.length
+    ),
+    training: this.training
+  };
+}
+
   private isLocked(): boolean {
     return document.pointerLockElement === this.canvas;
   }
@@ -158,7 +259,19 @@ export class PlayableSession {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent) => {
-    if (!this.isLocked()) return;
+    if (this.disposed) return;
+
+    if (
+      event.code === 'Enter' &&
+      !event.repeat &&
+      !this.combat.alive
+    ) {
+      event.preventDefault();
+      this.restart();
+      return;
+    }
+
+    if (!this.isLocked() || !this.combat.alive) return;
 
     if (event.code === 'KeyR') {
       if (!event.repeat && this.aimPressed) {
@@ -339,6 +452,9 @@ step(deltaTimeMs: number): void {
     reload: combat.reloadStarted
   });
 
+  // Accumulate damage from every successful infected attack.
+  let totalDamage = 0;
+
   for (const infected of this.infected) {
     const state = infected.update(
       deltaTimeMs,
@@ -347,21 +463,37 @@ step(deltaTimeMs: number): void {
 
     if (state.attackHit) {
       this.infectedAttackHits++;
+      totalDamage += COMBAT.infectedDamage;
+    }
+  }
 
-      if (!this.training) {
-        this.combat.takeDamage(
-          COMBAT.infectedDamage,
-          SURVIVAL.damageGrace
-        );
+  // Apply combined damage without shared damage immunity.
+  if (!this.training && totalDamage > 0) {
+    this.combat.takeDamage(totalDamage, 0);
 
-        if (!this.combat.alive) {
-          this.onReset();
+    if (!this.combat.alive) {
+      this.onReset();
 
-          if (this.isLocked()) {
-            document.exitPointerLock();
-          }
-        }
+      if (this.isLocked()) {
+        document.exitPointerLock();
       }
+    }
+  }
+
+  separateInfected(this.infected, deltaTimeMs);
+
+  if (!this.training && this.combat.alive) {
+    const horde = this.getHordeInfo();
+
+    const nextWave = this.horde.step(
+      deltaTimeMs,
+      horde.living,
+      horde.total
+    );
+
+    if (nextWave) {
+      this.combat.rewardWave();
+      this.spawnWave();
     }
   }
 
@@ -412,10 +544,11 @@ step(deltaTimeMs: number): void {
       this.camera.updateProjectionMatrix();
     }
     this.hud.update(
-    this.state,
-    this.isLocked(),
-    this.combat.getState()
-  );
+      this.state,
+      this.isLocked(),
+      this.combat.getState(),
+      this.getHordeInfo()
+    );
   }
 
   getModelInfo() {
@@ -498,9 +631,8 @@ damageInfected(index: number, amount: number): boolean {
       document.exitPointerLock();
     }
 
-    for (const infected of this.infected) {
-      infected.dispose();
-    }
+    this.clearInfected();
+    this.infectedPool.dispose();
 
     this.infected.length = 0;
     this.infectedPool.dispose();

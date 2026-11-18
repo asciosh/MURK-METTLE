@@ -152,6 +152,20 @@ export class CombatController {
     }
   }
 
+  rewardWave(): void {
+  if (!this.alive) return;
+
+  this.health = Math.min(
+    COMBAT.maxHealth,
+    this.health + 20
+  );
+
+  this.reserve = Math.min(
+    COMBAT.reserveAmmo,
+    this.reserve + 24
+  );
+}
+
   getState() {
     return {
       health: this.health,

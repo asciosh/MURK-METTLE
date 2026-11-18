@@ -237,6 +237,32 @@ export class InfectedController {
     return this.getState();
   }
 
+  separate(dx: number, dz: number): boolean {
+  if (
+    this.health <= 0 ||
+    !Number.isFinite(dx) ||
+    !Number.isFinite(dz)
+  ) {
+    return false;
+  }
+
+  const distance = Math.hypot(dx, dz);
+
+  if (distance < 0.000001) return false;
+
+  const scale = Math.min(1, 0.12 / distance);
+
+  const x = this.clamp(this.position[0] + dx * scale);
+  const z = this.clamp(this.position[2] + dz * scale);
+  const y = this.terrain.heightAt(x, z);
+
+  if (!Number.isFinite(y)) return false;
+
+  this.position = [x, y, z];
+
+  return true;
+}
+
   damage(amount: number): boolean {
     if (
       this.health === 0 ||

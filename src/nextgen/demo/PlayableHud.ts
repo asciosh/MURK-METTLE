@@ -2,6 +2,7 @@ import type {
   CharacterControllerResult
 } from '../core/CharacterController';
 import type { CombatState } from '../core/CombatController';
+import type { HordeState } from '../core/HordeDirector';
 
 export class PlayableHud {
   private readonly root = document.createElement('div');
@@ -12,6 +13,7 @@ export class PlayableHud {
   private readonly crosshair = document.createElement('div');
   private readonly health = document.createElement('div');
   private readonly ammunition = document.createElement('div');
+  private readonly hordeStatus = document.createElement('div');
 
   constructor() {
     this.root.style.cssText = `
@@ -110,13 +112,24 @@ this.ammunition.style.cssText = `
   color:#e5d69a;
 `;
 
+this.hordeStatus.style.cssText = `
+  font-size:14px;
+  font-weight:bold;
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid #617b5c;
+  color:#e5d69a;
+  white-space:pre-line;
+`;
+
   panel.append(
     this.health,
     title,
     this.value,
     track,
     this.status,
-    this.ammunition
+    this.ammunition,
+    this.hordeStatus
   );
 
     this.root.append(
@@ -131,7 +144,8 @@ this.ammunition.style.cssText = `
   update(
     state: CharacterControllerResult,
     locked: boolean,
-    combat: CombatState
+    combat: CombatState,
+    horde: HordeState & { training: boolean }
   ): void {
     const fraction = Math.max(
       0,
@@ -170,14 +184,22 @@ this.ammunition.style.cssText = `
       ? 'PISTOL  RELOADING...'
       : `PISTOL  ${combat.ammo} / ${combat.reserve}`;
 
-    if (!combat.alive) {
-      this.prompt.textContent = 'YOU DIED — Refresh to restart';
-      this.prompt.style.color = '#ff6666';
-      this.crosshair.style.display = 'none';
-    } else if (locked) {
-      this.prompt.textContent =
-        'WASD | Shift Sprint | Ctrl Dodge | Space Jump | RMB Aim | LMB Fire | R Reload';
-    }
+  this.hordeStatus.textContent = horde.training
+    ? `TRAINING | KILLS ${horde.kills}`
+    : horde.intermission
+      ? `WAVE ${horde.wave} CLEARED\nNEXT WAVE IN ${Math.ceil(horde.countdownMs / 1000)}s\nKILLS ${horde.kills}`
+      : `WAVE ${horde.wave}\nINFECTED ${horde.living} / ${horde.total}\nKILLS ${horde.kills}`;
+
+  this.prompt.style.color = '#fff';
+
+  if (!combat.alive) {
+    this.prompt.textContent = 'YOU DIED - Press ENTER to restart';
+    this.prompt.style.color = '#ff6666';
+    this.crosshair.style.display = 'none';
+  } else if (locked) {
+    this.prompt.textContent =
+      'WASD | Shift Sprint | Ctrl Dodge | Space Jump | RMB Aim | LMB Fire | R Reload';
+  }
   }
 
   dispose(): void {

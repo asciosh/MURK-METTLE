@@ -100,6 +100,14 @@ export class InfectedAvatar {
     return state;
   }
 
+  separate(dx: number, dz: number): void {
+  if (this.disposed) return;
+
+  if (this.controller.separate(dx, dz)) {
+    this.present(this.controller.getState());
+  }
+}
+
   damage(amount: number): boolean {
     if (this.disposed) return false;
 
