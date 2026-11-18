@@ -1,3 +1,5 @@
+import type { WeaponId } from './EquipmentInventory.ts';
+import { resonantBallistics } from './WeaponResonance.ts';
 type Vec3 = readonly [number, number, number];
 
 export interface ShotTarget {
@@ -168,5 +170,63 @@ export function findShotTarget(
     nearestDistance = distance;
   }
 
+  return nearest;
+}
+
+// One trigger pull; five deterministic pellets for the shotgun. Group damage
+// by target so a single blast cannot repeatedly restart its hit animation.
+export function findWeaponHits(weapon: WeaponId, origin: Vec3, direction: Vec3,
+  shooter: Vec3, targets: readonly ShotTarget[], heightAt: (x:number,z:number)=>number, resonant=false) {
+  const spec = resonantBallistics(weapon,resonant);
+  const offsets: readonly (readonly [number,number])[] = weapon === 'shotgun'
+    ? [[0,0],[-.035,.02],[.035,.02],[-.025,-.025],[.025,-.025]] : [[0,0]];
+  const len = Math.hypot(...direction);
+  if (!Number.isFinite(len) || len < 1e-6) return [];
+  const [dx,dy,dz] = direction.map(v=>v/len) as [number,number,number];
+  const horizontal = Math.hypot(dx,dz);
+  const rx = horizontal > 1e-6 ? -dz/horizontal : 1;
+  const rz = horizontal > 1e-6 ? dx/horizontal : 0;
+  const up: Vec3 = [-rz*dy, rz*dx-rx*dz, rx*dy];
+  const hits = new Map<number,number>();
+  for (const [x,y] of offsets) {
+    const ray: Vec3 = [dx+(rx*x+up[0]*y)*spec.spread,dy+up[1]*y*spec.spread,dz+(rz*x+up[2]*y)*spec.spread];
+    const index = findShotTarget(origin,ray,shooter,targets,spec.range,heightAt);
+    if (index !== null) hits.set(index,(hits.get(index)??0)+1);
+  }
+  return [...hits].map(([index,pellets])=>({index,damage:spec.damage*pellets/offsets.length}));
+}
+
+// The legacy melee cone is retained, but visibility uses the NEXTGEN terrain.
+export function findMeleeTarget(
+  position: Vec3,
+  facing: Vec3,
+  targets: readonly ShotTarget[],
+  range: number,
+  heightAt: (x: number, z: number) => number
+): number | null {
+  if (!position.every(Number.isFinite) || !facing.every(Number.isFinite) ||
+      !Number.isFinite(range) || range <= 0 || range > 10) return null;
+  const length = Math.hypot(facing[0], facing[2]);
+  if (length < 0.000001) return null;
+  let nearest: number | null = null;
+  let best = range;
+  targets.forEach((target, index) => {
+    if (!Number.isFinite(target.health) || target.health <= 0 ||
+        !target.position.every(Number.isFinite) ||
+        Math.abs(target.position[1] - position[1]) > 1) return;
+    const dx = target.position[0] - position[0];
+    const dz = target.position[2] - position[2];
+    const distance = Math.hypot(dx, dz);
+    if (distance > best || (nearest !== null && distance === best)) return;
+    if (distance > 0.001 && (dx * facing[0] + dz * facing[2]) /
+        (length * distance) < -0.15) return;
+    if (terrainBlocked(
+      [position[0], position[1] + 1, position[2]],
+      [target.position[0], target.position[1] + 1, target.position[2]],
+      heightAt
+    )) return;
+    nearest = index;
+    best = distance;
+  });
   return nearest;
 }

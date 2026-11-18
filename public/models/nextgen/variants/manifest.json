@@ -1,0 +1,170 @@
+{
+  "survivor": [
+    {
+      "file": "survivor-ranger.glb",
+      "sha256": "dc1692868bb4a0b67f972e510e3ed2985e42a56e59e7408360c4f376ec2f7875",
+      "bytes": 4135740,
+      "triangles": 40332,
+      "meshes": 10,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "JumpStart",
+        "JumpLoop",
+        "JumpLand",
+        "Dodge",
+        "Aim",
+        "PistolShoot",
+        "PistolReload",
+        "AimUp",
+        "AimDown",
+        "Hit",
+        "Death",
+        "Melee",
+        "Bandage",
+        "Pickup"
+      ]
+    },
+    {
+      "file": "survivor-medic.glb",
+      "sha256": "5f53cf610855a8e85f1a3341b629cbba2463db71e8cf3221c5e02bafe21cb34c",
+      "bytes": 3963736,
+      "triangles": 39948,
+      "meshes": 10,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "JumpStart",
+        "JumpLoop",
+        "JumpLand",
+        "Dodge",
+        "Aim",
+        "PistolShoot",
+        "PistolReload",
+        "AimUp",
+        "AimDown",
+        "Hit",
+        "Death",
+        "Melee",
+        "Bandage",
+        "Pickup"
+      ]
+    },
+    {
+      "file": "survivor-scavenger.glb",
+      "sha256": "91f564f2f97a4916b038bb090c46ccffd14659b99077c928a0d701b435a85e91",
+      "bytes": 4278584,
+      "triangles": 40884,
+      "meshes": 10,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "JumpStart",
+        "JumpLoop",
+        "JumpLand",
+        "Dodge",
+        "Aim",
+        "PistolShoot",
+        "PistolReload",
+        "AimUp",
+        "AimDown",
+        "Hit",
+        "Death",
+        "Melee",
+        "Bandage",
+        "Pickup"
+      ]
+    },
+    {
+      "file": "survivor-sentinel.glb",
+      "sha256": "47d3b8426857b0c4ea82e227b710ffdff8ec45bc3c53fde0b26752571aa9bcf5",
+      "bytes": 4051336,
+      "triangles": 40872,
+      "meshes": 12,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "JumpStart",
+        "JumpLoop",
+        "JumpLand",
+        "Dodge",
+        "Aim",
+        "PistolShoot",
+        "PistolReload",
+        "AimUp",
+        "AimDown",
+        "Hit",
+        "Death",
+        "Melee",
+        "Bandage",
+        "Pickup"
+      ]
+    }
+  ],
+  "infected": [
+    {
+      "file": "infected-withered.glb",
+      "sha256": "3d23b105463f69e9f21dddc2713687f625f254419e401f648698827c7ae0cf69",
+      "bytes": 2518292,
+      "triangles": 32728,
+      "meshes": 7,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "Attack",
+        "Hit",
+        "Death"
+      ]
+    },
+    {
+      "file": "infected-ashen.glb",
+      "sha256": "f5fe596dcecfb38cf7044e588566c952dacef047defed343b5f9a50d175866e9",
+      "bytes": 2550916,
+      "triangles": 32920,
+      "meshes": 8,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "Attack",
+        "Hit",
+        "Death"
+      ]
+    },
+    {
+      "file": "infected-ravager.glb",
+      "sha256": "40991a03a0ebade28adab10f9223dddee7efdf77ae503554d03675a42e53a15c",
+      "bytes": 2559232,
+      "triangles": 33304,
+      "meshes": 8,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "Attack",
+        "Hit",
+        "Death"
+      ]
+    },
+    {
+      "file": "infected-feral.glb",
+      "sha256": "94fda869416e4b7023a2570d5aa74b3294018867f2d75f4b5e6c19a72ce2bf55",
+      "bytes": 2554944,
+      "triangles": 32968,
+      "meshes": 8,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "Attack",
+        "Hit",
+        "Death"
+      ]
+    }
+  ]
+}

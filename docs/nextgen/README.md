@@ -48,8 +48,10 @@ loot → upgrade the survivor headquarters.
 ## Non-negotiable constraints
 
 - Browser only (WebGL2/WebGPU via Three.js). No new native desktop work.
-- Cloudflare Worker, Durable Object classes, migrations, account schema, storage keys and
-  room protocol are preserved unchanged; player data survives the rebuild.
+- Cloudflare Worker, Durable Object classes, migrations, account schema and storage keys
+  are preserved; player data survives the rebuild. The legacy room protocol stays compatible.
+  Operator-approved, additive NEXTGEN-only room extensions may negotiate new combat behavior
+  without removing existing fields or changing legacy client semantics.
 - Original or properly licensed free assets only, with recorded provenance.
 - Cosmetic mod security and asset licensing: only original or appropriately licensed assets
   may be imported locally in the browser; never bundle unauthorized third-party IP.

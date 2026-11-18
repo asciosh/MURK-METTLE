@@ -66,7 +66,8 @@ export function cancelHealing(s: Vitals): boolean;
 export function stepVitals(s: Vitals, dt: number, now: number, input?: { moving?: boolean; sprint?: boolean }): number;
 export function refillVitals(s: Vitals): void;
 export function findRoute(start: Position2, goal: Position2): Position2[];
-export function spawnHorde(players: Combatant[], wave: number, runId?: string): Enemy[];
+type TerrainMap=typeof import('./nextgen-terrain.mjs').NEXTGEN_MAP;
+export function spawnHorde(players: Combatant[], wave: number, runId?: string,map?:TerrainMap): Enemy[];
 export function alertHorde(enemies: Enemy[], source: Position2, now: number, radius?: number): void;
 export function damageEnemy(enemy: Enemy, damage: number): boolean;
 export function bulletTarget<T extends Pick<Enemy, 'hp' | 'x' | 'z'>>(
@@ -74,16 +75,19 @@ export function bulletTarget<T extends Pick<Enemy, 'hp' | 'x' | 'z'>>(
   origin: Position2 & { y: number },
   direction: Position2 & { y: number },
   range: number,
+  map?:TerrainMap,
 ): { enemy: T; distance: number } | null;
 export function meleeTarget<T extends Pick<Enemy, 'hp' | 'x' | 'z'>>(
   enemies: T[],
   player: Position2 & { yaw: number },
   range: number,
+  map?:TerrainMap,
 ): T | null;
 export function pulseTargets<T extends Pick<Enemy, 'hp' | 'x' | 'z'>>(
   enemies: T[],
   player: Position2,
   range: number,
+  map?:TerrainMap,
 ): T[];
 export interface HordeHit {
   playerId: string;
@@ -91,8 +95,10 @@ export interface HordeHit {
   damage: number;
   hp: number;
 }
-export function stepHorde(enemies: Enemy[], players: Combatant[], dt: number, now: number): HordeHit[];
+export function stepHorde(enemies: Enemy[], players: Combatant[], dt: number, now: number,map?:TerrainMap): HordeHit[];
 export class HordeSimulation {
+  constructor(map?:TerrainMap);
+  map?:TerrainMap;
   enemies: Enemy[];
   wave: number;
   nextWaveAt: number;

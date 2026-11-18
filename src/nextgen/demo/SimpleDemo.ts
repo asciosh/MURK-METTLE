@@ -8,6 +8,10 @@ import { TerrainGenerator } from '../core/TerrainGenerator';
 import { TerrainMaterial } from '../core/TerrainMaterial';
 import { VegetationRenderer } from '../core/VegetationRenderer';
 import { PlayableSession } from './PlayableSession';
+import { OnlineSession } from './OnlineSession';
+import { NextgenPauseMenu } from './NextgenPauseMenu';
+import { savedNextgenQuality } from '../core/NextgenOptions';
+import { NEXTGEN_TERRAIN_SEED, roomHeight } from '../../../shared/nextgen-terrain.mjs';
 
 /**
  * Independent graphics demonstration scene (M01 checkpoint).
@@ -32,6 +36,8 @@ export class SimpleDemo {
   private resizeObserver?: ResizeObserver;
   private vegetation?: VegetationRenderer;
   private session?: PlayableSession;
+  private onlineSession?: OnlineSession;
+  private pauseMenu?: NextgenPauseMenu;
 
   private readonly qualityPresets = {
     low: {
@@ -66,7 +72,7 @@ export class SimpleDemo {
   private readonly bloomRadius = uniform(1.0);
   private readonly bloomThreshold = uniform(0.3);
 
-  constructor(private readonly playable = false) {
+  constructor(private readonly playable = false, private readonly roomCode?: string) {
     document.body.style.margin = '0';
     this.canvas = document.createElement('canvas');
     this.canvas.style.display = 'block';
@@ -122,9 +128,11 @@ async mount(): Promise<void> {
     sceneColor.a
   );
 
-  this.setQuality('balanced');
+  this.setQuality(new URLSearchParams(location.search).get('quality') ?? savedNextgenQuality(window.localStorage));
   this.renderer.setRenderPipeline(this.pipeline);
 
+  // Solo and co-op now use the exact same in-game menu and graphics settings.
+  if (this.playable || this.roomCode !== undefined) this.pauseMenu = new NextgenPauseMenu(this.canvas, this.roomCode !== undefined ? 'coop' : 'solo', value => this.setQuality(value));
   this.renderer.start();
 
   window.addEventListener('resize', this._onResize);
@@ -168,7 +176,7 @@ async mount(): Promise<void> {
     pmrem.dispose();
 
         // Heightfield terrain
-    const terrain = new TerrainGenerator(12345);
+    const terrain = new TerrainGenerator(NEXTGEN_TERRAIN_SEED);
     const grid = terrain.gridSize;
     const cell = terrain.cellSize;
     const heights = terrain.getHeights();
@@ -220,7 +228,7 @@ async mount(): Promise<void> {
 
     // Procedural vegetation and environment props.
     this.vegetation = this.renderer.track(
-      new VegetationRenderer(scene, terrain, 12345)
+      new VegetationRenderer(scene, terrain, NEXTGEN_TERRAIN_SEED)
     );
 
     this.vegetation.setQuality(this.currentPreset);
@@ -253,6 +261,20 @@ async mount(): Promise<void> {
         centerHeight,
         centerZ
       );
+    }
+
+    // Both modes share this exact world; only the simulation/session controller differs.
+    if (this.roomCode !== undefined) {
+      const online = new OnlineSession(scene, camera, this.canvas, this.roomCode);
+      this.onlineSession = online;
+      this.renderer.onBeforeRender = (dtMs) => {
+        online.present(dtMs);
+        this.vegetation?.update(camera.position.x,camera.position.z);
+        const p=online.getPosition(),x=p.x+100,z=p.z+100,y=terrain.heightAt(x,z);
+        this.sun?.position.set(x-30,y+45,z+25);
+        this.sun?.target.position.set(x,y,z);
+      };
+      return;
     }
 
       if (this.playable) {
@@ -337,6 +359,10 @@ async mount(): Promise<void> {
     return this.session?.getModelInfo();
   }
 
+  getRoomInfo() { return this.onlineSession?.getInfo(); }
+  getRoomLandscapeInfo() { return this.onlineSession?.getLandscapeInfo(); }
+  getRoomHeight(x:number,z:number) { return roomHeight(x,z); }
+
   getPlayerState() {
     return this.session?.getState();
   }
@@ -353,7 +379,10 @@ getCombatInfo() {
   return this.session?.getCombatInfo();
 }
 
-getInfectedInfo() {
+  getLootInfo() { return this.session?.getLootInfo() ?? []; }
+  getPickupInfo() { return this.session?.getPickupInfo(); }
+
+  getInfectedInfo() {
   return this.session?.getInfectedInfo() ?? [];
 }
 
@@ -491,8 +520,12 @@ private applyShadowPreset(): void {
     this.renderer.onSimulationStep = undefined;
     this.renderer.onBeforeRender = undefined;
 
+    this.pauseMenu?.dispose();
+    this.pauseMenu = undefined;
     this.session?.dispose();
     this.session = undefined;
+    this.onlineSession?.dispose();
+    this.onlineSession = undefined;
 
     this.renderer.dispose();
     this.container.remove();

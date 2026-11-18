@@ -3,6 +3,7 @@ import type { Arsenal, SpeciesId } from '../../../shared/expansion.mjs';
 import type { CollectionState } from './Collection';
 import type { ActorPose } from '../../../shared/actor-pose.mjs';
 import type { Vitals, HordePacket } from '../../../shared/survival.mjs';
+import type { NextgenPlayerState, NextgenWeapon } from '../../../shared/nextgen-combat.mjs';
 export interface RemotePlayer extends Partial<ActorPose> {
   reloadProgress?: number;
   survival?: Vitals;
@@ -14,6 +15,7 @@ export interface RemotePlayer extends Partial<ActorPose> {
   creatureOwned?: boolean;
   species?: SpeciesId;
   creatureXp?: number;
+  nextgen?: NextgenPlayerState;
 }
 export interface RemoteZombie {
   x: number;
@@ -44,11 +46,16 @@ export type RoomEvent =
       direction: { x: number; y: number; z: number };
       distance: number;
       hit: boolean;
+      nextgenWeapon?: NextgenWeapon;
+      resonant?: boolean;
+      pellets?: { direction: { x: number; y: number; z: number }; distance: number; hit: boolean }[];
     }
+  | { type: 'companion-strike'; by: string; x: number; z: number }
+  | { type: 'revive-state'; status: 'started' | 'cancelled' | 'completed'; by: string; target: string; reason?: string }
   | MissionState
   | { type: 'mission-extracted'; by: string; completed: number }
   | { type: 'mission-reward'; xp: number; completed: number; totals: { xp: number; kills: number; creatureXp: number } }
-  | { type: 'welcome'; id: string; code: string; survival?: Vitals }
+  | { type: 'welcome'; id: string; code: string; survival?: Vitals; map?: string }
   | { type: 'survival'; survival: Vitals }
   | { type: 'correction'; x: number; z: number }
   | { type: 'respawn'; hp: number; x: number; z: number; survival: Vitals }
@@ -66,13 +73,21 @@ export type RoomEvent =
   | { type: 'creature-state'; owned: boolean; xp: number }
   | { type: 'error'; message: string };
 type Frame = { at: number; players: RemotePlayer[]; horde: HordePacket };
-const INTERPOLATION_DELAY_MS = 120;
+const DEFAULT_INTERPOLATION_DELAY_MS = 120;
 const blend = (a: number, b: number, t: number): number => a + (b - a) * t;
 function yawBlend(a: number, b: number, t: number): number {
   const delta = Math.atan2(Math.sin(b - a), Math.cos(b - a));
   return a + delta * t;
 }
 export class Multiplayer {
+  // Legacy multiplayer keeps its original 120ms delay. NEXTGEN may choose
+  // a larger jitter buffer so 100ms room snapshots interpolate continuously.
+  private readonly interpolationDelayMs: number;
+  constructor(visualDelayMs = DEFAULT_INTERPOLATION_DELAY_MS) {
+    this.interpolationDelayMs = Number.isFinite(visualDelayMs)
+      ? Math.max(0, Math.min(500, visualDelayMs))
+      : DEFAULT_INTERPOLATION_DELAY_MS;
+  }
   readonly arrivalMetrics = new SnapshotArrivals();
   private ws: WebSocket | null = null;
   private frames: Frame[] = [];
@@ -83,10 +98,10 @@ export class Multiplayer {
   horde: HordePacket | null = null;
   self: RemotePlayer | null = null;
   onEvent: (event: RoomEvent) => void = () => {};
-  connect(code: string): void {
+  connect(code: string, map?: string): void {
     this.disconnect();
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-    const socket = new WebSocket(`${scheme}://${location.host}/room?code=${encodeURIComponent(code)}`);
+    const socket = new WebSocket(`${scheme}://${location.host}/room?code=${encodeURIComponent(code)}${map ? '&map='+encodeURIComponent(map):''}`);
     this.ws = socket;
     socket.onmessage = (event) => {
       if (this.ws !== socket) return;
@@ -127,7 +142,7 @@ export class Multiplayer {
   // Holding the newest state briefly gives us two samples to interpolate instead of snapping.
   updateVisuals(): void {
     if (!this.frames.length) return;
-    const target = performance.now() - INTERPOLATION_DELAY_MS;
+    const target = performance.now() - this.interpolationDelayMs;
     const last = this.frames[this.frames.length - 1];
     let a = this.frames[0];
     let b = last;

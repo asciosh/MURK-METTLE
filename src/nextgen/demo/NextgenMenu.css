@@ -1,0 +1,39 @@
+/* The same NEXTGEN visual language is used for the landing page and in-game menu. */
+.ng-shell{font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:#ecf2e5;letter-spacing:.01em}
+.ng-shell *{box-sizing:border-box}
+.ng-shell button,.ng-shell a,.ng-shell input,.ng-shell select{font:inherit}
+.ng-shell button{cursor:pointer}
+.ng-shell :focus-visible{outline:2px solid #d9eab3;outline-offset:3px}
+.ng-shell a{color:inherit;text-decoration:none}
+.ng-shell .ng-panel{background:linear-gradient(155deg,rgba(23,39,29,.97),rgba(9,23,19,.97));border:1px solid #72876b;border-radius:18px;box-shadow:0 25px 90px #0008;padding:clamp(20px,3vw,36px)}
+.ng-shell .ng-eyebrow{margin:0;color:#b9d19e;font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase}
+.ng-shell h1{font-size:clamp(26px,3vw,39px);line-height:1.15;letter-spacing:.025em;margin:8px 0 8px}
+.ng-shell h2{font-size:22px;line-height:1.2;margin:0 0 12px}
+.ng-shell p{margin:8px 0 12px;color:#cbd7c8}
+.ng-shell .ng-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 18px}
+.ng-shell .ng-tab{background:#253b2c;border:1px solid #4c614c;color:#dde8d5;border-radius:8px;padding:9px 13px}
+.ng-shell .ng-tab[aria-selected="true"]{background:#a3ba82;border-color:#bbcf9b;color:#13251b;font-weight:700}
+.ng-shell .ng-section[hidden]{display:none}
+.ng-shell .ng-button{display:block;width:100%;background:#a4c18a;color:#102018;border:1px solid #bdcfa9;border-radius:8px;padding:12px 14px;text-align:center;font-weight:700;margin:8px 0}
+.ng-shell .ng-button:hover{background:#c1d5a5}
+.ng-shell .ng-button.ng-secondary{background:#2b4133;color:#e1edda;border-color:#607c61}
+.ng-shell .ng-button.ng-secondary:hover{background:#3b5742}
+.ng-shell .ng-button:disabled{opacity:.55;cursor:wait}
+.ng-shell input,.ng-shell select{width:100%;background:#14271e;color:#eff8e9;border:1px solid #657e67;border-radius:8px;padding:11px 12px}
+.ng-shell label{display:block;font-size:13px;color:#c8dbc2;margin:11px 0 5px}
+.ng-shell .ng-note{font-size:12px;line-height:1.5;color:#bfd0b8}
+.ng-shell .ng-status{min-height:24px;font-size:13px;color:#e6d59c}
+.ng-shell .ng-controls{display:grid;grid-template-columns:minmax(100px,1fr) 2fr;gap:7px 12px;max-height:min(43vh,350px);overflow:auto}
+.ng-shell .ng-key{color:#cbe4af;font-weight:700}
+.ng-shell .ng-card{border:1px solid #455f4b;border-radius:10px;background:#182e22;padding:12px;margin:10px 0}
+.ng-shell .ng-smallcaps{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:#b7caaf}
+#nextgen-lobby{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:16px;overflow-y:auto;background:linear-gradient(120deg,#04140acc,transparent 85%),#0005}
+#nextgen-lobby>.ng-panel{width:min(100%,525px);max-height:min(95vh,960px);overflow-y:auto}
+#nextgen-lobby .ng-subtitle{font-size:14px}
+#nextgen-pause-toggle{position:fixed;right:16px;top:14px;z-index:108;padding:8px 12px;background:#12261de0;color:#eaf5e2;border:1px solid #6f8b68;border-radius:8px;pointer-events:auto}
+#nextgen-pause{position:fixed;inset:0;z-index:110;display:grid;place-items:center;padding:16px;overflow:auto;background:#040f0abf;pointer-events:auto}
+#nextgen-pause[hidden]{display:none}
+#nextgen-pause>.ng-panel{width:min(100%,480px);max-height:min(92vh,760px);overflow:auto}
+@media(max-width:540px){#nextgen-lobby{padding:8px}#nextgen-lobby>.ng-panel{padding:18px}.ng-shell .ng-tabs{gap:4px}.ng-shell .ng-tab{flex:1;min-width:calc(50% - 4px);padding:9px 5px}}
+@media(prefers-reduced-motion:reduce){.ng-shell *{scroll-behavior:auto!important;transition:none!important}}
+.ng-shell [hidden]{display:none!important}

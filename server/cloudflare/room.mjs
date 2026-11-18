@@ -17,6 +17,9 @@ import {
   pulseTargets,
 } from '../../shared/survival.mjs';
 import { sanitizeActorPose } from '../../shared/actor-pose.mjs';
+import { NEXTGEN_MAP, NEXTGEN_MAP_ID } from '../../shared/nextgen-terrain.mjs';
+import { NEXTGEN_MOBILITY, newNextgenMobility, beginNextgenDodge, beginNextgenJump, advanceNextgenDodge, nextgenMobilitySnapshot, nextgenJumpHeight } from '../../shared/nextgen-mobility.mjs';
+import { NEXTGEN_WEAPONS, NEXTGEN_SHOTGUN, REVIVE_RULES, COMPANION_STRIKE, newNextgenCombat, isNextgenWeapon, selectNextgenWeapon, toggleNextgenResonance, consumeNextgenResonance, reloadShotgun, fireShotgun, stepNextgenCombat, nextgenShots, canRevive } from '../../shared/nextgen-combat.mjs';
 import {
   WORLD_BOUNDARY,
   CREATURES,
@@ -63,6 +66,7 @@ export class GameRoom extends DurableObject {
     // Socket attachments recover player positions when a Durable Object wakes.
     for (const ws of this.ctx.getWebSockets()) {
       const data = ws.deserializeAttachment();
+      if(data?.map===NEXTGEN_MAP_ID){this.map=NEXTGEN_MAP;this.horde.map=this.map;}
       if (data?.id && this.players.size < MAX_PLAYERS)
         this.players.set(ws, {
           id: data.id,
@@ -100,6 +104,9 @@ export class GameRoom extends DurableObject {
     if (!validRoomCode(code)) return new Response('Invalid code', { status: 400 });
     const username = request.headers.get('X-MM-Verified-User') || '';
     if (!validUsername(username)) return new Response('Verified account required', { status: 401 });
+    const requestedMap=request.headers.get('X-MM-Room-Map')===NEXTGEN_MAP_ID?NEXTGEN_MAP:undefined;
+    if(this.players.size&&this.map!==requestedMap)return new Response('Room map mismatch',{status:409});
+    this.map=requestedMap;this.horde.map=this.map;
     // Block two simultaneous sockets for the same account in one room.
     if ([...this.players.values()].some((p) => p.username === username))
       return new Response('Account already connected to this room', { status: 409 });
@@ -128,7 +135,7 @@ export class GameRoom extends DurableObject {
     };
     this.players.set(server, player);
     this.saveAttachment(server, player);
-    this.send(server, { type: 'welcome', id: player.id, code, survival: player.survival });
+    this.send(server, { type: 'welcome', id: player.id, code, survival: player.survival,...(this.map?{map:this.map.id}:{}) });
     this.send(server, this.missionPacket());
     // Load server-owned creature state before accepting combat abilities.
     try {
@@ -163,9 +170,16 @@ export class GameRoom extends DurableObject {
   broadcast(msg) {
     for (const socket of this.players.keys()) this.send(socket, msg);
   }
+  cancelRevive(player, reason = 'interrupted') {
+    const attempt = player.nextgen?.revive;
+    if (!attempt) return;
+    player.nextgen.revive = null;
+    this.broadcast({ type: 'revive-state', status: 'cancelled', by: player.id, target: attempt.targetId, reason });
+  }
   saveAttachment(socket, player) {
     socket.serializeAttachment({
       id: player.id,
+      ...(this.map?{map:this.map.id}:{}),
       username: player.username,
       x: player.x,
       z: player.z,
@@ -274,9 +288,53 @@ export class GameRoom extends DurableObject {
     }
     if (!msg || typeof msg.type !== 'string') return;
     const now = Date.now();
+    // Additive opt-in. Legacy clients never get new combat behavior or lose their existing restart semantics.
+    if (msg.type === 'nextgen-hello') {
+      if (msg.version === 1) {
+        if (!player.nextgen) player.nextgen = newNextgenCombat();
+        player.nextgen.mobility ??= newNextgenMobility();
+      }
+      return;
+    }
+    if (msg.type === 'revive-cancel') { this.cancelRevive(player); return; }
+    if (msg.type === 'nextgen-jump') {
+      if (!player.nextgen || !this.map || !beginNextgenJump(player.nextgen.mobility, player, now)) return;
+      this.cancelRevive(player, 'jump');
+      this.saveAttachment(socket, player);
+      return;
+    }
+    if (msg.type === 'nextgen-dodge') {
+      if (!player.nextgen || !this.map || !beginNextgenDodge(player.nextgen.mobility, player, msg.x, msg.z, now)) return;
+      cancelHealing(player.survival);this.cancelRevive(player, 'dodge');
+      player.movingUntil=now+NEXTGEN_MOBILITY.dodgeDuration;
+      this.send(socket, { type: 'survival', survival: player.survival });
+      this.saveAttachment(socket, player);
+      return;
+    }
+
+    if (msg.type === 'revive') {
+      const target = [...this.players.values()].find(p => p.id === msg.target);
+      if (!canRevive(player, target, now,this.map) || target.nextgen.downedUntil - now < REVIVE_RULES.duration || player.nextgen.revive || player.survival.bandages <= 0 || [...this.players.values()].some(p => p.nextgen?.revive?.targetId === target?.id)) {
+        this.send(socket, { type: 'error', message: 'Revive requires a nearby downed teammate, one bandage and standing still.' }); return;
+      }
+      player.survival.bandages--;
+      player.nextgen.resonant = false; player.nextgen.transitionUntil = 0;
+      player.nextgen.revive = { targetId: target.id, startedAt: now, endsAt: now + REVIVE_RULES.duration };
+      this.send(socket, { type: 'survival', survival: player.survival });
+      this.saveAttachment(socket, player);
+      this.broadcast({ type: 'revive-state', status: 'started', by: player.id, target: target.id }); return;
+    }
+    if (msg.type === 'nextgen-equip' || msg.type === 'nextgen-resonance') {
+      if (!player.nextgen || player.hp <= 0 || player.nextgen.revive) return;
+      if (msg.type === 'nextgen-equip') selectNextgenWeapon(player.nextgen, msg.weapon);
+      else if (!toggleNextgenResonance(player.nextgen, now)) this.send(socket, { type: 'error', message: 'Resonance not ready.' });
+      return;
+    }
+    if (!['move', 'sync-equipment'].includes(msg.type)) this.cancelRevive(player);
     if (msg.type === 'move') {
+      if (player.nextgen?.mobility?.dodgeUntil > now) { this.send(socket, { type: 'correction', x: player.x, z: player.z }); return; }
       if (!isNumber(msg.x) || !isNumber(msg.z) || !isNumber(msg.yaw)) return;
-      if (Math.abs(msg.x) > WORLD_BOUNDARY || Math.abs(msg.z) > WORLD_BOUNDARY || Math.abs(msg.yaw) > 1000) return;
+      if (Math.abs(msg.x) > (this.map?.boundary??WORLD_BOUNDARY) || Math.abs(msg.z) > (this.map?.boundary??WORLD_BOUNDARY) || Math.abs(msg.yaw) > 1000) return;
       // Guard against high packet rates and large impossible teleports.
       if (now - player.messageAt < 45) return;
       player.messageAt = now;
@@ -289,9 +347,10 @@ export class GameRoom extends DurableObject {
       if (distance > 0.001) {
         player.movingUntil = now + 220;
         cancelHealing(player.survival);
+        this.cancelRevive(player, 'movement');
       }
       if (player.hp <= 0) return;
-      const constrained = constrainPosition({ x: msg.x, z: msg.z });
+      const constrained = (this.map?.constrain??constrainPosition)({ x: msg.x, z: msg.z });
       if (Math.hypot(constrained.x - msg.x, constrained.z - msg.z) > 0.05) {
         this.send(socket, { type: 'correction', x: player.x, z: player.z });
         return;
@@ -301,6 +360,7 @@ export class GameRoom extends DurableObject {
       player.yaw = msg.yaw;
       player.lastMove = now;
       player.pose = sanitizeActorPose(msg);
+      if (player.nextgen) selectNextgenWeapon(player.nextgen, isNextgenWeapon(msg.nextgenWeapon) ? msg.nextgenWeapon : player.pose.weapon);
       this.saveAttachment(socket, player);
       return;
     }
@@ -323,6 +383,7 @@ export class GameRoom extends DurableObject {
     if (msg.type === 'reload' || msg.type === 'resupply') {
       if (player.hp <= 0) return;
       if (msg.type === 'reload' && Object.hasOwn(WEAPONS, msg.weapon)) reloadWeapon(player.arsenal, msg.weapon, now);
+      if (msg.type === 'reload' && msg.weapon === 'shotgun' && player.nextgen) reloadShotgun(player.nextgen, now);
       if (msg.type === 'resupply') {
         const cache = SUPPLIES.find((p) => p.id === msg.id);
         if (!cache || Math.hypot(player.x - cache.x, player.z - cache.z) > 2.8) return;
@@ -334,6 +395,7 @@ export class GameRoom extends DurableObject {
         refillVitals(player.survival);
         this.send(socket, { type: 'survival', survival: player.survival });
         for (const id of Object.keys(WEAPONS)) player.arsenal[id].reserve = WEAPONS[id].reserve;
+        if (player.nextgen) player.nextgen.shotgun.reserve = NEXTGEN_SHOTGUN.reserve;
       }
       this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
       this.saveAttachment(socket, player);
@@ -429,6 +491,7 @@ export class GameRoom extends DurableObject {
         player.moveBudget = 0.75;
         player.budgetAt = now;
         player.arsenal = newArsenal();
+        if (player.nextgen) { player.nextgen = newNextgenCombat(); player.nextgen.mobility = newNextgenMobility(); }
         if (wiped) this.horde.reset([player]);
         this.saveAttachment(socket, player);
         this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
@@ -436,49 +499,67 @@ export class GameRoom extends DurableObject {
       }
       return;
     }
-    if (!['attack', 'pulse', 'shoot'].includes(msg.type) || player.hp <= 0) return;
+    if (!['attack', 'pulse', 'shoot', 'companion-strike'].includes(msg.type) || player.hp <= 0) return;
     const pulse = msg.type === 'pulse',
-      shooting = msg.type === 'shoot';
+      shooting = msg.type === 'shoot', companion = msg.type === 'companion-strike';
     const species = player.collection?.active || 'lanternkin',
       power = creaturePower(species, player.collection?.creatures[species]?.xp || 0);
-    if (pulse && !player.creatureOwned) {
-      this.send(socket, { type: 'error', message: 'Bond with a creature before using Pulse.' });
+    if ((pulse || companion) && !player.creatureOwned) {
+      this.send(socket, { type: 'error', message: companion ? 'Bond with a creature before commanding a strike.' : 'Bond with a creature before using Pulse.' });
       return;
     }
-    let targets = [],
+    let targets = [], damageByEnemy = null,
       damage = 0;
     if (shooting) {
       const d = msg.direction;
       if (
-        !Object.hasOwn(WEAPONS, msg.weapon) ||
+        !(Object.hasOwn(WEAPONS, msg.weapon) || (player.nextgen && msg.weapon === 'shotgun')) ||
         !d ||
         ![d.x, d.y, d.z].every(isNumber) ||
         Math.abs(Math.hypot(d.x, d.y, d.z) - 1) > 0.015
       )
         return;
-      const weapon = WEAPONS[msg.weapon],
-        origin = { x: player.x, y: 1.32, z: player.z };
-      if (!fireWeapon(player.arsenal, msg.weapon, now)) {
+      const weapon = NEXTGEN_WEAPONS[msg.weapon],
+        origin = { x: player.x, y: 1.32+(this.map?.heightAt(player.x,player.z)??0)+nextgenJumpHeight(player.nextgen?.mobility,now), z: player.z };
+      if (player.nextgen) {
+        selectNextgenWeapon(player.nextgen, msg.weapon);
+        if (player.nextgen.transitionUntil > now) return;
+      }
+      const fired = msg.weapon === 'shotgun' ? fireShotgun(player.nextgen, now) : fireWeapon(player.arsenal, msg.weapon, now);
+      if (!fired) {
         this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
         return;
       }
       cancelHealing(player.survival);
-      player.pose = { ...sanitizeActorPose(player.pose), weapon: msg.weapon };
-      const hit = bulletTarget(this.horde.enemies, origin, d, weapon.range);
+      player.pose = { ...sanitizeActorPose(player.pose), weapon: msg.weapon === 'shotgun' ? 'rifle' : msg.weapon };
+      const resonant = player.nextgen ? consumeNextgenResonance(player.nextgen, now) : false;
+      const extended = !!player.nextgen && (resonant || msg.weapon === 'shotgun');
+      const hits = extended ? nextgenShots(this.horde.enemies, origin, d, msg.weapon, resonant,this.map) : null;
+      const hit = extended ? null : bulletTarget(this.horde.enemies, origin, d, weapon.range,this.map);
+      const ray = hits ? (hits.rays.find(r => r.hit) || hits.rays[0]) : { direction: d, distance: hit?.distance ?? (this.map?.distance??obstacleDistance)(origin, d, weapon.range), hit: !!hit };
       alertHorde(this.horde.enemies, player, now);
       this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
       this.saveAttachment(socket, player);
       this.broadcast({
         type: 'shot',
-        weapon: msg.weapon,
+        weapon: msg.weapon === 'shotgun' ? 'rifle' : msg.weapon,
         by: player.id,
         origin,
-        direction: d,
-        distance: hit?.distance ?? obstacleDistance(origin, d, weapon.range),
-        hit: !!hit,
+        direction: ray.direction,
+        distance: ray.distance,
+        hit: ray.hit,
+        ...(extended ? { nextgenWeapon: msg.weapon, resonant, pellets: hits.rays } : {}),
       });
-      if (hit) targets = [hit.enemy];
+      if (hits) { damageByEnemy = hits.damage; targets = [...hits.damage.keys()]; }
+      else if (hit) targets = [hit.enemy];
       damage = weapon.damage;
+    } else if (companion) {
+      if (!player.nextgen || now - player.nextgen.companionAt < COMPANION_STRIKE.interval) return;
+      const target = pulseTargets(this.horde.enemies, player, COMPANION_STRIKE.range,this.map).sort((a,b) => Math.hypot(a.x-player.x,a.z-player.z)-Math.hypot(b.x-player.x,b.z-player.z))[0];
+      if (!target) return;
+      player.nextgen.companionAt = now; cancelHealing(player.survival);
+      targets = [target]; damage = COMPANION_STRIKE.damage;
+      this.broadcast({ type: 'companion-strike', by: player.id, x: target.x, z: target.z });
     } else {
       const cooldown = pulse ? power.cooldown * 1000 : 480;
       if (now - (pulse ? player.pulseAt : player.attackAt) < cooldown) return;
@@ -487,17 +568,17 @@ export class GameRoom extends DurableObject {
       cancelHealing(player.survival);
       this.broadcast({ type: 'action', by: player.id, action: pulse ? 'pulse' : 'melee' });
       if (pulse) {
-        targets = pulseTargets(this.horde.enemies, player, power.range);
+        targets = pulseTargets(this.horde.enemies, player, power.range,this.map);
         damage = power.damage;
         alertHorde(this.horde.enemies, player, now, 18);
       } else {
-        const target = meleeTarget(this.horde.enemies, player, player.upgrades?.balanced ? 3.35 : 2.65);
+        const target = meleeTarget(this.horde.enemies, player, player.upgrades?.balanced ? 3.35 : 2.65,this.map);
         if (target) targets = [target];
         damage = player.upgrades?.sharpened ? 55 : 40;
       }
     }
     // Mark every death synchronously before awaiting account writes, so overlapping inputs cannot double-credit it.
-    const killed = targets.filter((enemy) => damageEnemy(enemy, damage));
+    const killed = targets.filter((enemy) => damageEnemy(enemy, damageByEnemy?.get(enemy) ?? damage));
     if (killed.length) {
       this.mission.kills = Math.min(MISSION_KILLS, this.mission.kills + killed.length);
       await this.persistMission();
@@ -550,6 +631,11 @@ export class GameRoom extends DurableObject {
     } catch {}
   }
   drop(socket) {
+    const player = this.players.get(socket);
+    if (player) {
+      this.cancelRevive(player, 'disconnect');
+      for (const p of this.players.values()) if (p.nextgen?.revive?.targetId === player.id) this.cancelRevive(p, 'teammate disconnected');
+    }
     this.players.delete(socket);
     if (!this.players.size) {
       this.stopTick();
@@ -566,6 +652,7 @@ export class GameRoom extends DurableObject {
     const dt = Math.min(0.25, (now - this.lastTick) / 1000);
     this.lastTick = now;
     for (const [socket, p] of this.players) {
+      if (p.nextgen) stepNextgenCombat(p.nextgen, now, dt, p.hp > 0);
       for (const id of Object.keys(WEAPONS)) {
         const prior = p.arsenal[id].reloadAt;
         settleReload(p.arsenal, id, now);
@@ -586,14 +673,40 @@ export class GameRoom extends DurableObject {
       }
       p.sprinting = p.survival.sprinting;
     }
+    // Optional online movement is owned by the server, including collision and stamina.
+    for (const [socket, p] of this.players) {
+      if (p.nextgen?.mobility && advanceNextgenDodge(p.nextgen.mobility,p,now,(this.map?.constrain??constrainPosition))) {
+        p.movingUntil=now+200; this.saveAttachment(socket,p);
+      }
+    }
     const hits = this.horde.step([...this.players.values()], dt, now);
     for (const hit of hits) {
       const entry = [...this.players].find(([, p]) => p.id === hit.playerId);
       if (!entry) continue;
       const [socket, p] = entry;
       cancelHealing(p.survival);
+      this.cancelRevive(p, 'damage');
+      if (p.nextgen && p.hp <= 0) {
+        p.nextgen.resonant = false; p.nextgen.transitionUntil = 0;
+        p.nextgen.downedUntil = now + REVIVE_RULES.downedMs;
+      }
       this.send(socket, { type: 'damage', hp: p.hp });
       this.saveAttachment(socket, p);
+    }
+    // Resolve only after server damage for this tick, so a damaging hit cancels even on completion tick.
+    for (const [socket, p] of this.players) {
+      const attempt = p.nextgen?.revive;
+      if (!attempt) continue;
+      const entry = [...this.players].find(([, target]) => target.id === attempt.targetId);
+      if (!entry || !canRevive(p, entry[1], now,this.map)) { this.cancelRevive(p, 'teammate unavailable'); continue; }
+      if (now < attempt.endsAt) continue;
+      const [targetSocket, target] = entry;
+      p.nextgen.revive = null; target.nextgen.downedUntil = 0;
+      target.hp = REVIVE_RULES.health; target.hurtUntil = now + REVIVE_RULES.grace;
+      target.movingUntil = 0; target.survival.sprinting = false;
+      this.saveAttachment(targetSocket, target); this.saveAttachment(socket, p);
+      this.send(targetSocket, { type: 'damage', hp: target.hp });
+      this.broadcast({ type: 'revive-state', status: 'completed', by: p.id, target: target.id });
     }
     this.broadcast({
       type: 'snapshot',
@@ -614,6 +727,14 @@ export class GameRoom extends DurableObject {
         creatureOwned: p.creatureOwned === true,
         species: p.collection?.active || 'lanternkin',
         creatureXp: p.collection?.creatures[p.collection.active]?.xp || 0,
+        ...(p.nextgen ? { nextgen: {
+          weapon: p.nextgen.weapon, shotgun: p.nextgen.shotgun, charge: p.nextgen.charge, resonant: p.nextgen.resonant, transitioning: p.nextgen.transitionUntil > now,
+          downedMs: p.hp <= 0 ? Math.max(0, p.nextgen.downedUntil - now) : 0,
+          revivingTarget: p.nextgen.revive?.targetId ?? null,
+          reviveProgress: p.nextgen.revive ? Math.max(0, Math.min(1, (now - p.nextgen.revive.startedAt) / REVIVE_RULES.duration)) : 0,
+          reviveBy: [...this.players.values()].find(other => other.nextgen?.revive?.targetId === p.id)?.id ?? null,
+          ...nextgenMobilitySnapshot(p.nextgen.mobility,now),
+        } } : {}),
       })),
       horde: this.horde.packet(),
       // Kept for older open clients until they reload into the multi-enemy protocol.

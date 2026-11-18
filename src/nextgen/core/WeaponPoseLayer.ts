@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { WEAPONS, type WeaponId } from './EquipmentInventory.ts';
 
 export type WeaponAction = 'shoot' | 'reload';
 
@@ -16,6 +17,7 @@ export class WeaponPoseLayer {
 
   private active: WeaponAction | null = null;
   private elapsedMs = 0;
+  private activeDurationMs = 0;
 
   constructor(clips: THREE.AnimationClip[]) {
     for (const clip of clips) {
@@ -67,7 +69,8 @@ export class WeaponPoseLayer {
     deltaTimeMs: number,
     enabled: boolean,
     shoot = false,
-    reload = false
+    reload = false,
+    weapon: WeaponId = 'pistol'
   ): void {
     if (!enabled) {
       this.cancel();
@@ -81,11 +84,9 @@ export class WeaponPoseLayer {
     if (dt === 0) return;
 
     if (this.active) {
-      const clip = this.clips.get(this.active)!;
-
       this.elapsedMs += dt;
 
-      if (this.elapsedMs >= clip.durationMs) {
+      if (this.elapsedMs >= this.activeDurationMs) {
         this.cancel();
       }
 
@@ -100,6 +101,9 @@ export class WeaponPoseLayer {
     if (requested && this.clips.has(requested)) {
       this.active = requested;
       this.elapsedMs = 0;
+      const native = this.clips.get(requested)!.durationMs;
+      this.activeDurationMs = weapon === 'pistol' ? native :
+        requested === 'reload' ? WEAPONS[weapon].reloadMs : WEAPONS[weapon].intervalMs;
     }
   }
 
@@ -115,7 +119,7 @@ export class WeaponPoseLayer {
 
     if (!track) return false;
 
-    const time = this.elapsedMs / 1000;
+    const time = this.elapsedMs / Math.max(1,this.activeDurationMs) * this.clips.get(this.active)!.durationMs / 1000;
     const times = track.times;
 
     let right = 1;

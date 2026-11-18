@@ -1,8 +1,84 @@
+### 2026-11-18 — M03: co-op infected visual smoothing (operator verification pending)
+
+- Diagnosed short motion stalls in co-op: the server sends horde snapshots at 100 ms intervals; the previous 120 ms co-op jitter buffer could reach the newest frame and hold while waiting for another packet. Solo infected use local per-frame movement and did not exhibit the same behavior.
+- NEXTGEN co-op uses a 190 ms **visual-only** interpolation delay; legacy multiplayer retains its existing 120 ms default. Kept movement, AI, hit detection, damage and persistence server-authoritative and unchanged.
+- Added a bounded cosmetic smoothing step for rendered infected meshes, plus stable walk/run animation during brief delayed packets. Server snapshots are not modified; large position corrections still snap instead of warping through the world.
+- Added unit regressions for snapshot delay isolation, locomotion stability, and non-mutating render positions. Local source-only verification: 81/81 repository tests and 10/10 relevant NEXTGEN tests passed (Node 22 with experimental TS stripping). Typecheck, full build, and in-game visual confirmation pending on operator Windows PC.
+- **Next:** run `npm run typecheck`, `npm run build`, the NEXTGEN room browser suites, and compare infected motion in solo/co-op. Investigate network/performance telemetry if visible hitches remain; do not close M03 without manual acceptance.
+
 # NEXTGEN Progress Log
 
 Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry records
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
+
+## M03 — final squad, mission, revive and room-lifecycle polish (awaiting operator acceptance)
+
+- Added server-snapshot-driven squad HUD with temporary team aliases, HP bars, downed countdown, teammate revive progress, and world-space teammate labels. The WebSocket room has no public username field in snapshots; aliases do not claim identity. Added objective banner and short-range labels distinguishing supply, sample, creature habitat and locked/ready extraction.
+- Added explicit manual reconnect action after a room disconnect/timeout, without automatic duplicate login storms. Existing server-authoritative health, combat, revive, mission, account and saved inventory code is untouched.
+- Added an independent two-account browser check for live squad HUD/nameplates and disconnect/rejoin, plus pure rules tests (four checks). Prepared `docs/nextgen/M03-FINAL-ACCEPTANCE.md` covering complete extraction, persistent rewards, real teammate revival (success/interruption), controls/aim/feel and four-player lifecycle.
+- Verification on exported source: **19/19** relevant shared expansion, room combat and new squad tests passed; new browser test syntax passes. Full TypeScript/build/browser checks remain **pending on the operator's full Windows checkout** (export excludes npm lockfile/dependencies and binary models). Solo jump/dodge are not server-authoritative in online mode; this remains an explicit control-parity gap and is not falsely marked complete.
+- Exact next task: apply the guarded polish script, run tests/build/room browser suites on Windows, perform the manual revival/extraction checklist, record failures, then commit/push the task branch only after approval. No PR, merge, deployment or M04 edits.
+
+## M03 — presentation parity on the shared world
+
+- Operator confirmed Windows NEXTGEN entry, 4-client room combat, 2-client field and 2-client shotgun/resonance browser tests all pass on home PC. Both modes now show the same heightfield and forest; co-op retained a separate HUD and floating field symbols.
+- Unified solo/co-op HUD component, including lower-left stamina/HP/weapons/wave and lower-right companion/resonance, with online data sourced only from authenticated room packets. Online now has a read-only `I` inventory (server ammo, bandages and cloud materials) with disabled combat inputs while inspected. Co-op retains mission progress, roster, live revival prompts and 1/2/3 gun slots. Solo controls and inventory are unchanged.
+- Added `FieldItemArt` for solo loot and online physical samples, supplies and habitats, keeping the server-owned marker lifecycle and extraction ring. Co-op character no longer shows an unearned rifle on its back before a primary is selected. No room protocol or account schema changes; weapons available on the co-op server are intentionally unchanged.
+- Added built Worker browser checks for the shared HUD and physical online markers. Pending operator checks: Windows typecheck/build and all four rendered browser suites, solo/co-op feel, successful live teammate revive and a full manual expedition/extraction. M03 is **not** signed off until these pass. No M04 work, PR, push or deploy.
+
+## M03 — shared NEXTGEN world (operator-requested correction)
+
+- Replaced the temporary online flat environment entirely with the exact solo heightfield, terrain material, procedural vegetation, fog and lighting pipeline. Lobby uses the same scene as a backdrop. Same terrain seed 12345 and triangle interpolation across solo, browser room and server; no duplicate terrain implementation. The room's scene-coordinate offset is retained (100 m).
+- NEXTGEN sockets negotiate `nextgen-terrain-v1` and route to isolated room instances (`nextgen-terrain-v1:<code>`). Legacy code-only rooms retain their previous map, collision, server protocol and mission state. Existing account/profile bindings, migration tags, persistent account schema and reward pipeline unchanged. New NEXTGEN rooms start their own mission state, not a copy of any prior blockout room.
+- Server computes ground height from shared terrain, no client-supplied Y. Shooting, pellet impact, terrain obstruction, infected AI, melee/Pulse/strike and revival use shared map rules. Movement no longer collides with invisible legacy trees/buildings. Solo vegetation remains decorative as before; co-op retains its authoritative interaction markers and survival rules, not a client-side solo simulation.
+- Rendered avatars, infected, field markers, companion and camera now follow shared ground. Lanternkin uses the solo NEXTGEN avatar; other species presentations remain M04 work. HUD aligns with solo style while showing co-op state.
+- Targeted source verification: 53 passing checks including sampled terrain equivalence, removed legacy collision, terrain ray blocking, real room shot with untrusted client height, and legacy room regressions. Full Windows typecheck/build and live local Wrangler browser regression remain pending. Four-client smoke now verifies shared terrain placement; use low graphics for headless four-client test, normal play stays balanced.
+- Operator: re-run `npm test`, `node --test tests/nextgen/*.test.mjs`, typecheck/build, restart Wrangler and run entry/room/field/final browser tests. Compare solo and room visually and test successful manual revive before M03 closure. M04 remains untouched.
+
+## M03 — NEXTGEN entry and room presentation follow-up
+
+- Operator confirmed all three checkpoint D browser suites: four-client movement, rigged infected, confirmed hit at 1.21 m and melee; two-client owned companion/Pulse/strike and field interactions; resonant shotgun five pellets, magazine 5→4, charge 100→70, independent rifle ammo, invalid self-revive rejection. Manual successful revival still pending.
+- Identified separate entry paths: Vite `tests/browser/nextgen.html?mode=playable` is the local heightfield prototype; `?nextgenRoom=BLOOM` used the same renderer and nextgen models but a flat blockout. Added Worker routes `?nextgen=lobby` (dedicated log-in/room selection) and `?nextgen=playable` (same solo session as Vite). Unauthenticated room entry displays NEXTGEN lobby rather than requiring the legacy UI. Normal legacy routes remain unchanged for compatibility.
+- Replaced online blockout with deterministic procedural painted ground, roads, instanced forest crowns/trunks, building finish, grass and matching fog/player-following sun. Shared server obstacle footprints and level ground remain unchanged; the solo heightfield is not yet a server-authoritative 3D map. No account, protocol or server authority changes. No new asset dependencies.
+- Verification pending on operator PC: typecheck, build, local Wrangler `nextgen-entry.cjs`, `nextgen-room.cjs`, `nextgen-room-field.cjs`, `nextgen-room-final.cjs`, manual visuals/controls and revival. M03 remains pending manual acceptance. No M04 work.
+
+## M03 — final combat and survival acceptance (checkpoint D)
+
+- Checkpoint C operator verification: four rendered authenticated clients, movement, real hit at 0.93 m, pistol ammo 12→11 and melee passed; two-client field test confirmed rejection of unowned Pulse, cloud-owned Lanternkin bonding, replicated companion and Pulse, shared salvage removal, and authoritative resupply.
+- Added optional NEXTGEN room extension v1. Existing clients keep their legacy message fields, pistol/rifle arsenal and restart behavior. Existing bindings, migrations, storage keys, account/profile schemas and persisted progression are unchanged. Extension state is expedition-local and can reset on room wake/reconnect; no new permanent save state.
+- Server-authoritative shotgun (5+30 rounds, five deterministic grouped pellets, reload and resupply), Q weapon resonance (charge, transition, enhanced damage/range and spread) and G directed owned-companion strike (range, line-of-sight, cooldown, shared reward path). Existing Pulse stays authoritative. Replicated weapons, emissive form, shot effects and companion lunge show only accepted events/state.
+- Added cooperative revival: 25-second downed window, nearby teammate within 2.7 m and line-of-sight, one bandage, three stationary seconds; movement, damage, actions or disconnect cancel. Successful revival restores 35 HP in place with brief damage grace. Enter retains the existing respawn path; all-dead rooms can restart. No client-created healing, ammo or rewards.
+- Verification in supplied source: 38/38 targeted room, expansion, reward, survival, field and presentation tests pass (nine new room rules/authority tests). Full repository suite needs the omitted assets, tooling and npm dependencies. Updated the existing expansion test's import shim to load the new shared rules without modifying any legacy assertions.
+- Operator acceptance: stop/restart local Wrangler after applying; run `npm test`, `node --test tests/nextgen/*.test.mjs`, `npm run typecheck`, `npm run build`, then `node tests/browser/nextgen-room.cjs`, `node tests/browser/nextgen-room-field.cjs`, `node tests/browser/nextgen-room-final.cjs`. Field now also checks directed strike; final checks real negotiated resonant shotgun, five replicated pellets, independent ammo and charge, invalid self-revive rejection. These browser tests send actual room messages, not simulated server results.
+- Manual acceptance: open the same local `/?nextgenRoom=BLOOM` twice in independent signed-in browser profiles, click the field, move/aim/attack (WASD/Shift, RMB/LMB, F), equip 1/2/3, reload R, toggle Q, bond/interact E, G strike, X Pulse, H bandage. With one player downed, clear nearby infected, approach within 2.7 m and stop, V to revive, stay still for three seconds; confirm revived player's 35 HP and one bandage consumed. Repeat with movement/damage to check interruption, then Enter respawn. Check both clients' equipment, animations, effects, and health/ammo HUD. Complete expedition/extraction is M06, not a new M03 requirement.
+- M03 implementation is ready for final acceptance, not yet marked complete; M04 is untouched. Exact next task: operator verification, record results and mark M03 complete only after the checklist passes; commit/push on `cline/m03-survival-combat` and await operator direction for PR/M04.
+
+## M03 — co-op creatures and field interactions (checkpoint C)
+
+- Checkpoint B operator verification: full tests/typecheck/build passed; revised four-client rendered local Worker test confirmed rigged infected, shared movement, a real server-confirmed hit at 1.10 m, magazine 12→11, shot effects and accepted melee. Manual input/feel and entire expedition remain pending.
+- Added online presentation for all five original creature species and their existing evolution forms. The current room's authoritative `creatureOwned`, species and XP snapshots control visible companions; no local creature damage or ownership grants. Confirmed `action:pulse` drives a cosmetic owner-centered range effect and companion animation.
+- Added server-coordinate markers for unowned habitats, supply caches, server-provided mission samples and extraction. E requests only the existing `bond`, `resupply`, `pickup` or `extract` action in range; C cycles owned species through `select-creature`. Existing X Pulse is still validated by the room. Team objective UI and cloud material totals update from room packets / authenticated `coop-state` reads, never local rewards.
+- Added five pure field-target/selection tests and a two-client local-only rendered field test for unowned Pulse rejection, authoritative bonding, companion replication, confirmed Pulse, shared sample removal and resupply. Focused suite 49/49 passed in supplied source; TypeScript and browser script syntax checks passed. Operator full typecheck/build, four-client combat regression and field browser test pending.
+- No Cloudflare server code, storage, shared runtime rules, protocol or deployment changes; `coop-rules.d.mts` only declares the existing shared constants. Reuses existing original procedural creature art, not new assets. Automatic companion attacks, teammate revive, shotgun and resonance remain unsupported online. M03/M05 are open.
+- Exact next unfinished task: validate real field actions; then review a backward-compatible revive extension and online gameplay acceptance before moving to M04.
+
+## M03 — co-op combat presentation and four-client validation (checkpoint B)
+
+- Checkpoint A operator verification: 67 legacy and 293 NEXTGEN tests, typecheck, build, and the real two-client rendered local Wrangler room smoke passed. Manual gameplay remained pending.
+- Replaced temporary online infected markers with shared-pool rigged infected instances driven by server snapshots. Presentation derives locomotion, windup attacks, hit reactions, terminal death poses and facing without running local AI or health simulation. Procedural fallback remains if a model cannot load.
+- Added bounded authoritative shot tracers, flash and hit effects using the actual room shot origin, direction, distance and hit flag; accepted melee/Pulse audio and server HP reactions. Shoulder-camera aim convergence and local-only render interpolation do not mutate network state or server rules.
+- Expanded the loopback-only browser test to four independent authenticated, rendered clients (optional two-client mode), server-confirmed movement, rigged infected, shot effects, ammunition decrement and accepted melee using the test page's actual room socket. Manual pointer-lock input and full expedition acceptance remain separate.
+- Verification in supplied source: 44 focused pure tests passed, including six new presentation tests; new TypeScript and browser script syntax checks passed. Operator full typecheck/build/browser verification pending. No server, shared rules, protocol, account schema, legacy client or deployment changes. Do not mark M03/M05 complete yet.
+- Exact next unfinished task: operator four-client combat acceptance, then online creature presentation and supported inventory/survival interactions; design compatible revive protocol separately before adding it.
+
+## M03 — authoritative co-op foundation (checkpoint A)
+
+- Added an explicitly opt-in NEXTGEN online sandbox via `/?nextgenRoom=BLOOM` on the same authenticated local Worker origin. Normal URLs and solo NEXTGEN fixtures still use their existing paths.
+- Reused the legacy authenticated room transport and interpolation. Remote player avatars and infected markers come from snapshots; damage, ammo, survival, actions and rewards remain server-owned. Pistol/rifle, melee, reload, bandage, owned-creature Pulse and dead-player restart use existing messages only.
+- The online sandbox intentionally uses a flat plane and server obstacle dimensions with a +100 coordinate offset; it does not run the local horde, loot, companion attacks, dodge, jump, shotgun or resonance simulation. Infected markers are temporary visualization, not final art. No server/protocol/schema/deployment changes.
+- Verification: focused pure room-coordinate/intent tests and existing dependency-free room/survival tests; the full checkout still needs typecheck/build and rendered two-/four-player local Wrangler acceptance. Do not mark M03 or M05 complete.
+- Exact next unfinished task: verify two independent authenticated clients against local Wrangler, refine authoritative movement/aim/feedback, then add rigged infected visuals and four-player checks. Revive or other protocol extensions require separate reviewed compatibility design.
 
 ---
 
@@ -502,3 +578,33 @@ under `src/nextgen/` with fixed render loop and lifecycle tests.
 - v0.27 "The Visual Leap" merged as PR #15; `main` deployable and playable.
 - Verified at M00 start: `npm test` (67 pass), `npm run typecheck` (pass),
   `npm run build` (pass) on `main` = `1bb0cd2`.
+
+
+### M03 — equipment and field inventory (2026-11-18)
+
+- Added local NEXTGEN primary/secondary slots, pistol/rifle/shotgun behavior, independent ammunition reserves, weapon pickups/drops preserving loaded magazines, and a keyboard field-inventory panel.
+- Added original procedural rifle/shotgun props, back/belt holsters, support-hand alignment, retimed compatible aim/fire/reload poses, distinct synthesized firing audio, recoil, and terrain-aware grouped shotgun pellets. Existing character GLBs and license records are unchanged.
+- Verification: 32 focused pure Node tests passed against the supplied source archive; TypeScript syntax and new browser test syntax parsed. Full repository typecheck/build and real browser equipment/loot/combat regression tests remain operator verification tasks.
+- NEXTGEN-only changes; no changes to shared/server rules, legacy gameplay, save schemas, room protocol or deployment. M03 remains open; these local equipment rules are not authoritative co-op validation.
+- Exact next unfinished task: weapon transformations and creature combat foundation (plus dedicated rifle/shotgun animation polish), then co-op validation according to the roadmap.
+
+
+### M03 — resonance and Lanternkin combat (2026-11-18)
+
+- Prior equipment checkpoint verified on operator PC: 276/276 NEXTGEN unit tests, equipment/loot/combat browser suites, typecheck and build passed.
+- Added local weapon resonance form: Q transitions standard/resonant, shared expedition charge, per-weapon shot costs, increased damage/range and tighter spread, folding emissive rails, independent magazines preserved. Added shotgun cycling and rifle magazine movement to existing compatible survivor animations.
+- Added the local Lanternkin companion prototype: C engage/recall, terrain-aware follow/pursuit, basic attacks and X Lumen Pulse using the existing shared species power, bounded targets and cooldown, kill/loot accounting, original procedural visual and audio feedback, HUD status. Existing GLBs unchanged. No attack without engage or explicit pulse; companion disabled in benchmark and default training fixtures.
+- Verification: 178 pure Node tests pass including 42 focused combat/equipment/companion tests; real Three.js visual unit tests, browser smoke, full typecheck/build and co-op validation pending on operator PC.
+- NEXTGEN-only; no server/shared-rule/protocol/save/deploy changes. No persistent creature ownership, evolution or companion health model yet. M03 remains open.
+- Exact next unfinished task: validate M03 combat/survival against existing authoritative co-op contracts, address downed/revive and multiplayer integration gaps without changing existing protocol or schemas; then M04 collection/evolution.
+
+### 2026-11-18 — M03: unified NEXTGEN interface checkpoint (pending operator build)
+
+- Inspected the operator's latest M03 source ZIP, including solo/co-op entry, gameplay sessions, HUD, extraction receipt, squad UI and cloud room protocol.
+- Added common main menu (Play / Co-op / Settings / Controls) with accessible co-op registration, sign-in and sign-out and a visible solo route even when co-op auth is required.
+- Added a shared in-game Esc/Menu overlay for both modes with graphics quality and mode-correct controls. Graphics preferences persist per-device only; no changes to account or Worker schemas.
+- Replaced the overly long top-of-screen key legends with a compact in-game hint and an actual controls panel.
+- Added pure menu/config tests and a two-mode menu browser smoke. The existing NEXTGEN terrain/lighting/actors/HUD remain shared.
+- Explicit parity limits and future actions recorded in `docs/nextgen/M03-UNIFIED-GAMEPLAY.md`. Added additive NEXTGEN-only server-owned jump/dodge actions, validated stamina/cooldowns, terrain constraints, and replicated animation state. No changes to legacy clients, DO bindings or account schema. No claim of full solo/co-op rules parity, complete M03 acceptance or M04 start.
+- Local verification in source-only archive: `npm test` 77 passed (existing source suite), new preferences/controls unit tests 3 passed, edited TypeScript parsed successfully. Full typecheck/build/browser suites are pending on the operator's Windows PC because dependencies are not present in this archive.
+- Next unfinished task: operator runs the unified menu smoke on Windows, then playtests online jump/dodge and resolves equipment/companion progression differences through server-validated extensions, and completes manual revive/extraction acceptance.
