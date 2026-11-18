@@ -24,6 +24,8 @@ import { findWeaponHits, findMeleeTarget } from '../core/ShotQuery';
 import { LootField, type LootItem } from '../core/LootField';
 import { PickupController, PICKUP } from '../core/PickupController';
 import { CombatFeedback } from '../core/CombatFeedback';
+import { CompanionController } from '../core/CompanionController';
+import { CompanionAvatar } from '../core/CompanionAvatar';
 import { WEAPONS, ammoKind, fullLootNotice, lootLabel, INVENTORY_ROWS, inventoryDropKind, type WeaponId, type LootKind } from '../core/EquipmentInventory';
 import {
   HordeDirector,
@@ -61,6 +63,10 @@ export class PlayableSession {
   private meleePressed = false;
   private bandagePressed = false;
   private pickupPressed = false;
+  private pulsePressed = false;
+  private readonly companion:CompanionController|null;
+  private readonly companionAvatar:CompanionAvatar|null;
+  private readonly companionHeight=(x:number,z:number)=>x>=0&&z>=0&&x<=this.terrain.size&&z<=this.terrain.size?this.terrain.heightAt(x,z):NaN;
   private inventoryOpen = false;
   private inventoryIndex = 0;
   private readonly loot = new LootField();
@@ -96,6 +102,12 @@ export class PlayableSession {
     );
 
     this.previousPosition = [...this.state.position];
+
+    const companionEnabled=!this.benchmark&&(!this.training||new URLSearchParams(window.location.search).get('companion')==='1');
+    this.companion=companionEnabled?new CompanionController():null;
+    this.companionAvatar=companionEnabled?new CompanionAvatar():null;
+    this.companion?.reset(this.state.position,this.state.facing,this.companionHeight);
+    if(this.companionAvatar&&this.companion){scene.add(this.companionAvatar.root);this.companionAvatar.update(0,this.companion.getState());}
 
     scene.add(this.avatar.root);
     scene.add(this.loot.root);
@@ -233,6 +245,8 @@ restart(): void {
   this.previousPosition = [...this.state.position];
 
   this.combat = new CombatController();
+  this.companion?.reset(this.state.position,this.state.facing,this.companionHeight);
+  if(this.companion&&this.companionAvatar)this.companionAvatar.update(0,this.companion.getState());
 
   const timing = this.avatar.getWeaponTiming();
 
@@ -345,6 +359,17 @@ getHordeInfo() {
       if(!event.repeat&&event.code==='KeyG')this.dropSelectedItem();
       event.preventDefault();return;
     }
+    if(['KeyQ','KeyC','KeyX'].includes(event.code)){
+      if(!event.repeat){
+        if(event.code==='KeyQ'){
+          if(this.pickup.active||this.state.airborne||this.state.dodging||this.avatar.getActiveClip()==='hit'||this.avatar.getWeaponAction()!==null||!this.combat.toggleResonance())this.showLootNotice('RESONANCE NOT READY');
+          else {this.clearAim();this.feedback.sound('resonance');this.showLootNotice(this.combat.getState().resonance.active?'RESONANCE FORM':'STANDARD FORM');}
+        }
+        if(event.code==='KeyC'&&this.companion)this.showLootNotice(this.companion.toggleAssist()?'LANTERNKIN: ENGAGE':'LANTERNKIN: FOLLOW');
+        if(event.code==='KeyX'&&this.companion)this.pulsePressed=true;
+      }
+      event.preventDefault();return;
+    }
     if (['KeyF', 'KeyH', 'KeyE'].includes(event.code)) {
       if (!event.repeat) {
         if (event.code === 'KeyF') this.meleePressed = true;
@@ -437,6 +462,7 @@ private readonly onReset = () => {
   this.meleePressed = false;
   this.bandagePressed = false;
   this.pickupPressed = false;
+  this.pulsePressed = false;
   this.combat.interruptActions();
 };
 
@@ -446,7 +472,7 @@ private readonly onPointerLockChange = () => {
   }
 };
 
-private fireShot(): void {
+private fireShot(resonant=false): void {
   this.camera.getWorldDirection(this.shotDirection);
 
   const origin: [number, number, number] = [
@@ -464,7 +490,7 @@ private fireShot(): void {
   const targets=this.infected.map(enemy=>enemy.getState());
   const impacts=findWeaponHits(this.combat.weaponId,origin,
     [this.shotDirection.x,this.shotDirection.y,this.shotDirection.z],shooter,targets,
-    (x,z)=>this.terrain.heightAt(x,z));
+    (x,z)=>this.terrain.heightAt(x,z),resonant);
   let hit=false;const killed:InfectedAvatar[]=[];
   for(const {index,damage} of impacts){
     const enemy=this.infected[index];if(!enemy||!enemy.damage(damage))continue;
@@ -473,6 +499,19 @@ private fireShot(): void {
   }
   if(hit){this.combat.recordShotHits(killed.length);for(const enemy of killed)this.dropLoot(enemy);}
   if(this.combat.weaponId!=='pistol')this.followCamera.rotate(0,this.combat.weaponId==='shotgun'?-10:-3);
+}
+
+private stepCompanion(delta:number):void {
+  if(!this.companion)return;
+  const pulse=this.pulsePressed&&this.isLocked()&&!this.inventoryOpen&&this.combat.alive;
+  const strikes=this.companion.step(delta,this.combat.alive?this.state.position:null,this.state.facing,
+    this.infected.map(enemy=>enemy.getState()),pulse,this.companionHeight);
+  if(pulse){const s=this.companion.getState();this.showLootNotice(strikes.some(hit=>hit.kind==='pulse')?'LANTERNKIN: LUMEN PULSE':s.pulseCooldownMs>0?'ABILITY COOLING DOWN':'NO VISIBLE TARGET IN RANGE');}
+  if(strikes.some(hit=>hit.kind==='pulse'))this.feedback.sound('pulse');
+  const from=this.companion.getState().position;
+  for(const strike of strikes){const enemy=this.infected[strike.index];if(!enemy||!enemy.damage(strike.damage))continue;
+    const dead=enemy.getState().health===0;this.combat.recordCompanionHit(dead);this.feedback.impact(enemy.getState().position,from,strike.kind==='basic');if(dead)this.dropLoot(enemy);}
+  this.companionAvatar?.update(delta,this.companion.getState());
 }
 
 private requestWeapon(id:WeaponId|null):void {
@@ -575,14 +614,14 @@ step(deltaTimeMs: number): void {
   const aiming =
     this.combat.alive &&
     this.state.aiming &&
-    this.isLocked() && !this.inventoryOpen && !this.combat.switching;
+    this.isLocked() && !this.inventoryOpen && !this.combat.switching && !this.combat.transforming;
 
   const weaponReady =
     this.avatar.getWeaponAction() === null;
 
   const actionAllowed = this.combat.alive &&
     this.avatar.getActiveClip() !== 'hit' &&
-    !this.state.airborne && !this.state.dodging && !this.inventoryOpen && !this.combat.switching;
+    !this.state.airborne && !this.state.dodging && !this.inventoryOpen && !this.combat.switching && !this.combat.transforming;
 
   const combat = this.combat.step(deltaTimeMs, {
     enabled:
@@ -602,8 +641,8 @@ step(deltaTimeMs: number): void {
   });
 
   if (combat.shot) {
-    this.feedback.shot(this.combat.weaponId);
-    this.fireShot();
+    this.feedback.shot(this.combat.weaponId,combat.resonantShot);
+    this.fireShot(combat.resonantShot);
   }
   if (combat.meleeStarted) this.feedback.sound('swing');
   if (combat.reloadStarted) this.feedback.sound('reload');
@@ -611,6 +650,7 @@ step(deltaTimeMs: number): void {
   if (combat.healed > 0) this.feedback.sound('healed');
 
   if (combat.meleeHit) this.meleeStrike();
+  this.stepCompanion(deltaTimeMs);
 
 
   const healthBefore = this.combat.getState().health;
@@ -696,7 +736,7 @@ step(deltaTimeMs: number): void {
   }
   // Animate using the updated combat state.
   const equipped=this.combat.getState().equipment;
-  this.avatar.setEquipment(equipped.active,equipped.primary,this.combat.switching);
+  this.avatar.setEquipment(equipped.active,equipped.primary,this.combat.switching,this.combat.getState().resonance.active);
   this.avatar.animate(deltaTimeMs, {
     speed: this.combat.alive ? speed : 0,
     sprinting: this.combat.alive && this.state.sprinting,
@@ -736,6 +776,7 @@ step(deltaTimeMs: number): void {
   this.meleePressed = false;
   this.bandagePressed = false;
   this.pickupPressed = false;
+  this.pulsePressed = false;
 }
 
 
@@ -792,7 +833,8 @@ step(deltaTimeMs: number): void {
       this.inventoryOpen,
       this.lootNoticeMs > 0 ? this.lootNotice : '',
       this.pickup.active,
-      this.inventoryIndex
+      this.inventoryIndex,
+      this.companion?.getState()??null
     );
   }
 
@@ -813,7 +855,8 @@ getCombatInfo() {
     ...this.combat.getState(),
     training: this.training,
     benchmark: this.benchmark,
-    inventoryOpen: this.inventoryOpen
+    inventoryOpen: this.inventoryOpen,
+    companion: this.companion?.getState()??null
   };
 }
 
@@ -888,6 +931,7 @@ damageInfected(index: number, amount: number): boolean {
     this.infectedLoads.clear();
     this.loot.dispose();
     this.feedback.dispose();
+    this.companionAvatar?.dispose();
     this.avatar.dispose();
     this.hud.dispose();
   }

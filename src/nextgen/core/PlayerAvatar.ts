@@ -3,6 +3,7 @@ import { SurvivorModel } from './SurvivorModel.ts';
 import type { CharacterControllerResult } from './CharacterController.ts';
 import { PistolProp } from './PistolProp.ts';
 import { LongGunProp, HAND_POSITION, HAND_ROTATION, supportLongGun } from './LongGunProp.ts';
+import { ResonanceProp } from './ResonanceProp.ts';
 import type { PrimaryWeapon, WeaponId } from './EquipmentInventory.ts';
 import type { LootKind } from './LootField.ts';
 import {
@@ -25,6 +26,9 @@ export class PlayerAvatar {
   private animator: AvatarAnimator | null = null;
   private weapon: PistolProp | null = null;
   private primaryProp: LongGunProp | null = null;
+  private pistolForm: ResonanceProp | null = null;
+  private primaryForm: ResonanceProp | null = null;
+  private resonanceActive=false;
   private selectedWeapon: WeaponId = 'pistol';
   private primaryId: PrimaryWeapon | null = null;
   private weaponHand: THREE.Bone | null = null;
@@ -155,6 +159,7 @@ export class PlayerAvatar {
     if (hand instanceof THREE.Bone) {
       this.weaponHand = hand;
       this.weapon = new PistolProp(hand);
+      this.pistolForm = new ResonanceProp('pistol');this.weapon.root.add(this.pistolForm.root);
       this.createHeldLoot(hand);
     }
     const belt = this.model.root.getObjectByName('pelvis');
@@ -215,11 +220,12 @@ setHeldLoot(kind: LootKind | null): void {
   this.presentEquipment();
 }
 
-setEquipment(active: WeaponId, primary: PrimaryWeapon | null, switching = false): void {
+setEquipment(active: WeaponId, primary: PrimaryWeapon | null, switching = false, resonance = false): void {
   this.switchingWeapon=switching;
+  this.resonanceActive=resonance;
   this.selectedWeapon=active;this.primaryId=primary;
-  if (this.primaryProp && this.primaryProp.id !== primary) { this.primaryProp.dispose();this.primaryProp=null; }
-  if (primary && this.weaponHand && !this.primaryProp) this.primaryProp=new LongGunProp(primary);
+  if (this.primaryProp && this.primaryProp.id !== primary) { this.primaryForm?.dispose();this.primaryForm=null;this.primaryProp.dispose();this.primaryProp=null; }
+  if (primary && this.weaponHand && !this.primaryProp) {this.primaryProp=new LongGunProp(primary);this.primaryForm=new ResonanceProp(primary);this.primaryProp.root.add(this.primaryForm.root);}
 }
 
 private presentEquipment(): void {
@@ -267,6 +273,7 @@ getActiveClip() {
         heldLoot: this.weaponHand ? this.heldKind : null,
         weaponVisible: this.drawnWeapon !== null,
         equippedWeapon: this.selectedWeapon,
+        resonanceVisible: this.resonanceActive&&!!(this.selectedWeapon==='pistol'?this.pistolForm?.root.visible:this.primaryForm?.root.visible),
         holsteredPrimary: this.primaryProp?.root.parent===this.back ? this.primaryId : null,
         weaponAction: this.animator?.getWeaponAction() ?? null
       };
@@ -279,6 +286,9 @@ getActiveClip() {
       this.drawAllowed=!motion.dead&&!motion.pickingUp;
       this.animator?.update(deltaTimeMs, { ...motion, weapon:this.selectedWeapon });
       this.presentEquipment();
+      this.pistolForm?.update(deltaTimeMs,this.resonanceActive&&this.selectedWeapon==='pistol'&&!motion.dead,!!motion.shoot&&this.selectedWeapon==='pistol');
+      this.primaryForm?.update(deltaTimeMs,this.resonanceActive&&this.selectedWeapon!=='pistol'&&!motion.dead,!!motion.shoot&&this.selectedWeapon!=='pistol');
+      this.primaryProp?.animateAction(deltaTimeMs,!!motion.shoot&&this.selectedWeapon!=='pistol',!!motion.reload&&this.selectedWeapon!=='pistol',this.animator?.getWeaponAction()??null);
       if(this.primaryProp&&this.drawnWeapon===this.primaryProp.id&&this.animator?.getWeaponAction()!=='reload'){
         supportLongGun(this.model.root,this.primaryProp.support,this.animator?.getAimWeight()??0);
       }
@@ -316,6 +326,8 @@ getActiveClip() {
 
     this.weapon?.dispose();
     this.weapon = null;
+    this.pistolForm?.dispose();this.pistolForm=null;
+    this.primaryForm?.dispose();this.primaryForm=null;
     this.primaryProp?.dispose();this.primaryProp=null;
 
     this.heldAmmo?.removeFromParent();

@@ -511,3 +511,13 @@ under `src/nextgen/` with fixed render loop and lifecycle tests.
 - Verification: 32 focused pure Node tests passed against the supplied source archive; TypeScript syntax and new browser test syntax parsed. Full repository typecheck/build and real browser equipment/loot/combat regression tests remain operator verification tasks.
 - NEXTGEN-only changes; no changes to shared/server rules, legacy gameplay, save schemas, room protocol or deployment. M03 remains open; these local equipment rules are not authoritative co-op validation.
 - Exact next unfinished task: weapon transformations and creature combat foundation (plus dedicated rifle/shotgun animation polish), then co-op validation according to the roadmap.
+
+
+### M03 — resonance and Lanternkin combat (2026-11-18)
+
+- Prior equipment checkpoint verified on operator PC: 276/276 NEXTGEN unit tests, equipment/loot/combat browser suites, typecheck and build passed.
+- Added local weapon resonance form: Q transitions standard/resonant, shared expedition charge, per-weapon shot costs, increased damage/range and tighter spread, folding emissive rails, independent magazines preserved. Added shotgun cycling and rifle magazine movement to existing compatible survivor animations.
+- Added the local Lanternkin companion prototype: C engage/recall, terrain-aware follow/pursuit, basic attacks and X Lumen Pulse using the existing shared species power, bounded targets and cooldown, kill/loot accounting, original procedural visual and audio feedback, HUD status. Existing GLBs unchanged. No attack without engage or explicit pulse; companion disabled in benchmark and default training fixtures.
+- Verification: 178 pure Node tests pass including 42 focused combat/equipment/companion tests; real Three.js visual unit tests, browser smoke, full typecheck/build and co-op validation pending on operator PC.
+- NEXTGEN-only; no server/shared-rule/protocol/save/deploy changes. No persistent creature ownership, evolution or companion health model yet. M03 remains open.
+- Exact next unfinished task: validate M03 combat/survival against existing authoritative co-op contracts, address downed/revive and multiplayer integration gaps without changing existing protocol or schemas; then M04 collection/evolution.

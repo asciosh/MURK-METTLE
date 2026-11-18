@@ -2,6 +2,7 @@ import {
   SURVIVAL, newVitals, beginHealing, cancelHealing, stepVitals
 } from '../../../shared/survival.mjs';
 import { EquipmentInventory, WEAPONS, SWITCH_MS, ammoKind, type LootKind, type WeaponId } from './EquipmentInventory.ts';
+import { WeaponResonance } from './WeaponResonance.ts';
 
 export const COMBAT = Object.freeze({
   maxHealth: 100,
@@ -33,6 +34,8 @@ export interface CombatInput {
 export class CombatController {
   private health: number = COMBAT.maxHealth;
   private readonly equipment = new EquipmentInventory();
+  private readonly resonance = new WeaponResonance();
+  private companionHits = 0;
   private switchRemainingMs = 0;
   private get ammo() { return this.equipment.current.loaded; }
   private set ammo(value: number) { this.equipment.current.loaded = value; }
@@ -41,6 +44,7 @@ export class CombatController {
   get weaponId(): WeaponId { return this.equipment.active; }
   get weaponSpec() { return WEAPONS[this.weaponId]; }
   get switching(): boolean { return this.switchRemainingMs > 0; }
+  get transforming(): boolean { return this.resonance.transitioning; }
 
   private cooldown = 0;
   private reloadRemainingMs = 0;
@@ -82,6 +86,7 @@ export class CombatController {
   step(deltaTimeMs: number, input: CombatInput) {
     const result = {
       shot: false,
+      resonantShot: false,
       reloadStarted: false,
       meleeStarted: false,
       meleeHit: false,
@@ -96,6 +101,7 @@ export class CombatController {
     if (dt === 0) return result;
 
     this.clockMs += dt;
+    this.resonance.tick(dt,this.alive);
     this.switchRemainingMs = Math.max(0, this.switchRemainingMs - dt);
     this.meleeCooldown = Math.max(0, this.meleeCooldown - dt);
     this.cooldown = Math.max(0, this.cooldown - dt);
@@ -111,7 +117,7 @@ export class CombatController {
       this.reloadRemainingMs = 0;
       return result;
     }
-    if (this.switching) return result;
+    if (this.switching || this.transforming) return result;
 
     const allowed = input.actionAllowed !== false;
     const interruptHeal = !allowed || input.moving || input.aiming ||
@@ -200,6 +206,7 @@ export class CombatController {
     ) {
       this.ammo--;
       this.shotsFired++;
+      result.resonantShot = this.resonance.consume(this.weaponId);
       this.cooldown = this.weaponId === 'pistol' ? this.fireIntervalMs : this.weaponSpec.intervalMs;
       result.shot = true;
     }
@@ -221,6 +228,7 @@ export class CombatController {
     this.meleeRemainingMs = 0;
     this.reloadRemainingMs = 0;
     this.health = Math.max(0, this.health - amount);
+    this.resonance.cancel();
 
     this.damageGraceRemainingMs = Number.isFinite(graceMs)
       ? Math.max(0, graceMs)
@@ -251,6 +259,13 @@ export class CombatController {
     if (killed) this.kills++;
   }
 
+  recordCompanionHit(killed:boolean):void {this.companionHits++;if(killed)this.kills++;}
+
+  toggleResonance():boolean {
+    if(!this.alive||this.switching||this.reloadRemainingMs>0||this.cooldown>0||this.meleeCooldown>0||this.vitals.healEndsAt)return false;
+    return this.resonance.toggle(this.weaponId);
+  }
+
   interruptActions(): void {
     cancelHealing(this.vitals);
     this.meleeRemainingMs = 0;
@@ -258,15 +273,16 @@ export class CombatController {
   }
 
   selectWeapon(id: WeaponId): boolean {
-    if (!this.alive || this.switching || this.cooldown > 0 || this.reloadRemainingMs > 0 ||
+    if (!this.alive || this.switching || this.transforming || this.cooldown > 0 || this.reloadRemainingMs > 0 ||
         this.meleeCooldown > 0 || this.vitals.healEndsAt) return false;
     if (!this.equipment.switchTo(id)) return false;
+    this.resonance.cancel();
     this.switchRemainingMs = SWITCH_MS;
     return true;
   }
 
   dropItem(kind: LootKind, amount: number, place: (kind: LootKind, amount: number, loadedRounds?: number) => boolean): boolean {
-    if (!this.alive || this.switching || this.reloadRemainingMs > 0 || this.vitals.healEndsAt ||
+    if (!this.alive || this.switching || this.transforming || this.reloadRemainingMs > 0 || this.vitals.healEndsAt ||
         this.cooldown > 0 || this.meleeCooldown > 0 || !Number.isSafeInteger(amount) || amount <= 0) return false;
     if (kind === 'bandage') {
       const n = Math.min(amount,this.vitals.bandages);
@@ -275,7 +291,7 @@ export class CombatController {
     }
     const old = this.weaponId;
     const dropped = this.equipment.drop(kind,amount,place);
-    if (dropped && old !== this.weaponId) this.switchRemainingMs = SWITCH_MS;
+    if (dropped && old !== this.weaponId) {this.resonance.cancel();this.switchRemainingMs = SWITCH_MS;}
     return dropped;
   }
 
@@ -325,6 +341,8 @@ export class CombatController {
       switching: this.switching,
       switchRemainingMs: this.switchRemainingMs,
       equipment: this.equipment.getState(),
+      resonance: this.resonance.getState(),
+      companionHits: this.companionHits,
       reloading: this.reloadRemainingMs > 0,
       reloadRemainingMs: this.reloadRemainingMs,
       shotsFired: this.shotsFired,

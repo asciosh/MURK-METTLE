@@ -6,6 +6,7 @@ import type { HordeState } from '../core/HordeDirector';
 import type { LootItem } from '../core/LootField';
 import { PICKUP } from '../core/PickupController';
 import { WEAPONS, ammoWeapon, lootLabel, fullLootNotice } from '../core/EquipmentInventory';
+import type { CompanionState } from '../core/CompanionController';
 
 export class PlayableHud {
   private readonly root = document.createElement('div');
@@ -23,6 +24,11 @@ export class PlayableHud {
   private readonly inventoryOverlay = document.createElement('div');
   private readonly equipmentSummary = document.createElement('div');
   private readonly inventoryRows: HTMLDivElement[] = [];
+  private readonly abilityPanel=document.createElement('div');
+  private readonly resonanceLabel=document.createElement('div');
+  private readonly resonanceFill=document.createElement('div');
+  private readonly companionLabel=document.createElement('div');
+  private readonly pulseLabel=document.createElement('div');
 
   constructor() {
     this.root.style.cssText = `
@@ -166,6 +172,15 @@ this.hordeStatus.style.cssText = `
     }
     const controls=document.createElement('div');controls.textContent='1 Secondary · 2 Primary · ↑/↓ Select · G Drop · I Close (combat still running)';controls.style.cssText='font-size:12px;color:#b8c8b0;line-height:1.6;margin-top:14px';this.inventoryOverlay.append(controls);
     this.root.append(this.inventoryOverlay);
+    this.abilityPanel.className='nextgen-ability-panel';
+    this.abilityPanel.style.cssText='position:absolute;bottom:28px;right:28px;width:230px;padding:14px;background:rgba(10,18,15,.88);border:1px solid #617b5c;border-radius:6px;color:#c8ebd4;font-size:13px;line-height:1.5';
+    this.resonanceLabel.className='nextgen-resonance-label';
+    this.resonanceLabel.style.cssText='font-weight:bold;letter-spacing:1px';
+    const meter=document.createElement('div');meter.style.cssText='height:6px;background:#263c31;border-radius:3px;overflow:hidden;margin:5px 0 12px';
+    this.resonanceFill.style.cssText='height:100%;background:#8fe8b1;transform-origin:left';meter.append(this.resonanceFill);
+    this.companionLabel.className='nextgen-companion-label';this.companionLabel.style.fontWeight='bold';
+    this.pulseLabel.className='nextgen-pulse-label';
+    this.abilityPanel.append(this.resonanceLabel,meter,this.companionLabel,this.pulseLabel);this.root.append(this.abilityPanel);
 
     document.body.appendChild(this.root);
   }
@@ -179,7 +194,8 @@ this.hordeStatus.style.cssText = `
     inventoryOpen = false,
     lootNotice = '',
     pickingUp = false,
-    inventoryIndex = 0
+    inventoryIndex = 0,
+    companion:CompanionState|null=null
   ): void {
     const fraction = Math.max(
       0,
@@ -218,6 +234,12 @@ this.hordeStatus.style.cssText = `
     this.ammunition.textContent = combat.switching ? weapon+' EQUIPPING...' : combat.reloading
       ? weapon+'  RELOADING...'
       : `${weapon}  ${combat.ammo} / ${combat.reserve}`;
+    const r=combat.resonance;
+    this.resonanceLabel.textContent=`Q  ${r.transitioning?'TRANSFORMING':r.active?'RESONANCE ACTIVE':'RESONANCE'}  ${Math.floor(r.charge)}%`;
+    this.resonanceFill.style.transform=`scaleX(${r.charge/r.maxCharge})`;
+    this.companionLabel.textContent=companion?`C  ${companion.name.toUpperCase()} · ${companion.assist?'ENGAGE':'FOLLOW'}`:'';
+    this.pulseLabel.textContent=companion?`X  LUMEN PULSE · ${companion.pulseCooldownMs>0?(companion.pulseCooldownMs/1000).toFixed(1)+'s':'READY'}`:'';
+    this.abilityPanel.style.display=combat.alive?'block':'none';
 
   this.hordeStatus.textContent = horde.training
     ? `TRAINING | KILLS ${horde.kills}`
@@ -273,7 +295,7 @@ this.hordeStatus.style.cssText = `
     this.crosshair.style.display = 'none';
   } else if (locked) {
     this.prompt.textContent =
-      'WASD | Shift Sprint | Ctrl Dodge | Space Jump | RMB Aim | LMB Fire | R Reload | F Melee | H Bandage | E Loot | 1/2 Weapon | I Inventory';
+      'WASD | Shift Sprint | Ctrl Dodge | Space Jump | RMB Aim | LMB Fire | R Reload | F Melee | H Bandage | E Loot | 1/2 Weapon | I Inventory | Q Transform'+(companion?' | C Companion | X Pulse':'');
   }
   }
 
