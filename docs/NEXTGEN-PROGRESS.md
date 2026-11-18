@@ -4,6 +4,15 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## M03 — co-op creatures and field interactions (checkpoint C)
+
+- Checkpoint B operator verification: full tests/typecheck/build passed; revised four-client rendered local Worker test confirmed rigged infected, shared movement, a real server-confirmed hit at 1.10 m, magazine 12→11, shot effects and accepted melee. Manual input/feel and entire expedition remain pending.
+- Added online presentation for all five original creature species and their existing evolution forms. The current room's authoritative `creatureOwned`, species and XP snapshots control visible companions; no local creature damage or ownership grants. Confirmed `action:pulse` drives a cosmetic owner-centered range effect and companion animation.
+- Added server-coordinate markers for unowned habitats, supply caches, server-provided mission samples and extraction. E requests only the existing `bond`, `resupply`, `pickup` or `extract` action in range; C cycles owned species through `select-creature`. Existing X Pulse is still validated by the room. Team objective UI and cloud material totals update from room packets / authenticated `coop-state` reads, never local rewards.
+- Added five pure field-target/selection tests and a two-client local-only rendered field test for unowned Pulse rejection, authoritative bonding, companion replication, confirmed Pulse, shared sample removal and resupply. Focused suite 49/49 passed in supplied source; TypeScript and browser script syntax checks passed. Operator full typecheck/build, four-client combat regression and field browser test pending.
+- No Cloudflare server code, storage, shared runtime rules, protocol or deployment changes; `coop-rules.d.mts` only declares the existing shared constants. Reuses existing original procedural creature art, not new assets. Automatic companion attacks, teammate revive, shotgun and resonance remain unsupported online. M03/M05 are open.
+- Exact next unfinished task: validate real field actions; then review a backward-compatible revive extension and online gameplay acceptance before moving to M04.
+
 ## M03 — co-op combat presentation and four-client validation (checkpoint B)
 
 - Checkpoint A operator verification: 67 legacy and 293 NEXTGEN tests, typecheck, build, and the real two-client rendered local Wrangler room smoke passed. Manual gameplay remained pending.

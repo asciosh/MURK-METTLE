@@ -1,0 +1,10 @@
+export const INFECTION_TYPES: readonly { id: string; hp: number; speed: number; damage: number }[];
+export const MISSION_KILLS: number;
+export const MISSION_SALVAGE: number;
+export const PICKUPS: readonly { id: string; x: number; z: number }[];
+export const EXTRACTION: Readonly<{ x: number; z: number; radius: number }>;
+export const MAX_PLAYERS: number;
+export const SNAPSHOT_MS: number;
+export function isFiniteNumber(value: unknown): value is number;
+export function validRoomCode(code: string): boolean;
+export function validUsername(username: string): boolean;

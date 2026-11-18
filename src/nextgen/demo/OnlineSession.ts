@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
-import { Multiplayer, type RoomEvent, type RemotePlayer } from '../../client/game/Multiplayer';
-import { OBSTACLES, WEAPONS, type Arsenal, type WeaponId } from '../../../shared/expansion.mjs';
+import { Multiplayer, type RoomEvent, type RemotePlayer, type MissionState } from '../../client/game/Multiplayer';
+import { OBSTACLES, WEAPONS, CREATURES, creaturePower, type Arsenal, type WeaponId } from '../../../shared/expansion.mjs';
+import type { CollectionState } from '../../../shared/collection.mjs';
+import { MISSION_KILLS, MISSION_SALVAGE } from '../../../shared/coop-rules.mjs';
 import { canSprint } from '../../../shared/survival.mjs';
 import { KeyboardInput } from '../core/KeyboardInput';
 import { ThirdPersonCamera } from '../core/ThirdPersonCamera';
@@ -12,6 +14,9 @@ import { RoomInfectedView } from '../core/RoomInfectedView';
 import { RoomShotEffects } from '../core/RoomShotEffects';
 import { roomAimDirection, smoothRoomPosition } from '../core/RoomPresentation';
 import { CombatFeedback } from '../core/CombatFeedback';
+import { RoomCompanionView } from '../core/RoomCompanionView';
+import { RoomFieldView } from '../core/RoomFieldView';
+import { fieldIntent, nearestFieldTarget, nextOwnedSpecies, roomFieldTargets } from '../core/RoomFieldRules';
 
 /** Explicit co-op sandbox. No PlayableSession, local horde, loot or damage simulation. */
 export class OnlineSession {
@@ -25,6 +30,13 @@ export class OnlineSession {
   private readonly infectedPool = new InfectedModelPool();
   private readonly effects = new RoomShotEffects();
   private readonly feedback = new CombatFeedback();
+  private readonly companions = new Map<string, RoomCompanionView>();
+  private readonly pendingPulses = new Map<string, number>();
+  private readonly field = new RoomFieldView();
+  private collection: CollectionState | null = null;
+  private mission: MissionState | null = null;
+  private inventory: { scrap: number; fiber: number; spore: number } | null = null;
+  private inventoryRevision = 0;
   private readonly geometry = new THREE.CapsuleGeometry(0.32, 1.05, 4, 8);
   private readonly enemyMaterial = new THREE.MeshStandardMaterial({ color: 0x864740 });
   private readonly box = new THREE.BoxGeometry(1, 1, 1);
@@ -34,6 +46,10 @@ export class OnlineSession {
   private readonly panel = document.createElement('div');
   private readonly status = document.createElement('div');
   private readonly detail = document.createElement('div');
+  private readonly objectives = document.createElement('div');
+  private readonly creatureStatus = document.createElement('div');
+  private readonly interaction = document.createElement('div');
+  private readonly inventoryStatus = document.createElement('div');
   private readonly reticle = document.createElement('div');
   private readonly abort = new AbortController();
   private position = { x: 0, z: 0 };
@@ -52,6 +68,7 @@ export class OnlineSession {
   private acceptedShots = 0;
   private confirmedHits = 0;
   private acceptedActions = 0;
+  private acceptedPulses = 0;
   private acceptedRewards = 0;
   private readonly fireEvents = new Set<string>();
   private readonly meleeEvents = new Set<string>();
@@ -72,14 +89,16 @@ export class OnlineSession {
       mesh.castShadow = mesh.receiveShadow = true;
       this.world.add(mesh);
     }
-    scene.add(this.world, this.avatar.root, this.effects.root, this.feedback.root);
+    scene.add(this.world, this.avatar.root, this.effects.root, this.feedback.root, this.field.root);
     this.loadAvatar(this.avatar);
     void this.infectedPool.load(`${import.meta.env.BASE_URL}models/nextgen/${characterSkinFile('infected', 'classic')}`);
     this.panel.style.cssText = 'position:fixed;top:12px;left:12px;z-index:10000;background:#14211de8;color:#e7f4e8;padding:14px;max-width:360px;font:14px system-ui;border:1px solid #75917b;border-radius:8px;line-height:1.5';
     const heading = document.createElement('strong'); heading.textContent = 'NEXTGEN · AUTHORITATIVE CO-OP';
-    const controls = document.createElement('div'); controls.textContent = 'Click field · WASD / Shift · RMB aim · LMB shoot · 1/2 weapons · R reload · F melee · H bandage · X Pulse · Enter respawn';
+    const controls = document.createElement('div'); controls.textContent = 'Click field · WASD / Shift · RMB aim · LMB shoot · 1/2 weapons · R reload · F melee · H bandage · E interact · C cycle owned creature · X Pulse · Enter respawn';
+    this.interaction.style.color = '#eacb8a';
+    this.interaction.style.fontWeight = '700';
     const exit = document.createElement('a'); exit.href = '/'; exit.textContent = 'Return to account menu'; exit.style.color = '#bde5cf';
-    this.panel.append(heading, this.status, this.detail, controls, exit);
+    this.panel.append(heading, this.status, this.detail, this.creatureStatus, this.inventoryStatus, this.objectives, this.interaction, controls, exit);
     document.body.append(this.panel);
     this.reticle.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999;color:#e9f4d7;font:24px monospace;pointer-events:none;display:none';
     this.reticle.textContent = '+';
@@ -112,9 +131,19 @@ export class OnlineSession {
       this.timeout = setTimeout(() => { if (!this.ready) { this.net.disconnect(); this.note = 'Room connection timed out. Reload to retry.'; } }, 12000);
     } catch { if (!this.disposed) this.note = 'Account API unavailable. Use the local Wrangler Worker.'; }
   }
+  private async refreshInventory() {
+    const revision = ++this.inventoryRevision;
+    try {
+      const response = await fetch('/api/account/coop-state', { credentials: 'same-origin', signal: this.abort.signal });
+      if (!response.ok) return;
+      const data = await response.json();
+      const inventory = data.inventory;
+      if (!this.disposed && revision === this.inventoryRevision && inventory && [inventory.scrap, inventory.fiber, inventory.spore].every(n => Number.isInteger(n) && n >= 0 && n <= 20)) this.inventory = { scrap: inventory.scrap, fiber: inventory.fiber, spore: inventory.spore };
+    } catch { /* Account state stays at the most recent confirmed read. */ }
+  }
   private readonly onEvent = (event: RoomEvent) => {
     switch (event.type) {
-      case 'welcome': this.note = `Joined ${event.code}; waiting for authoritative snapshot…`; break;
+      case 'welcome': this.note = `Joined ${event.code}; waiting for authoritative snapshot…`; void this.refreshInventory(); break;
       case 'snapshot': {
         const me = this.net.self;
         if (!me) break;
@@ -125,9 +154,13 @@ export class OnlineSession {
       case 'correction': this.position = { x: event.x, z: event.z }; this.visualPosition = { ...this.position }; break;
       case 'respawn': this.position = { x: event.x, z: event.z }; this.visualPosition = { ...this.position }; this.note = 'Respawn accepted.'; break;
       case 'arsenal': this.arsenal = event.arsenal; break;
+      case 'collection-state': this.collection = event.collection; if (event.bonded) this.note = `Bond confirmed: ${CREATURES[event.collection.active].name}`; break;
+      case 'mission-state': if (this.mission && event.salvage > this.mission.salvage) this.note = 'Team sample recovered.'; this.mission = event; break;
+      case 'mission-extracted': this.note = `Team extraction confirmed. Expedition ${event.completed}.`; break;
+      case 'mission-reward': this.note = `Expedition reward: +${event.xp} XP`; void this.refreshInventory(); break;
       case 'shot': this.fireEvents.add(event.by); this.acceptedShots++; if (event.hit) this.confirmedHits++; if (this.effects.show(event)) this.feedback.sound(event.weapon === 'rifle' ? 'rifle-shot' : 'shot'); if (event.by === this.net.id) this.note = event.hit ? 'Server-confirmed HIT' : 'Server-confirmed shot'; break;
-      case 'action': this.acceptedActions++; if (event.action === 'melee') { this.meleeEvents.add(event.by); this.feedback.sound('swing'); } else this.feedback.sound('pulse'); if (event.by === this.net.id) this.note = `Server accepted ${event.action}.`; break;
-      case 'reward': this.acceptedRewards++; this.note = `Server reward: +${event.xp} XP · +${event.creatureXp} creature XP`; break;
+      case 'action': this.acceptedActions++; if (event.action === 'melee') { this.meleeEvents.add(event.by); this.feedback.sound('swing'); } else { this.acceptedPulses++; this.pendingPulses.set(event.by, performance.now()); this.feedback.sound('pulse'); } if (event.by === this.net.id) this.note = `Server accepted ${event.action}.`; break;
+      case 'reward': this.acceptedRewards++; this.note = event.duplicate ? 'Server reward already recorded.' : `Server reward: +${event.xp} XP · +${event.creatureXp} creature XP${event.material ? ' · ' + event.material : ''}`; void this.refreshInventory(); break;
       case 'error': this.note = this.net.connected ? event.message : 'Connection unavailable/disconnected. Reload to retry.'; if (!this.net.connected) { this.ready = false; this.resetInput(); } break;
     }
   };
@@ -147,6 +180,19 @@ export class OnlineSession {
       case 'KeyR': this.net.send('reload', { weapon: this.weapon }); break;
       case 'KeyF': this.net.send('attack'); break;
       case 'KeyH': this.net.send('heal'); break;
+      case 'KeyE': {
+        const me = this.net.self;
+        const target = me ? nearestFieldTarget(me, roomFieldTargets(this.collection, this.mission)) : null;
+        const intent = target ? fieldIntent(target) : null;
+        if (intent) { this.net.send(intent.type, intent.body); this.note = `Requested: ${target!.label}`; }
+        else this.note = 'Move closer to a field marker.';
+        break;
+      }
+      case 'KeyC': {
+        const species = nextOwnedSpecies(this.collection);
+        if (species) this.net.send('select-creature', { species }); else this.note = 'Bond with another creature to cycle companions.';
+        break;
+      }
       case 'KeyX': if (this.net.self?.creatureOwned) this.net.send('pulse'); else this.note = 'Pulse requires a cloud-owned bonded creature.'; break;
     }
   };
@@ -177,6 +223,17 @@ export class OnlineSession {
     avatar.animate(dt, { speed: p.hp > 0 ? speed : 0, sprinting: !!p.sprinting, airborne: false, dodging: false, aiming: !!p.aiming, aimPitch: p.pitch, shoot: this.fireEvents.has(p.id), melee: this.meleeEvents.has(p.id), reload: (p.reloadProgress ?? 0) > 0 && !this.reloadEvents.has(p.id), healing: !!p.survival?.healEndsAt, hit: damaged, dead: p.hp <= 0 });
     if ((p.reloadProgress ?? 0) > 0) this.reloadEvents.add(p.id); else this.reloadEvents.delete(p.id);
   }
+  private syncCompanion(owner: RemotePlayer, dt: number, position = { x: owner.x, z: owner.z }, yaw = owner.yaw) {
+    if (!owner.creatureOwned || !owner.species) {
+      this.companions.get(owner.id)?.dispose(); this.companions.delete(owner.id);
+      return;
+    }
+    let view = this.companions.get(owner.id);
+    if (!view) { view = new RoomCompanionView(this.scene, owner.species); this.companions.set(owner.id, view); }
+    view.update({ ...position, yaw, hp: owner.hp }, owner.species, owner.creatureXp ?? 0, dt);
+    const at = this.pendingPulses.get(owner.id);
+    if (at !== undefined) { if (performance.now() - at < 2000) view.pulse(owner); this.pendingPulses.delete(owner.id); }
+  }
   present(dt: number) {
     if (this.disposed) return;
     const now = performance.now();
@@ -197,10 +254,12 @@ export class OnlineSession {
       this.net.updateVisuals();
       this.visualPosition = smoothRoomPosition(this.visualPosition, this.position, dt);
       this.syncAvatar(this.avatar, { ...me, weapon: this.weapon, aiming: this.aim, pitch: this.follow.getAimPitch() }, dt, this.visualPosition, this.yaw);
+      this.syncCompanion(me, dt, this.visualPosition, this.yaw);
       for (const [id, p] of this.net.peers) {
         let avatar = this.peers.get(id);
         if (!avatar) { avatar = new PlayerAvatar(); this.peers.set(id, avatar); this.scene.add(avatar.root); this.loadAvatar(avatar); }
         this.syncAvatar(avatar, p, dt);
+        this.syncCompanion(p, dt);
       }
       for (const [id, a] of this.peers) if (!this.net.peers.has(id)) { a.dispose(); a.root.removeFromParent(); this.peers.delete(id); this.reloadEvents.delete(id); this.previousHp.delete(id); }
       const current = new Set<string>();
@@ -212,7 +271,10 @@ export class OnlineSession {
         view.update(enemy, dt, living, this.infectedPool);
       }
       for (const [id, view] of this.enemies) if (!current.has(id)) { view.dispose(); this.enemies.delete(id); }
-    } else { for (const a of this.peers.values()) a.root.visible = false; for (const e of this.enemies.values()) e.root.visible = false; }
+      for (const [id, view] of this.companions) if (id !== me.id && !this.net.peers.has(id)) { view.dispose(); this.companions.delete(id); }
+      this.field.update(roomFieldTargets(this.collection, this.mission), dt);
+    } else { for (const a of this.peers.values()) a.root.visible = false; for (const e of this.enemies.values()) e.root.visible = false; for (const c of this.companions.values()) c.hide(); this.field.update([], dt); }
+    for (const [id, at] of this.pendingPulses) if (now - at >= 2000) this.pendingPulses.delete(id);
     this.fireEvents.clear(); this.meleeEvents.clear();
     this.effects.update(dt); this.feedback.update(dt, null);
     const p = roomToScene(this.visualPosition.x, this.visualPosition.z);
@@ -221,10 +283,15 @@ export class OnlineSession {
     this.status.textContent = this.isReady() ? `Room ${this.net.code} · ${this.net.peers.size + 1}/4 · HP ${me?.hp} · Wave ${this.net.horde?.wave ?? '–'}` : 'Not connected';
     this.reticle.style.display = this.alive() && this.locked() && this.aim ? 'block' : 'none';
     const ammo = this.arsenal?.[this.weapon];
-    this.detail.textContent = `${this.weapon.toUpperCase()} ${ammo ? `${ammo.magazine}/${ammo.reserve}` : '–'} · Bandages ${me?.survival?.bandages ?? '–'} · ${this.note}`;
+    this.detail.textContent = `${this.weapon.toUpperCase()} ${ammo ? `${ammo.magazine}/${ammo.reserve}` : '–'} · Bandages ${me?.survival?.bandages ?? '–'} · Stamina ${Math.round(me?.survival?.stamina ?? 0)}${me?.survival?.healEndsAt ? ' · BANDAGING' : ''} · ${this.note}`;
+    this.creatureStatus.textContent = me?.creatureOwned && me.species ? `Companion: ${creaturePower(me.species, me.creatureXp ?? 0).name} · ${me.creatureXp ?? 0} XP` : 'No bonded creature · find a green habitat marker';
+    this.inventoryStatus.textContent = this.inventory ? `Cloud materials · Scrap ${this.inventory.scrap} · Fiber ${this.inventory.fiber} · Spore ${this.inventory.spore}` : 'Cloud materials: synchronizing…';
+    this.objectives.textContent = this.mission ? `Team objective · Infected ${this.mission.kills}/${MISSION_KILLS} · Samples ${this.mission.salvage}/${MISSION_SALVAGE}${this.mission.ready ? ' · EXTRACTION READY' : ''}` : 'Waiting for team mission…';
+    const target = this.alive() && me ? nearestFieldTarget(me, roomFieldTargets(this.collection, this.mission)) : null;
+    this.interaction.textContent = target ? `E · ${target.label}` : this.isReady() && !this.alive() ? 'Downed: Enter to respawn (teammate revive not yet supported)' : '';
   }
   getInfo() {
-    return { connected: this.isReady(), room: this.net.code, id: this.net.id, peers: [...this.net.peers.keys()], remotePlayers: [...this.net.peers.values()], self: this.net.self, horde: this.net.horde, arsenal: this.arsenal, acceptedShots: this.acceptedShots, confirmedHits: this.confirmedHits, shotEffects: this.effects.count, infectedViews: [...this.enemies].map(([id, view]) => ({ id, ...view.info() })), acceptedActions: this.acceptedActions, acceptedRewards: this.acceptedRewards };
+    return { connected: this.isReady(), room: this.net.code, id: this.net.id, peers: [...this.net.peers.keys()], remotePlayers: [...this.net.peers.values()], self: this.net.self, horde: this.net.horde, arsenal: this.arsenal, collection: this.collection, mission: this.mission, inventory: this.inventory, fieldMarkers: this.field.info(), companionViews: [...this.companions].map(([id, view]) => ({ id, ...view.info() })), acceptedShots: this.acceptedShots, confirmedHits: this.confirmedHits, shotEffects: this.effects.count, infectedViews: [...this.enemies].map(([id, view]) => ({ id, ...view.info() })), acceptedActions: this.acceptedActions, acceptedPulses: this.acceptedPulses, acceptedRewards: this.acceptedRewards };
   }
   dispose() {
     this.disposed = true; this.abort.abort(); clearTimeout(this.timeout); this.net.disconnect(); this.resetInput();
@@ -232,6 +299,8 @@ export class OnlineSession {
     this.avatar.dispose(); this.avatar.root.removeFromParent();
     for (const a of this.peers.values()) { a.dispose(); a.root.removeFromParent(); }
     for (const view of this.enemies.values()) view.dispose();
+    for (const view of this.companions.values()) view.dispose();
+    this.companions.clear(); this.pendingPulses.clear(); this.field.dispose();
     this.peers.clear(); this.enemies.clear(); this.infectedPool.dispose(); this.effects.dispose(); this.feedback.dispose(); this.world.removeFromParent();
     this.geometry.dispose(); this.enemyMaterial.dispose(); this.box.dispose(); this.obstacleMaterial.dispose(); this.groundGeometry.dispose(); this.groundMaterial.dispose(); this.panel.remove(); this.reticle.remove();
   }
