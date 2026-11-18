@@ -4,6 +4,18 @@ import type { Game } from './client/game/Game';
 import { initAccount } from './client/game/Account';
 import { arrangeHud } from './client/ui/HudLayout';
 
+const nextgenRoom = new URLSearchParams(location.search).get('nextgenRoom');
+if (nextgenRoom !== null) {
+  // Explicit opt-in; legacy account/menu boot is unchanged for ordinary URLs.
+  document.body.replaceChildren();
+  void import('./nextgen/demo/RoomEntry').then(({ mountRoom }) => mountRoom(nextgenRoom)).catch(error => {
+    console.error('NEXTGEN room failed to start', error);
+    const message = document.createElement('p');
+    message.textContent = 'NEXTGEN room failed to start. Return to the account menu and retry.';
+    document.body.append(message);
+  });
+} else {
+
 const viewport = document.querySelector<HTMLElement>('#game-viewport');
 
 if (!viewport) {
@@ -86,3 +98,4 @@ enterButton?.addEventListener('click', () => {
 window.addEventListener('beforeunload', () => {
   game?.dispose();
 });
+}

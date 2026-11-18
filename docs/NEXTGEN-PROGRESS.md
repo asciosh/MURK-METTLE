@@ -4,6 +4,14 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## M03 — authoritative co-op foundation (checkpoint A)
+
+- Added an explicitly opt-in NEXTGEN online sandbox via `/?nextgenRoom=BLOOM` on the same authenticated local Worker origin. Normal URLs and solo NEXTGEN fixtures still use their existing paths.
+- Reused the legacy authenticated room transport and interpolation. Remote player avatars and infected markers come from snapshots; damage, ammo, survival, actions and rewards remain server-owned. Pistol/rifle, melee, reload, bandage, owned-creature Pulse and dead-player restart use existing messages only.
+- The online sandbox intentionally uses a flat plane and server obstacle dimensions with a +100 coordinate offset; it does not run the local horde, loot, companion attacks, dodge, jump, shotgun or resonance simulation. Infected markers are temporary visualization, not final art. No server/protocol/schema/deployment changes.
+- Verification: focused pure room-coordinate/intent tests and existing dependency-free room/survival tests; the full checkout still needs typecheck/build and rendered two-/four-player local Wrangler acceptance. Do not mark M03 or M05 complete.
+- Exact next unfinished task: verify two independent authenticated clients against local Wrangler, refine authoritative movement/aim/feedback, then add rigged infected visuals and four-player checks. Revive or other protocol extensions require separate reviewed compatibility design.
+
 ---
 
 ## 2026-11-18 — M02 Final Acceptance

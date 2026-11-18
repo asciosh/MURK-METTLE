@@ -8,6 +8,7 @@ import { TerrainGenerator } from '../core/TerrainGenerator';
 import { TerrainMaterial } from '../core/TerrainMaterial';
 import { VegetationRenderer } from '../core/VegetationRenderer';
 import { PlayableSession } from './PlayableSession';
+import { OnlineSession } from './OnlineSession';
 
 /**
  * Independent graphics demonstration scene (M01 checkpoint).
@@ -32,6 +33,7 @@ export class SimpleDemo {
   private resizeObserver?: ResizeObserver;
   private vegetation?: VegetationRenderer;
   private session?: PlayableSession;
+  private onlineSession?: OnlineSession;
 
   private readonly qualityPresets = {
     low: {
@@ -66,7 +68,7 @@ export class SimpleDemo {
   private readonly bloomRadius = uniform(1.0);
   private readonly bloomThreshold = uniform(0.3);
 
-  constructor(private readonly playable = false) {
+  constructor(private readonly playable = false, private readonly roomCode?: string) {
     document.body.style.margin = '0';
     this.canvas = document.createElement('canvas');
     this.canvas.style.display = 'block';
@@ -166,6 +168,16 @@ async mount(): Promise<void> {
     scene.environment = envTarget.texture;
     scene.environmentIntensity = 0.7;
     pmrem.dispose();
+
+    if (this.roomCode !== undefined) {
+      const online = new OnlineSession(scene, camera, this.canvas, this.roomCode);
+      this.onlineSession = online;
+      scene.add(new THREE.HemisphereLight(0xc5d9ef, 0x596044, 1.4));
+      this.sun.position.set(70, 45, 125);
+      this.sun.target.position.set(100, 0, 100);
+      this.renderer.onBeforeRender = (dtMs) => online.present(dtMs);
+      return;
+    }
 
         // Heightfield terrain
     const terrain = new TerrainGenerator(12345);
@@ -337,6 +349,8 @@ async mount(): Promise<void> {
     return this.session?.getModelInfo();
   }
 
+  getRoomInfo() { return this.onlineSession?.getInfo(); }
+
   getPlayerState() {
     return this.session?.getState();
   }
@@ -496,6 +510,8 @@ private applyShadowPreset(): void {
 
     this.session?.dispose();
     this.session = undefined;
+    this.onlineSession?.dispose();
+    this.onlineSession = undefined;
 
     this.renderer.dispose();
     this.container.remove();
