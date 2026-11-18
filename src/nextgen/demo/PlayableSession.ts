@@ -14,6 +14,12 @@ import { InfectedModelPool } from '../core/InfectedModel';
 import { InfectedAvatar } from '../core/InfectedAvatar';
 import { TerrainGenerator } from '../core/TerrainGenerator';
 import { PlayableHud } from './PlayableHud';
+import {
+  COMBAT,
+  CombatController
+} from '../core/CombatController';
+
+import { findShotTarget } from '../core/ShotQuery';
 
 export class PlayableSession {
   private readonly keyboard = new KeyboardInput();
@@ -23,6 +29,8 @@ export class PlayableSession {
   private readonly infected: InfectedAvatar[] = [];
   private infectedAttackHits = 0;
   private readonly hud = new PlayableHud();
+  private readonly combat = new CombatController();
+  private readonly shotDirection = new THREE.Vector3();
 
   private readonly controller: CharacterController;
   private state: CharacterControllerResult;
@@ -38,7 +46,8 @@ export class PlayableSession {
     scene: THREE.Scene,
     private readonly camera: THREE.PerspectiveCamera,
     private readonly canvas: HTMLCanvasElement,
-    private readonly terrain: TerrainGenerator
+    private readonly terrain: TerrainGenerator,
+    private readonly training = false
   ) {
     this.controller = new CharacterController({
       speed: SURVIVAL.walkSpeed,
@@ -57,8 +66,17 @@ export class PlayableSession {
     scene.add(this.avatar.root);
 
     void this.avatar.loadModel(
-    `${import.meta.env.BASE_URL}models/nextgen/survivor.glb`
-    );
+      `${import.meta.env.BASE_URL}models/nextgen/survivor.glb`
+    ).then(loaded => {
+      if (!loaded || this.disposed) return;
+
+      const timing = this.avatar.getWeaponTiming();
+
+      this.combat.configureWeapon(
+        timing.shootMs,
+        timing.reloadMs
+      );
+    });
 
       const enemy = new InfectedAvatar(
     new InfectedController({
@@ -120,7 +138,13 @@ export class PlayableSession {
   }
 
   private readonly onClick = () => {
-    if (this.disposed || this.isLocked()) return;
+    if (
+      this.disposed ||
+      !this.combat.alive ||
+      this.isLocked()
+    ) {
+      return;
+    }
 
     try {
       void Promise.resolve(
@@ -216,11 +240,53 @@ private readonly onPointerLockChange = () => {
   }
 };
 
-    step(deltaTimeMs: number): void {
-    if (this.disposed) return;
+private fireShot(): void {
+  this.camera.getWorldDirection(this.shotDirection);
 
-    this.previousPosition = [...this.state.position];
+  const direction: [number, number, number] = [
+    this.shotDirection.x,
+    this.shotDirection.y,
+    this.shotDirection.z
+  ];
 
+  const origin: [number, number, number] = [
+    this.camera.position.x,
+    this.camera.position.y,
+    this.camera.position.z
+  ];
+
+  const shooter: [number, number, number] = [
+    this.state.position[0],
+    this.state.position[1] + 1.35,
+    this.state.position[2]
+  ];
+
+  const target = findShotTarget(
+    origin,
+    direction,
+    shooter,
+    this.infected.map(enemy => enemy.getState()),
+    COMBAT.range,
+    (x, z) => this.terrain.heightAt(x, z)
+  );
+
+  if (target === null) return;
+
+  const enemy = this.infected[target];
+
+  if (enemy.damage(COMBAT.bulletDamage)) {
+    this.combat.recordHit(
+      enemy.getState().health === 0
+    );
+  }
+}
+
+step(deltaTimeMs: number): void {
+  if (this.disposed) return;
+
+  this.previousPosition = [...this.state.position];
+
+  if (this.combat.alive) {
     this.state = this.controller.update(
       deltaTimeMs,
       {
@@ -229,44 +295,80 @@ private readonly onPointerLockChange = () => {
       },
       this.followCamera.getOrientation()
     );
+  }
 
-    const distance = Math.hypot(
-        this.state.position[0] - this.previousPosition[0],
-        this.state.position[2] - this.previousPosition[2]
-    );
-
-    const speed = deltaTimeMs > 0
-        ? distance / (deltaTimeMs / 1000)
-        : 0;
-
-    const aiming =
-      this.state.aiming && this.isLocked();
-
-    this.avatar.animate(deltaTimeMs, {
-      speed,
-      sprinting: this.state.sprinting,
-      airborne: this.state.airborne,
-      dodging: this.state.dodging,
-      aiming,
-      aimPitch: this.followCamera.getAimPitch(),
-      shoot: aiming && this.shootPressed,
-      reload: aiming && this.reloadPressed
-    });
-
-    for (const infected of this.infected) {
-  const state = infected.update(
-    deltaTimeMs,
-    this.state.position
+  const distance = Math.hypot(
+    this.state.position[0] - this.previousPosition[0],
+    this.state.position[2] - this.previousPosition[2]
   );
 
-  if (state.attackHit) {
-    this.infectedAttackHits++;
+  const speed = deltaTimeMs > 0
+    ? distance / (deltaTimeMs / 1000)
+    : 0;
+
+  const aiming =
+    this.combat.alive &&
+    this.state.aiming &&
+    this.isLocked();
+
+  const weaponReady =
+    this.avatar.getWeaponAction() === null;
+
+  const combat = this.combat.step(deltaTimeMs, {
+    enabled:
+      aiming &&
+      !this.state.airborne &&
+      !this.state.dodging,
+
+    shoot: this.shootPressed && weaponReady,
+    reload: this.reloadPressed && weaponReady
+  });
+
+  if (combat.shot) {
+    this.fireShot();
   }
+
+  this.avatar.animate(deltaTimeMs, {
+    speed: this.combat.alive ? speed : 0,
+    sprinting: this.combat.alive && this.state.sprinting,
+    airborne: this.combat.alive && this.state.airborne,
+    dodging: this.combat.alive && this.state.dodging,
+    aiming,
+    aimPitch: this.followCamera.getAimPitch(),
+    shoot: combat.shot,
+    reload: combat.reloadStarted
+  });
+
+  for (const infected of this.infected) {
+    const state = infected.update(
+      deltaTimeMs,
+      this.combat.alive ? this.state.position : null
+    );
+
+    if (state.attackHit) {
+      this.infectedAttackHits++;
+
+      if (!this.training) {
+        this.combat.takeDamage(
+          COMBAT.infectedDamage,
+          SURVIVAL.damageGrace
+        );
+
+        if (!this.combat.alive) {
+          this.onReset();
+
+          if (this.isLocked()) {
+            document.exitPointerLock();
+          }
+        }
+      }
+    }
+  }
+
+  this.shootPressed = false;
+  this.reloadPressed = false;
 }
 
-    this.shootPressed = false;
-    this.reloadPressed = false;
-    }
 
   present(
     deltaTimeMs: number,
@@ -309,7 +411,11 @@ private readonly onPointerLockChange = () => {
       this.camera.fov = pose.fov;
       this.camera.updateProjectionMatrix();
     }
-    this.hud.update(this.state, this.isLocked());
+    this.hud.update(
+    this.state,
+    this.isLocked(),
+    this.combat.getState()
+  );
   }
 
   getModelInfo() {
@@ -323,6 +429,13 @@ private readonly onPointerLockChange = () => {
       facing: [...this.state.facing]
     };
   }
+
+  getCombatInfo() {
+  return {
+    ...this.combat.getState(),
+    training: this.training
+  };
+}
 
   getInfectedInfo() {
   return this.infected.map(enemy => ({
