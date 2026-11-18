@@ -94,11 +94,11 @@ The asset uses in-place animations for controller-driven movement.
 ### Asset specifications
 
 - File: infected.glb
-- Size: approximately 3.00 MiB
+- Size: approximately 2.94 MiB.
 - Triangles: 32,728
 - Skeletons: 1
 - Bones: 53
 - Meshes: 7
 - Textures: 8
-- Animations: Idle, Walk, Run, Attack, Hit, Death
-- SHA256: DFCA8CC9A422786537AFA504EF5A4E6B789B28E9AF30EAB5D1E52B516581E6D7
+- Animations: 14, including Hit and Death.
+- SHA256: 792DCD134EAE93D1FBED9026B6D4BCF4E6B310BD500D0AEE376C9E4E6E4E6334
