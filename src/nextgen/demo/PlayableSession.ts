@@ -26,6 +26,7 @@ import { PickupController, PICKUP } from '../core/PickupController';
 import { CombatFeedback } from '../core/CombatFeedback';
 import { CompanionController } from '../core/CompanionController';
 import { CompanionAvatar } from '../core/CompanionAvatar';
+import { NextgenModBridge } from '../modding/NextgenModBridge';
 import { WEAPONS, ammoKind, fullLootNotice, lootLabel, INVENTORY_ROWS, inventoryDropKind, type WeaponId, type LootKind } from '../core/EquipmentInventory';
 import {
   HordeDirector,
@@ -66,6 +67,7 @@ export class PlayableSession {
   private pulsePressed = false;
   private readonly companion:CompanionController|null;
   private readonly companionAvatar:CompanionAvatar|null;
+  private readonly companionCosmetic:NextgenModBridge|null;
   private readonly companionHeight=(x:number,z:number)=>x>=0&&z>=0&&x<=this.terrain.size&&z<=this.terrain.size?this.terrain.heightAt(x,z):NaN;
   private inventoryOpen = false;
   private inventoryIndex = 0;
@@ -106,6 +108,7 @@ export class PlayableSession {
     const companionEnabled=!this.benchmark&&(!this.training||new URLSearchParams(window.location.search).get('companion')==='1');
     this.companion=companionEnabled?new CompanionController():null;
     this.companionAvatar=companionEnabled?new CompanionAvatar():null;
+    this.companionCosmetic=companionEnabled?new NextgenModBridge(scene, 'lanternkin'):null;
     this.companion?.reset(this.state.position,this.state.facing,this.companionHeight);
     if(this.companionAvatar&&this.companion){scene.add(this.companionAvatar.root);this.companionAvatar.update(0,this.companion.getState());}
 
@@ -512,6 +515,11 @@ private stepCompanion(delta:number):void {
   for(const strike of strikes){const enemy=this.infected[strike.index];if(!enemy||!enemy.damage(strike.damage))continue;
     const dead=enemy.getState().health===0;this.combat.recordCompanionHit(dead);this.feedback.impact(enemy.getState().position,from,strike.kind==='basic');if(dead)this.dropLoot(enemy);}
   this.companionAvatar?.update(delta,this.companion.getState());
+  if (this.companionAvatar) {
+    const hasCosmetic = this.companionCosmetic?.update(this.companionAvatar.root, delta, this.companion.getState().moving, true) ?? false;
+    this.companionAvatar.root.visible = !hasCosmetic;
+  }
+  if (strikes.some(hit => hit.kind === 'pulse')) this.companionCosmetic?.pulse();
 }
 
 private requestWeapon(id:WeaponId|null):void {
@@ -931,6 +939,7 @@ damageInfected(index: number, amount: number): boolean {
     this.infectedLoads.clear();
     this.loot.dispose();
     this.feedback.dispose();
+    this.companionCosmetic?.dispose();
     this.companionAvatar?.dispose();
     this.avatar.dispose();
     this.hud.dispose();

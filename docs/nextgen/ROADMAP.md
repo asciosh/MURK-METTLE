@@ -76,7 +76,7 @@ tests against the nextgen client.
 and revive rules while preserving compatibility. Run the full operator verification and
 manual checklist in the progress log before checking off M03.
 
-## M04 — Creatures: Collection & Evolution ☐
+## M04 — Creatures: Collection & Evolution ◐
 
 - [ ] Five original species re-presented with nextgen models, animation and habitats.
 - [ ] Capture/befriending gameplay, journal UI, evolution forms.

@@ -37,3 +37,27 @@
 @media(max-width:540px){#nextgen-lobby{padding:8px}#nextgen-lobby>.ng-panel{padding:18px}.ng-shell .ng-tabs{gap:4px}.ng-shell .ng-tab{flex:1;min-width:calc(50% - 4px);padding:9px 5px}}
 @media(prefers-reduced-motion:reduce){.ng-shell *{scroll-behavior:auto!important;transition:none!important}}
 .ng-shell [hidden]{display:none!important}
+
+.ng-mod-actions{display:flex;gap:8px;flex-wrap:wrap}.ng-mod-actions .ng-button{width:auto;flex:1 1 85px;font-size:12px;padding:7px}.ng-mod-actions button{min-width:80px}#nextgen-mod-preview{width:100%;min-height:0;overflow:hidden}#nextgen-mod-preview canvas{display:block;max-width:100%}
+
+/* M04-B menu polish: do not stack the evolution sandbox and ZIP tools in one scroll. */
+.ng-shell .ng-subtabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 16px}
+.ng-shell .ng-subtab{border:1px solid #607b62;border-radius:9px;padding:11px 8px;background:#213a2a;color:#dce9d4;font-weight:650}
+.ng-shell .ng-subtab[aria-selected="true"]{background:#a4c18a;color:#102018;border-color:#bbd2a6}
+.ng-shell #nextgen-mod-appearances[hidden],.ng-shell #nextgen-mod-evolution[hidden]{display:none}
+.ng-shell .ng-mod-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 10px}
+.ng-shell .ng-mod-toolbar .ng-button{width:auto;flex:1 1 130px;margin:0;font-size:12px;padding:10px}
+.ng-shell #nextgen-evolution-lab{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px;row-gap:10px;margin:0}
+.ng-shell #nextgen-evolution-lab>h2,
+.ng-shell #nextgen-evolution-lab>p,
+.ng-shell #nextgen-evolution-lab>#ng-evolution-options{grid-column:1/-1}
+.ng-shell #nextgen-evolution-lab>label{margin:0;min-width:0}
+.ng-shell #nextgen-evolution-lab>label input:not([type=checkbox]),
+.ng-shell #nextgen-evolution-lab>label select{margin-top:4px}
+.ng-shell #nextgen-evolution-lab>label:has(input[type=checkbox]){display:flex;align-items:center;gap:8px;font-size:12px}
+.ng-shell #nextgen-evolution-lab>label input[type=checkbox]{margin:0!important;width:auto;flex-shrink:0}
+.ng-shell #nextgen-evolution-lab #ng-evolution-options .ng-button{width:auto;min-width:140px;padding:8px 12px}
+.ng-shell .ng-pause-details{margin:14px 0;border:1px solid #4c654e;border-radius:9px;padding:12px}
+.ng-shell .ng-pause-details>summary{font-weight:700;color:#cfe7bc;cursor:pointer}
+.ng-shell .ng-pause-details .ng-controls{margin-top:12px}
+@media(max-width:540px){.ng-shell #nextgen-evolution-lab{grid-template-columns:1fr}.ng-shell .ng-mod-toolbar .ng-button{flex-basis:100%}}

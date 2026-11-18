@@ -50,7 +50,8 @@ export class NextgenPauseMenu {
       const saved = saveNextgenQuality(window.localStorage, quality.value);
       this.setQuality(saved);
     }, { signal });
-    const controlsTitle = document.createElement('h3'); controlsTitle.textContent = 'CONTROLS';
+    const controlsSection = document.createElement('details'); controlsSection.className = 'ng-pause-details';
+    const controlsTitle = document.createElement('summary'); controlsTitle.textContent = 'CONTROLS';
     const controlsHint = document.createElement('p'); controlsHint.className = 'ng-note';
     controlsHint.textContent = mode === 'coop'
       ? 'Dodge, jump, revive, extraction and rewards are validated by the room server.'
@@ -63,7 +64,8 @@ export class NextgenPauseMenu {
     }
     const back = document.createElement('a'); back.className = 'ng-button ng-secondary'; back.href = '/?nextgen=lobby';
     back.textContent = mode === 'coop' ? 'LEAVE ROOM · MAIN MENU' : 'MAIN MENU';
-    panel.append(top, title, message, resume, qualityLabel, controlsTitle, controlsHint, controls, back);
+    controlsSection.append(controlsTitle, controlsHint, controls);
+    panel.append(top, title, message, resume, qualityLabel, controlsSection, back);
     this.root.append(panel);
     document.body.append(this.toggle, this.root);
     this.toggle.addEventListener('click', () => this.show(), { signal });

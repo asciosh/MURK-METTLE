@@ -1,0 +1,95 @@
+{
+  "archivedAt": "M04-A",
+  "status": "preserved-original-fallback",
+  "reason": "Original creatures frozen as a reversible catalog while optional licensed cosmetic packs are introduced. This does not alter cloud collection IDs, ownership, evolutions, or XP.",
+  "species": {
+    "lanternkin": {
+      "name": "Lanternkin",
+      "forms": [
+        "Lanternkin",
+        "Luminbloom",
+        "Grovewarden"
+      ],
+      "color": 8764320,
+      "glow": 9300934,
+      "x": 4.2,
+      "z": -3.8,
+      "damage": 35,
+      "range": 7.5,
+      "cooldown": 8,
+      "habitat": "Field camp"
+    },
+    "emberling": {
+      "name": "Emberling",
+      "forms": [
+        "Emberling",
+        "Cinderhorn",
+        "Ashcrown"
+      ],
+      "color": 8939084,
+      "glow": 16757358,
+      "x": 8,
+      "z": -54,
+      "damage": 48,
+      "range": 6,
+      "cooldown": 10,
+      "habitat": "Old settlement · north"
+    },
+    "mossback": {
+      "name": "Mossback",
+      "forms": [
+        "Mossback",
+        "Briarhide",
+        "Elderroot"
+      ],
+      "color": 5662797,
+      "glow": 12044158,
+      "x": 48,
+      "z": 38,
+      "damage": 62,
+      "range": 5,
+      "cooldown": 12,
+      "habitat": "Southern pine ridge · southeast"
+    },
+    "stormrook": {
+      "name": "Stormrook",
+      "forms": [
+        "Stormrook",
+        "Thundermantle",
+        "Tempestcrest"
+      ],
+      "color": 5594738,
+      "glow": 11058659,
+      "x": 54,
+      "z": -46,
+      "damage": 24,
+      "range": 13,
+      "cooldown": 5,
+      "habitat": "Eastern relay · northeast"
+    },
+    "reedwisp": {
+      "name": "Reedwisp",
+      "forms": [
+        "Reedwisp",
+        "Mistwing",
+        "Tideveil"
+      ],
+      "color": 6720921,
+      "glow": 10409453,
+      "x": -48,
+      "z": -28,
+      "damage": 28,
+      "range": 11,
+      "cooldown": 6,
+      "habitat": "Wetland · northwest"
+    }
+  },
+  "artSources": [
+    "src/client/game/CreatureArt.ts",
+    "src/client/game/Companion.ts",
+    "src/nextgen/core/CompanionAvatar.ts",
+    "src/nextgen/core/RoomCompanionView.ts"
+  ],
+  "saveContract": "shared/collection.mjs",
+  "note": "All original species remain a fallback until a separate reviewed migration. Do not delete them; do not change existing account data."
+}

@@ -1,9 +1,10 @@
 import './NextgenMenu.css';
+import { mountNextgenModsTab } from '../modding/NextgenModsTab';
 import { SimpleDemo } from './SimpleDemo';
 import { validateRoomCode } from '../core/RoomIntent';
 import { NEXTGEN_CONTROLS, QUALITY_OPTIONS, savedNextgenQuality, saveNextgenQuality } from '../core/NextgenOptions';
 
-type MenuTab = 'play' | 'coop' | 'settings' | 'controls';
+type MenuTab = 'play' | 'coop' | 'settings' | 'controls' | 'mods';
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', content = ''): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -51,6 +52,7 @@ export function mountLobby(roomCode = '') {
   const tabNames: { id: MenuTab; label: string }[] = [
     { id: 'play', label: 'Play' }, { id: 'coop', label: 'Co-op' },
     { id: 'settings', label: 'Settings' }, { id: 'controls', label: 'Controls' },
+    { id: 'mods', label: 'Creature Mods' },
   ];
   const tabButtons = new Map<MenuTab, HTMLButtonElement>();
   const sections = new Map<MenuTab, HTMLElement>();
@@ -61,7 +63,9 @@ export function mountLobby(roomCode = '') {
     const section = element('section', 'ng-section'); section.id = `ng-tab-${id}`;
     sections.set(id, section);
   }
+  let closeModPreview: (() => void) | undefined;
   const activate = (id: MenuTab) => {
+    if (id !== 'mods') closeModPreview?.();
     for (const [name, section] of sections) section.hidden = name !== id;
     for (const [name, button] of tabButtons) button.setAttribute('aria-selected', String(name === id));
   };
@@ -71,11 +75,9 @@ export function mountLobby(roomCode = '') {
   const play = sections.get('play')!;
   play.append(element('h2', '', 'Choose your expedition'), element('p', '', 'Both modes use the same terrain, characters, lighting and HUD. The gameplay rules below are mode-specific.'));
   const solo = element('a', 'ng-button', 'PLAY SOLO'); solo.href = '/?nextgen=playable';
-  // Keep a single visible solo link in every tab, including the unauthenticated room gate.
-  panel.append(solo);
-  const coopButton = element('button', 'ng-button ng-secondary', 'PLAY WITH FRIENDS'); coopButton.type = 'button'; coopButton.onclick = () => activate('coop');
-  play.append(element('p', 'ng-note', 'Solo: local survival waves, pickups, jump/dodge and Lanternkin companion training. Does not award cloud account XP.'), coopButton,
-    element('p', 'ng-note', 'Co-op: 1–4 authenticated players, cloud-owned creatures, server-confirmed combat, revival and expedition rewards.'));
+  play.append(solo,
+    element('p', 'ng-note', 'Solo: local survival waves, pickups, jump/dodge and Lanternkin training. No cloud account XP.'),
+    element('p', 'ng-note', 'For friends, open the Co-op tab above to sign in and join a private room.'));
 
   const coop = sections.get('coop')!;
   const form = element('form'); form.autocomplete = 'off';
@@ -151,6 +153,8 @@ export function mountLobby(roomCode = '') {
 
   const controls = sections.get('controls')!;
   controls.append(element('h2', '', 'Controls'), renderControls('both'));
+  const mods = sections.get('mods')!;
+  closeModPreview = mountNextgenModsTab(mods).closePreview;
   for (const section of sections.values()) panel.append(section);
   ui.append(panel);
   // The UI intentionally sits in front of an ambient NEXTGEN world preview.
@@ -161,7 +165,7 @@ export function mountLobby(roomCode = '') {
     const value = saveNextgenQuality(window.localStorage, quality.value);
     backdrop.setQuality(value); settingStatus.textContent = `Saved: ${QUALITY_OPTIONS.find(o => o.id === value)?.label}.`;
   });
-  activate(roomCode ? 'coop' : 'play');
+  activate(roomCode ? 'coop' : new URLSearchParams(location.search).get('tab') === 'mods' ? 'mods' : 'play');
   window.addEventListener('beforeunload', () => backdrop.dispose(), { once: true });
   void fetch('/api/account/me', { credentials: 'same-origin', cache: 'no-store' }).then(async response => {
     if (response.ok) {

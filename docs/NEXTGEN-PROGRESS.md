@@ -12,6 +12,22 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## 2026-11-18 — M04-B: declarative evolution rules and local preview (operator verification pending)
+
+- Added `shared/creature-evolution.mjs` with guarded family/form catalog validation, branching evolution, level/XP, item, friendship, server-verified trade and day/night prerequisites. Pure transaction plans specify item requirements without writing inventory or saves. Reject cycles, duplicate forms, malformed conditions and oversized catalogs.
+- Archived originals remain represented with their **existing XP thresholds 120/400**; added original data-only Glimmerpaw as a branching evolution demonstration, not as an owned or spawnable creature.
+- Added the read-only **Evolution Lab** beneath Creature Mods in the NEXTGEN menu; it never changes cloud XP, collection, room protocol or combat. The existing cosmetic-only ZIP validation boundary remains unchanged.
+- New pure unit tests plus a local Playwright smoke check. Full Windows typecheck/build/browser execution pending; see `docs/nextgen/M04-EVOLUTION-ENGINE.md`.
+- **Next task:** after operator verification, design approved backward-compatible server-owned new-species progression with trustworthy evolution transactions; no persistent schema changes until reviewed. Continue on `cline/m04-creature-system`, no PR or production deployment yet.
+
+## 2026-11-18 — M04-A: archived original creatures and NEXTGEN cosmetic mods (operator verification pending)
+
+- Started from M03 PR #44 merged into `nextgen`; M04 task branch `cline/m04-creature-system`. Five original species / fifteen evolution names archived in `docs/nextgen/archive/M03-ORIGINAL-CREATURES.json` without deleting originals or changing collection/saves.
+- NEXTGEN lobby **Creature Mods** tab and pause menu navigation added. Reuses existing worker-validated local `.mmcosmetic` importer, license details, preview, install/enable/disable/remove, and IndexedDB persistence. Original CC0 demo is available for testing.
+- Solo Lanternkin and co-op companions can render the same device-local cosmetic override, without changing server gameplay species, room packets, damage, ownership, account data or Cloudflare bindings. Missing/invalid packs fall back to original creature visuals.
+- New tests cover archived catalog compatibility and static mod authority boundaries; browser smoke covers import, persistence and restore-originals. Full PC build, browser and visual check remain pending.
+- **Next task:** Windows typecheck/build, import original demo, verify solo/co-op appearances and restore. Then design M04-B new species data/evolution schema without replacing existing cloud saves. No unlicensed franchise assets.
+
 ## M03 — final squad, mission, revive and room-lifecycle polish (awaiting operator acceptance)
 
 - Added server-snapshot-driven squad HUD with temporary team aliases, HP bars, downed countdown, teammate revive progress, and world-space teammate labels. The WebSocket room has no public username field in snapshots; aliases do not claim identity. Added objective banner and short-range labels distinguishing supply, sample, creature habitat and locked/ready extraction.

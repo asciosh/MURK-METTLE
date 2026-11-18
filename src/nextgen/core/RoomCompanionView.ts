@@ -4,11 +4,13 @@ import { CREATURES, creaturePower, type SpeciesId } from '../../../shared/expans
 import { companionFollow } from './RoomFieldRules';
 import { roomToScene } from './RoomIntent';
 import { CompanionAvatar } from './CompanionAvatar';
+import { NextgenModBridge } from '../modding/NextgenModBridge';
 
 /** Original five-species art; the room's ownership, species and XP are authoritative. */
 export class RoomCompanionView {
   private readonly pet: Companion;
   private readonly nextgenPet = new CompanionAvatar();
+  private readonly cosmetic: NextgenModBridge;
   private readonly ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
   private position?: { x: number; z: number };
   private species: SpeciesId;
@@ -21,6 +23,7 @@ export class RoomCompanionView {
   private visible = true;
   constructor(scene: THREE.Scene, species: SpeciesId) {
     this.species = species;
+    this.cosmetic = new NextgenModBridge(scene, species);
     this.pet = new Companion(scene, species);
     this.pet.setLightEnabled(false);
     scene.add(this.nextgenPet.root);
@@ -30,7 +33,7 @@ export class RoomCompanionView {
     scene.add(this.ring);
   }
   update(owner: { x: number; z: number; yaw: number; hp: number }, species: SpeciesId, xp: number, dt: number) {
-    this.species = species; this.xp = xp;
+    this.species = species; this.xp = xp; this.cosmetic.setSpecies(species);
     this.pet.setForm(species, xp);
     this.visible = owner.hp > 0;
     this.pet.root.visible = this.visible && species !== 'lanternkin';
@@ -52,6 +55,9 @@ export class RoomCompanionView {
       const power=creaturePower(species,xp);
       this.nextgenPet.update(dt,{species:'lanternkin',name:power.name,position:point,facing:[-Math.sin(facing),0,-Math.cos(facing)],assist:false,mode:this.strikeMs>0?'attack':'follow',moving,attackPoseMs:Math.min(320,this.strikeMs),pulsePoseMs:0,pulseCooldownMs:0,pulseMaxCooldownMs:power.cooldown*1000,pulseRange:power.range,attacks:this.strikeCount,pulses:this.pulseCount});
     }else this.pet.updateRemote(Math.min(100, Math.max(0, dt)) / 1000, new THREE.Vector3(...point), facing, moving);
+    const defaultVisual = species === 'lanternkin' ? this.nextgenPet.root : this.pet.root;
+    const override = this.cosmetic.update(defaultVisual, dt, moving, this.visible);
+    defaultVisual.visible = this.visible && !override;
     if (this.pulseMs > 0) {
       this.pulseMs = Math.max(0, this.pulseMs - Math.min(100, Math.max(0, dt)));
       const progress = 1 - this.pulseMs / 650;
@@ -64,11 +70,12 @@ export class RoomCompanionView {
   pulse(origin: { x: number; z: number }) {
     this.pulseMs = 650; this.pulseCount++;
     this.pet.triggerPulse();
+    this.cosmetic.pulse();
     const [x,y,z]=roomToScene(origin.x,origin.z,true); this.ring.position.set(x,y+0.3,z);
     this.ring.material.color.setHex(CREATURES[this.species].glow);
   }
   strike(target: { x: number; z: number }) { this.strikeTarget = { ...target }; this.strikeMs = 400; this.strikeCount++; }
   info() { return { species: this.species, xp: this.xp, form: creaturePower(this.species, this.xp).name, visible: this.visible, pulseCount: this.pulseCount, strikeCount: this.strikeCount }; }
-  hide() { this.nextgenPet.root.visible=this.pet.root.visible = this.ring.visible = false; }
-  dispose() { this.nextgenPet.dispose();this.pet.dispose(); this.ring.removeFromParent(); this.ring.geometry.dispose(); this.ring.material.dispose(); }
+  hide() { this.nextgenPet.root.visible=this.pet.root.visible = this.ring.visible = false; this.cosmetic.hide(); }
+  dispose() { this.cosmetic.dispose();this.nextgenPet.dispose();this.pet.dispose(); this.ring.removeFromParent(); this.ring.geometry.dispose(); this.ring.material.dispose(); }
 }
