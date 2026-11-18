@@ -6,6 +6,27 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-18 — M02/M03: Infected, Combat and Hordes
+
+**Status:** Implemented.
+
+- Integrated the rigged infected model with six animations.
+- Authored an original zombie attack animation.
+- Implemented infected pursuit, attack, hit reactions and death.
+- Added pistol combat, ammunition, reloading and player health.
+- Added progressive infected waves, enemy separation and restart.
+- Implemented cumulative damage from simultaneous infected attacks.
+- Refined the infected model with skeletal proportions and decayed textures.
+
+**Verification:**
+- 234 NEXTGEN unit tests passed.
+- Combat and horde browser smoke tests passed.
+- Redesigned infected manually verified in gameplay.
+
+**Remaining M02 work:**
+- Survivor hit and death animations.
+- Hardware performance benchmark during combat.
+
 ## 2026-11-17 — M02 Task 4C: Vertical Aim Animation
 
 **Status:** Complete.

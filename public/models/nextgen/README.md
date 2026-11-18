@@ -74,6 +74,9 @@ Exported as GLB with embedded 512px PNG textures.
 Redundant animation keyframes removed using glTF Transform.
 Original two-arm zombie attack animation authored in Blender.
 Opaque material rendering corrected; eyebrow and eyelash transparency preserved.
+Emaciated body proportions, gaunt facial features, decayed skin,
+clouded eyes and distressed clothing.
+Original skeleton, skin weights and animation data preserved.
 
 ### Animation mapping
 
@@ -91,11 +94,11 @@ The asset uses in-place animations for controller-driven movement.
 ### Asset specifications
 
 - File: infected.glb
-- Size: approximately 3.61 MiB
+- Size: approximately 3.00 MiB
 - Triangles: 32,728
 - Skeletons: 1
 - Bones: 53
 - Meshes: 7
 - Textures: 8
 - Animations: Idle, Walk, Run, Attack, Hit, Death
-- SHA256: BA45A8CC7558B0E347C764B8997ADA40B9F7FEE2471FF33DAFBF76B253E3B71E
+- SHA256: DFCA8CC9A422786537AFA504EF5A4E6B789B28E9AF30EAB5D1E52B516581E6D7

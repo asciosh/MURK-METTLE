@@ -46,15 +46,18 @@ with tests and a recorded benchmark.
 
 ## M02 — Character & Animation Foundation ☐
 
-- [ ] Third-person character controller: camera-relative movement, sprint/dodge/stamina,
+- [x] Third-person character controller: camera-relative movement, sprint/dodge/stamina,
       pointer-lock aim, collision against nextgen terrain.
 - [ ] Original survivor and infected character models with rigged skeletons and
       locomotion/attack/hit/death animation sets (provenance recorded).
-- [ ] Animation state machine with blending, layering for aim/upper-body actions.
-- [ ] Third-person camera with collision, aim zoom and feel tuning.
+      Remaining: survivor hit and death animations.
+- [x] Animation state machine with blending, layering for aim/upper-body actions.
+- [x] Third-person camera with collision, aim zoom and feel tuning.
 
 **Done when:** a player character runs, aims, fights a melee infected in a nextgen scene
 at the M01 perf budget.
+
+**Remaining acceptance check:** hardware performance benchmark during combat.
 
 ## M03 — Combat & Survival Core ☐
 
