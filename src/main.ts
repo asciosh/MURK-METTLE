@@ -5,14 +5,20 @@ import { initAccount } from './client/game/Account';
 import { arrangeHud } from './client/ui/HudLayout';
 
 const nextgenRoom = new URLSearchParams(location.search).get('nextgenRoom');
+const nextgenMode = new URLSearchParams(location.search).get('nextgen');
 if (nextgenRoom !== null) {
   // Explicit opt-in; legacy account/menu boot is unchanged for ordinary URLs.
   document.body.replaceChildren();
   void import('./nextgen/demo/RoomEntry').then(({ mountRoom }) => mountRoom(nextgenRoom)).catch(error => {
     console.error('NEXTGEN room failed to start', error);
     const message = document.createElement('p');
-    message.textContent = 'NEXTGEN room failed to start. Return to the account menu and retry.';
+    message.textContent = 'NEXTGEN room failed to start. Return to the NEXTGEN lobby and retry.';
     document.body.append(message);
+  });
+} else if (nextgenMode === 'playable' || nextgenMode === 'lobby') {
+  document.body.replaceChildren();
+  void import('./nextgen/demo/NextgenEntry').then(({mountLobby,mountPlayable}) => nextgenMode === 'playable' ? mountPlayable() : mountLobby()).catch(error => {
+    console.error('NEXTGEN failed to start',error); const message=document.createElement('p');message.textContent='NEXTGEN could not start. Reload and retry.';document.body.append(message);
   });
 } else {
 

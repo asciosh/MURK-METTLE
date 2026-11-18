@@ -1,6 +1,7 @@
 import { CREATURES, SPECIES_IDS, SUPPLIES, constrainPosition, type SpeciesId } from '../../../shared/expansion.mjs';
 import { EXTRACTION } from '../../../shared/coop-rules.mjs';
 import type { CollectionState } from '../../../shared/collection.mjs';
+import { terrainConstrain } from '../../../shared/nextgen-terrain.mjs';
 
 type Point = { x: number; z: number };
 type Mission = { pickups: readonly (Point & { id: string })[]; ready: boolean; phase: string };
@@ -39,6 +40,6 @@ export function nextOwnedSpecies(collection: CollectionState | null): SpeciesId 
   return owned.length > 1 ? owned[(owned.indexOf(collection.active) + 1) % owned.length] : null;
 }
 
-export function companionFollow(owner: Point, yaw: number): Point {
-  return constrainPosition({ x: owner.x + Math.sin(yaw) * 1.6 + Math.cos(yaw) * 1.1, z: owner.z + Math.cos(yaw) * 1.6 - Math.sin(yaw) * 1.1 }, 0.3);
+export function companionFollow(owner: Point, yaw: number,terrain=false): Point {
+  return (terrain?terrainConstrain:constrainPosition)({ x: owner.x + Math.sin(yaw) * 1.6 + Math.cos(yaw) * 1.1, z: owner.z + Math.cos(yaw) * 1.6 - Math.sin(yaw) * 1.1 }, 0.3);
 }

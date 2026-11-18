@@ -59,7 +59,7 @@ at the M01 perf budget.
 
 **Remaining acceptance check:** hardware performance benchmark during combat.
 
-## M03 — Combat & Survival Core ☐
+## M03 — Combat & Survival Core ◐
 
 - [ ] Melee and firearm combat: hit detection, damage, stagger, feedback (VFX/audio).
 - [ ] Creature combat: creature attacks, special abilities, companion participation.
@@ -71,6 +71,10 @@ at the M01 perf budget.
 
 **Done when:** co-op-validated combat and survival rules pass both unit and browser
 tests against the nextgen client.
+
+**Final acceptance pending:** checkpoint D delivers the remaining opt-in online combat
+and revive rules while preserving compatibility. Run the full operator verification and
+manual checklist in the progress log before checking off M03.
 
 ## M04 — Creatures: Collection & Evolution ☐
 

@@ -30,8 +30,8 @@ export class RoomFieldView {
         if (t.kind === 'extract') mesh.rotation.x = -Math.PI / 2;
         if (t.kind === 'resupply') mesh.castShadow = true;
       }
-      const [x, , z] = roomToScene(t.x, t.z);
-      marker.mesh.position.set(x, t.kind === 'extract' ? 0.035 : t.kind === 'resupply' ? 0.325 : 0.9 + Math.sin(this.time * 2.2) * 0.12, z);
+      const [x, y, z] = roomToScene(t.x, t.z,true);
+      marker.mesh.position.set(x, y+(t.kind === 'extract' ? 0.25 : t.kind === 'resupply' ? 0.325 : 0.9 + Math.sin(this.time * 2.2) * 0.12), z);
       if (t.kind === 'extract') marker.mesh.material = t.available ? this.materials.extract : this.materials.locked;
       else if (t.kind !== 'resupply') marker.mesh.rotation.y = this.time;
     }

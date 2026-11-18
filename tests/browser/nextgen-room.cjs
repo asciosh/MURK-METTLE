@@ -25,13 +25,16 @@ const { launchBrowser } = require('./support.cjs');
           }
         };
       });
-      await page.goto(new URL(`/?nextgenRoom=${room}`, base).href);
+      await page.goto(new URL(`/?nextgenRoom=${room}&quality=low`, base).href);
       await page.waitForFunction(() => window.__nextgenRoom?.getRoomInfo()?.connected, null, { timeout: 90000, polling: 100 });
       return page;
     }));
     const wait = { timeout: 60000, polling: 100 };
     await Promise.all(pages.map(page => page.waitForFunction(n => window.__nextgenRoom.getRoomInfo()?.peers.length === n - 1, clients, wait)));
     const states = await Promise.all(pages.map(page => page.evaluate(() => window.__nextgenRoom.getRoomInfo())));
+    const { NEXTGEN_MAP_ID, NEXTGEN_TERRAIN_SEED, roomHeight, terrainConstrain } = await import('../../shared/nextgen-terrain.mjs');
+    const landscapes = await Promise.all(pages.map(page => page.evaluate(() => window.__nextgenRoom.getRoomLandscapeInfo())));
+    for (const landscape of landscapes) { assert.equal(landscape.style,NEXTGEN_MAP_ID);assert.equal(landscape.seed,NEXTGEN_TERRAIN_SEED);assert.equal(landscape.groundHeight,roomHeight(0,0));assert.ok(Math.abs(landscape.position[1]-roomHeight(landscape.position[0]-100,landscape.position[2]-100))<1e-6); }
     const ids = new Set(states.map(s => s.id));
     assert.equal(ids.size, clients);
     for (const state of states) { assert.equal(state.room, room); assert.deepEqual(new Set(state.peers), new Set([...ids].filter(id => id !== state.id))); assert.ok(state.horde); assert.ok(state.arsenal); assert.ok(state.self); }
@@ -45,9 +48,8 @@ const { launchBrowser } = require('./support.cjs');
       await actor.waitForFunction(() => window.__nextgenRoom.getRoomInfo().self.hp > 0, null, wait);
       before = await read();
     }
-    const { constrainPosition } = await import('../../shared/expansion.mjs');
     const start = before.self;
-    const destination = constrainPosition({ x: start.x + 0.25, z: start.z });
+    const destination = terrainConstrain({ x: start.x + 0.25, z: start.z });
     assert.ok(Math.hypot(destination.x - start.x, destination.z - start.z) > 0.15);
     await send({ type: 'move', ...destination, yaw: 0, pitch: 0, weapon: 'pistol', aiming: false, sprinting: false });
     await actor.waitForFunction(p => { const q = window.__nextgenRoom.getRoomInfo().self; return Math.hypot(q.x - p.x, q.z - p.z) < 0.05; }, destination, wait);
@@ -94,8 +96,10 @@ const { launchBrowser } = require('./support.cjs');
         if (action === 'shoot') {
           const enemy = packet.horde.enemies.find(e => e.hp > 0 && Math.hypot(e.x - me.x, e.z - me.z) > 0.01);
           const dx = enemy ? enemy.x - me.x : 0, dz = enemy ? enemy.z - me.z : -1;
-          const length = Math.hypot(dx, dz);
-          socket.send(JSON.stringify({ type: 'shoot', weapon: 'pistol', direction: { x: dx / length, y: 0, z: dz / length } }));
+          const height=(x,z)=>window.__nextgenRoom.getRoomHeight(x,z);
+          const dy=enemy?height(enemy.x,enemy.z)+1.1-height(me.x,me.z)-1.32:0;
+          const length = Math.hypot(dx,dy,dz);
+          socket.send(JSON.stringify({ type: 'shoot', weapon: 'pistol', direction: { x: dx / length, y: dy/length, z: dz / length } }));
         } else socket.send(JSON.stringify({ type: 'attack' }));
       }
       socket.addEventListener('message', onMessage);

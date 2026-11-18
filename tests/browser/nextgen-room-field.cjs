@@ -45,6 +45,8 @@ const { launchBrowser } = require('./support.cjs');
         try { packet = JSON.parse(event.data); } catch { return; }
         if (sent) {
           if (type === 'unowned-pulse' && packet.type === 'error' && /bond/i.test(packet.message)) return done(packet);
+          if (type === 'unowned-strike' && packet.type === 'error' && /bond/i.test(packet.message)) return done(packet);
+          if (type === 'strike' && packet.type === 'companion-strike' && packet.by === id) return done(packet);
           if (type === 'bond' && packet.type === 'collection-state' && packet.bonded && packet.collection.creatures[body.species].owned) return done(packet);
           if (type === 'pulse' && packet.type === 'action' && packet.action === 'pulse' && packet.by === id) return done(packet);
           if (type === 'pickup' && packet.type === 'mission-state' && !packet.pickups.some(p => p.id === body.id)) return done(packet);
@@ -65,12 +67,20 @@ const { launchBrowser } = require('./support.cjs');
           socket.send(JSON.stringify({ type: 'restart' })); return;
         }
         restarting = false;
+        // A range/line-of-sight miss does not acknowledge a strike. Retry against a
+        // fresh snapshot, not a stale target, while respecting the server cooldown.
+        if (type === 'strike' && sent && performance.now() - lastMove >= 1400) sent = false;
         if (sent) return;
+        if (type === 'strike') {
+          const enemy = packet.horde.enemies.filter(e => e.hp > 0).sort((a,b) => Math.hypot(a.x-me.x,a.z-me.z)-Math.hypot(b.x-me.x,b.z-me.z))[0];
+          if (!enemy) return;
+          target = { x: enemy.x, z: enemy.z, radius: 2.8 };
+        }
         const dx = target ? target.x - me.x : 0, dz = target ? target.z - me.z : 0;
         const distance = Math.hypot(dx, dz);
         if (!target || distance <= target.radius) {
-          sent = true;
-          socket.send(JSON.stringify({ type: type === 'unowned-pulse' ? 'pulse' : type, ...body })); return;
+          sent = true; lastMove = performance.now();
+          socket.send(JSON.stringify({ type: type === 'unowned-pulse' ? 'pulse' : ['strike','unowned-strike'].includes(type) ? 'companion-strike' : type, ...body })); return;
         }
         const now = performance.now(); if (now - lastMove < 90) return; lastMove = now;
         const sprint = !!me.survival && !me.survival.exhausted && me.survival.stamina > 5;
@@ -81,6 +91,7 @@ const { launchBrowser } = require('./support.cjs');
     }), { type, target, body });
 
     await perform('unowned-pulse', null, {});
+    await perform('unowned-strike', null, {});
     assert.equal(await actor.evaluate(() => window.__nextgenRoom.getRoomInfo().acceptedPulses), 0);
     console.log('Unowned Pulse rejected by the server.');
     await perform('bond', { ...CREATURES.lanternkin, radius: 2.35 }, { species: 'lanternkin' });
@@ -95,6 +106,8 @@ const { launchBrowser } = require('./support.cjs');
     console.log('Shared salvage marker removed only after server confirmation.');
     await perform('resupply', { ...SUPPLIES[0], radius: 2.4 }, { id: SUPPLIES[0].id });
     console.log('Server confirmed reserve ammo and bandage resupply.');
-    console.log('NEXTGEN FIELD: owned companion, rejected unowned Pulse, synchronized Pulse VFX, shared salvage and resupply passed. Full extraction and manual gameplay remain pending.');
+    await perform('strike', null, {});
+    await Promise.all(pages.map(page => page.waitForFunction(id => { const s = window.__nextgenRoom.getRoomInfo(); return s.acceptedStrikes >= 1 && s.companionViews.some(v => v.id === id && v.strikeCount >= 1); }, id, wait)));
+    console.log('NEXTGEN FIELD: owned companion, rejected unowned Pulse/strike, synchronized Pulse and strike VFX, shared salvage and resupply passed. Full extraction and manual gameplay remain pending.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

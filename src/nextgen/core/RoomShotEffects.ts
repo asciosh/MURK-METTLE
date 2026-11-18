@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { confirmedShotSegment } from './RoomPresentation';
 
-type Shot = { origin: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number }; distance: number; hit: boolean; weapon?: 'pistol' | 'rifle' };
+type Shot = { origin: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number }; distance: number; hit: boolean; resonant?: boolean };
 
 /** Bounded, reusable VFX displayed only after the authoritative shot packet. */
 export class RoomShotEffects {
@@ -29,6 +29,8 @@ export class RoomShotEffects {
     if (length > 0.001) slot.tracer.quaternion.setFromUnitVectors(this.axis, delta.normalize());
     slot.tracer.scale.set(0.025, 0.025, Math.max(0.001, length));
     slot.tracer.visible = length > 0.001;
+    slot.tracer.material.color.setHex(shot.resonant ? 0x91ffc4 : 0xffcd7b);
+    slot.flash.material.color.setHex(shot.resonant ? 0x91ffc4 : 0xffd58c);
     slot.flash.position.copy(from); slot.flash.scale.setScalar(0.11); slot.flash.visible = true;
     slot.impact.position.copy(to); slot.impact.scale.setScalar(0.1); slot.impact.visible = shot.hit;
     slot.tracer.material.opacity = slot.flash.material.opacity = slot.impact.material.opacity = 1;

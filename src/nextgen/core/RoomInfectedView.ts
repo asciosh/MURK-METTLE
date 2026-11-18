@@ -27,7 +27,7 @@ export class RoomInfectedView {
       }
     }
     this.motion = enemyMotion(this.motion, enemy, dt, players);
-    this.root.position.set(...roomToScene(enemy.x, enemy.z));
+    this.root.position.set(...roomToScene(enemy.x, enemy.z,true));
     this.root.rotation.y = this.motion.yaw;
     this.animator?.update(dt, this.motion);
     if (!this.model) { this.fallback.rotation.z = enemy.hp <= 0 ? Math.PI / 2 : 0; this.fallback.position.y = enemy.hp <= 0 ? 0.3 : 0.85; }

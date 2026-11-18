@@ -94,7 +94,8 @@ const blocked = (x, z) =>
     (o) => Math.abs(x - o.x) < o.w / 2 + 0.55 && Math.abs(z - o.z) < o.d / 2 + 0.55,
   );
 const key = (x, z) => x + ',' + z;
-const visible = (a, b) => {
+const visible = (a, b, map) => {
+  if(map){const dx=b.x-a.x,dz=b.z-a.z,dy=map.heightAt(b.x,b.z)-map.heightAt(a.x,a.z),d=Math.hypot(dx,dy,dz);return d<0.01||map.distance({x:a.x,y:map.heightAt(a.x,a.z)+1.15,z:a.z},{x:dx/d,y:dy/d,z:dz/d},d)>=d-0.02;}
   const distance = Math.hypot(b.x - a.x, b.z - a.z);
   if (distance < 0.01) return true;
   return (
@@ -173,9 +174,9 @@ export function findRoute(start, goal) {
   }
   return [];
 }
-function walk(enemy, goal, speed, dt, now) {
+function walk(enemy, goal, speed, dt, now, map) {
   let target = goal;
-  if (!visible(enemy, goal)) {
+  if (!map && !visible(enemy, goal)) {
     const goalKey = key(Math.round(goal.x / CELL), Math.round(goal.z / CELL));
     if ((now > enemy.routeAt || enemy.routeGoal !== goalKey) && routePlansRemaining > 0) {
       routePlansRemaining--;
@@ -196,7 +197,7 @@ function walk(enemy, goal, speed, dt, now) {
   let best = null,
     bestProgress = -Infinity;
   for (const turn of [0, 0.75, -0.75, 1.4, -1.4]) {
-    const candidate = constrainPosition(
+    const candidate = (map?.constrain ?? constrainPosition)(
       { x: enemy.x + Math.sin(angle + turn) * step, z: enemy.z + Math.cos(angle + turn) * step },
       0.43,
     );
@@ -213,7 +214,7 @@ function walk(enemy, goal, speed, dt, now) {
     enemy.z = best.z;
   }
 }
-export function spawnHorde(players, wave, runId = 'field') {
+export function spawnHorde(players, wave, runId = 'field', map) {
   const living = players.filter((p) => p.hp > 0),
     anchor = living[0] || { x: 0, z: 0, yaw: 0 };
   const count = Math.min(SURVIVAL.maxEnemies, 2 + Math.max(1, living.length) + Math.floor((wave - 1) / 3));
@@ -224,7 +225,7 @@ export function spawnHorde(players, wave, runId = 'field') {
     for (let attempt = 0; attempt < 24; attempt++) {
       const angle = (anchor.yaw || 0) + (i - (count - 1) / 2) * 0.42 + attempt * Math.PI * 0.37;
       const radius = 13 + (i % 3) * 2.2;
-      const candidate = constrainPosition(
+      const candidate = (map?.constrain ?? constrainPosition)(
         { x: anchor.x - Math.sin(angle) * radius, z: anchor.z - Math.cos(angle) * radius },
         0.5,
       );
@@ -282,12 +283,12 @@ export function damageEnemy(enemy, damage) {
   }
   return false;
 }
-export function bulletTarget(enemies, origin, direction, range) {
+export function bulletTarget(enemies, origin, direction, range, map) {
   let nearest = null,
-    distance = range;
+    distance = map ? map.distance(origin,direction,range) : range;
   for (const enemy of enemies) {
     if (enemy.hp <= 0) continue;
-    const hit = shotDistance(origin, direction, enemy, distance);
+    const hit = (map?.shotDistance ?? shotDistance)(origin, direction, enemy, distance);
     if (hit !== null && hit < distance) {
       nearest = enemy;
       distance = hit;
@@ -295,10 +296,10 @@ export function bulletTarget(enemies, origin, direction, range) {
   }
   return nearest ? { enemy: nearest, distance } : null;
 }
-export function meleeTarget(enemies, player, range) {
+export function meleeTarget(enemies, player, range, map) {
   return (
     enemies
-      .filter((e) => e.hp > 0 && Math.hypot(e.x - player.x, e.z - player.z) <= range && visible(player, e))
+      .filter((e) => e.hp > 0 && Math.hypot(e.x - player.x, e.z - player.z) <= range && visible(player, e,map))
       .filter((e) => {
         const d = Math.max(0.001, Math.hypot(e.x - player.x, e.z - player.z));
         return (-Math.sin(player.yaw) * (e.x - player.x) - Math.cos(player.yaw) * (e.z - player.z)) / d >= -0.15;
@@ -307,9 +308,9 @@ export function meleeTarget(enemies, player, range) {
     null
   );
 }
-export const pulseTargets = (enemies, player, range) =>
-  enemies.filter((e) => e.hp > 0 && Math.hypot(e.x - player.x, e.z - player.z) <= range && visible(player, e));
-export function stepHorde(enemies, players, dt, now) {
+export const pulseTargets = (enemies, player, range,map) =>
+  enemies.filter((e) => e.hp > 0 && Math.hypot(e.x - player.x, e.z - player.z) <= range && visible(player, e,map));
+export function stepHorde(enemies, players, dt, now,map) {
   routePlansRemaining = 2;
   const hits = [],
     living = players.filter((p) => p.hp > 0);
@@ -325,7 +326,7 @@ export function stepHorde(enemies, players, dt, now) {
       .sort((a, b) => Math.hypot(a.x - enemy.x, a.z - enemy.z) - Math.hypot(b.x - enemy.x, b.z - enemy.z));
     const target = sorted.find((p) => {
       const d = Math.hypot(p.x - enemy.x, p.z - enemy.z);
-      return d < 18 && visible(enemy, p);
+      return d < 18 && visible(enemy, p,map);
     });
     if (target) {
       enemy.investigateX = target.x;
@@ -365,7 +366,7 @@ export function stepHorde(enemies, players, dt, now) {
     }
     if (now < enemy.alertUntil) {
       enemy.state = target ? 'chase' : 'investigate';
-      walk(enemy, { x: enemy.investigateX, z: enemy.investigateZ }, enemy.speed, dt, now);
+      walk(enemy, { x: enemy.investigateX, z: enemy.investigateZ }, enemy.speed, dt, now,map);
     } else {
       enemy.state = 'idle';
       const phase = now * 0.00017 + (enemy.generation || 0) * 2 + enemy.homeX * 0.4;
@@ -374,7 +375,7 @@ export function stepHorde(enemies, players, dt, now) {
         { x: enemy.homeX + Math.sin(phase) * 1.8, z: enemy.homeZ + Math.cos(phase) * 1.8 },
         enemy.speed * 0.22,
         dt,
-        now,
+        now,map,
       );
     }
   }
@@ -395,12 +396,13 @@ export function stepHorde(enemies, players, dt, now) {
       a.z -= nz * push;
       b.x += nx * push;
       b.z += nz * push;
-      constrainPosition(a, 0.43);
-      constrainPosition(b, 0.43);
+      (map?.constrain ?? constrainPosition)(a, 0.43);
+      (map?.constrain ?? constrainPosition)(b, 0.43);
     }
   return hits;
 }
 export class HordeSimulation {
+  constructor(map){this.map=map;}
   enemies = [];
   wave = 0;
   nextWaveAt = 0;
@@ -416,7 +418,7 @@ export class HordeSimulation {
   }
   spawn(players) {
     this.wave++;
-    this.enemies = spawnHorde(players, this.wave, this.runId);
+    this.enemies = spawnHorde(players, this.wave, this.runId,this.map);
     this.nextWaveAt = 0;
   }
   step(players, dt, now) {
@@ -437,7 +439,7 @@ export class HordeSimulation {
         this.relocateAt = 0;
       }
     } else this.relocateAt = 0;
-    return stepHorde(this.enemies, players, dt, now);
+    return stepHorde(this.enemies, players, dt, now,this.map);
   }
   packet() {
     return {

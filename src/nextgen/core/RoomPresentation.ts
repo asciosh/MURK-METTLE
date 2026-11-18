@@ -2,6 +2,7 @@ import type { EnemySnapshot } from '../../../shared/survival.mjs';
 import type { InfectedAnimation } from './InfectedController.ts';
 import { roomToScene } from './RoomIntent.ts';
 import { obstacleDistance, shotDistance } from '../../../shared/expansion.mjs';
+import { NEXTGEN_MAP } from '../../../shared/nextgen-terrain.mjs';
 
 export type RoomEnemyMotion = { hp: number; x: number; z: number; yaw: number; speed: number; animation: InfectedAnimation; hitMs: number; attackMs: number; serverState: string };
 type Point2 = { x: number; z: number };
@@ -32,19 +33,19 @@ export function smoothRoomPosition(previous: Point2, target: Point2, elapsedMs: 
 }
 
 export function confirmedShotSegment(origin: Point3, direction: Point3, distance: number): { from: [number, number, number]; to: [number, number, number] } | null {
-  if (![origin.x, origin.y, origin.z, direction.x, direction.y, direction.z, distance].every(Number.isFinite) || distance < 0 || distance > 100 || Math.abs(Math.hypot(direction.x, direction.y, direction.z) - 1) > 0.015) return null;
+  if (![origin.x, origin.y, origin.z, direction.x, direction.y, direction.z, distance].every(Number.isFinite) || distance < 0 || distance > 120 || Math.abs(Math.hypot(direction.x, direction.y, direction.z) - 1) > 0.015) return null;
   const from = roomToScene(origin.x, origin.z); from[1] = origin.y;
   return { from, to: [from[0] + direction.x * distance, from[1] + direction.y * distance, from[2] + direction.z * distance] };
 }
 
 // Converge from the server's fixed shot origin toward the visible center of the shoulder camera.
 // The server still performs the real ray test; this is only a normalized direction intent.
-export function roomAimDirection(player: Point2, camera: Point3, view: Point3, range: number, enemies: readonly EnemySnapshot[]): Point3 {
-  const origin = { x: player.x, y: 1.32, z: player.z };
-  let distance = obstacleDistance(camera, view, range);
+export function roomAimDirection(player: Point2, camera: Point3, view: Point3, range: number, enemies: readonly EnemySnapshot[],terrain=false): Point3 {
+  const origin = { x: player.x, y: 1.32+(terrain?NEXTGEN_MAP.heightAt(player.x,player.z):0), z: player.z };
+  let distance = (terrain?NEXTGEN_MAP.distance:obstacleDistance)(camera, view, range);
   for (const enemy of enemies) {
     if (enemy.hp <= 0) continue;
-    const hit = shotDistance(camera, view, enemy, distance);
+    const hit = (terrain?NEXTGEN_MAP.shotDistance:shotDistance)(camera, view, enemy, distance);
     if (hit !== null) distance = Math.min(distance, hit);
   }
   const target = { x: camera.x + view.x * distance, y: camera.y + view.y * distance, z: camera.z + view.z * distance };

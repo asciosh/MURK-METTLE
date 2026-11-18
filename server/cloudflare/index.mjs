@@ -48,8 +48,10 @@ export default {
       // Only the edge Worker may assert this verified account identity.
       const forwarded = new Request(request);
       forwarded.headers.set('X-MM-Verified-User', match[1]);
+      const nextgen = url.searchParams.get('map') === 'nextgen-terrain-v1';
+      forwarded.headers.set('X-MM-Room-Map', nextgen ? 'nextgen-terrain-v1' : 'legacy');
       // A separate Durable Object instance is identified by each room code.
-      const id = env.GAME_ROOMS.idFromName(code);
+      const id = env.GAME_ROOMS.idFromName(nextgen ? `nextgen-terrain-v1:${code}` : code);
       return env.GAME_ROOMS.get(id).fetch(forwarded);
     }
     return env.ASSETS.fetch(request);

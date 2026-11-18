@@ -9,6 +9,7 @@ import { TerrainMaterial } from '../core/TerrainMaterial';
 import { VegetationRenderer } from '../core/VegetationRenderer';
 import { PlayableSession } from './PlayableSession';
 import { OnlineSession } from './OnlineSession';
+import { NEXTGEN_TERRAIN_SEED, roomHeight } from '../../../shared/nextgen-terrain.mjs';
 
 /**
  * Independent graphics demonstration scene (M01 checkpoint).
@@ -124,7 +125,7 @@ async mount(): Promise<void> {
     sceneColor.a
   );
 
-  this.setQuality('balanced');
+  this.setQuality(new URLSearchParams(location.search).get('quality') ?? 'balanced');
   this.renderer.setRenderPipeline(this.pipeline);
 
   this.renderer.start();
@@ -169,18 +170,8 @@ async mount(): Promise<void> {
     scene.environmentIntensity = 0.7;
     pmrem.dispose();
 
-    if (this.roomCode !== undefined) {
-      const online = new OnlineSession(scene, camera, this.canvas, this.roomCode);
-      this.onlineSession = online;
-      scene.add(new THREE.HemisphereLight(0xc5d9ef, 0x596044, 1.4));
-      this.sun.position.set(70, 45, 125);
-      this.sun.target.position.set(100, 0, 100);
-      this.renderer.onBeforeRender = (dtMs) => online.present(dtMs);
-      return;
-    }
-
         // Heightfield terrain
-    const terrain = new TerrainGenerator(12345);
+    const terrain = new TerrainGenerator(NEXTGEN_TERRAIN_SEED);
     const grid = terrain.gridSize;
     const cell = terrain.cellSize;
     const heights = terrain.getHeights();
@@ -232,7 +223,7 @@ async mount(): Promise<void> {
 
     // Procedural vegetation and environment props.
     this.vegetation = this.renderer.track(
-      new VegetationRenderer(scene, terrain, 12345)
+      new VegetationRenderer(scene, terrain, NEXTGEN_TERRAIN_SEED)
     );
 
     this.vegetation.setQuality(this.currentPreset);
@@ -265,6 +256,20 @@ async mount(): Promise<void> {
         centerHeight,
         centerZ
       );
+    }
+
+    // Both modes share this exact world; only the simulation/session controller differs.
+    if (this.roomCode !== undefined) {
+      const online = new OnlineSession(scene, camera, this.canvas, this.roomCode);
+      this.onlineSession = online;
+      this.renderer.onBeforeRender = (dtMs) => {
+        online.present(dtMs);
+        this.vegetation?.update(camera.position.x,camera.position.z);
+        const p=online.getPosition(),x=p.x+100,z=p.z+100,y=terrain.heightAt(x,z);
+        this.sun?.position.set(x-30,y+45,z+25);
+        this.sun?.target.position.set(x,y,z);
+      };
+      return;
     }
 
       if (this.playable) {
@@ -350,6 +355,8 @@ async mount(): Promise<void> {
   }
 
   getRoomInfo() { return this.onlineSession?.getInfo(); }
+  getRoomLandscapeInfo() { return this.onlineSession?.getLandscapeInfo(); }
+  getRoomHeight(x:number,z:number) { return roomHeight(x,z); }
 
   getPlayerState() {
     return this.session?.getState();
