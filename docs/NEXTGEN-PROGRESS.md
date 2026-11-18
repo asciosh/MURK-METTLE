@@ -1,8 +1,31 @@
+### 2026-11-18 — M03: co-op infected visual smoothing (operator verification pending)
+
+- Diagnosed short motion stalls in co-op: the server sends horde snapshots at 100 ms intervals; the previous 120 ms co-op jitter buffer could reach the newest frame and hold while waiting for another packet. Solo infected use local per-frame movement and did not exhibit the same behavior.
+- NEXTGEN co-op uses a 190 ms **visual-only** interpolation delay; legacy multiplayer retains its existing 120 ms default. Kept movement, AI, hit detection, damage and persistence server-authoritative and unchanged.
+- Added a bounded cosmetic smoothing step for rendered infected meshes, plus stable walk/run animation during brief delayed packets. Server snapshots are not modified; large position corrections still snap instead of warping through the world.
+- Added unit regressions for snapshot delay isolation, locomotion stability, and non-mutating render positions. Local source-only verification: 81/81 repository tests and 10/10 relevant NEXTGEN tests passed (Node 22 with experimental TS stripping). Typecheck, full build, and in-game visual confirmation pending on operator Windows PC.
+- **Next:** run `npm run typecheck`, `npm run build`, the NEXTGEN room browser suites, and compare infected motion in solo/co-op. Investigate network/performance telemetry if visible hitches remain; do not close M03 without manual acceptance.
+
 # NEXTGEN Progress Log
 
 Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry records
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
+
+## M03 — final squad, mission, revive and room-lifecycle polish (awaiting operator acceptance)
+
+- Added server-snapshot-driven squad HUD with temporary team aliases, HP bars, downed countdown, teammate revive progress, and world-space teammate labels. The WebSocket room has no public username field in snapshots; aliases do not claim identity. Added objective banner and short-range labels distinguishing supply, sample, creature habitat and locked/ready extraction.
+- Added explicit manual reconnect action after a room disconnect/timeout, without automatic duplicate login storms. Existing server-authoritative health, combat, revive, mission, account and saved inventory code is untouched.
+- Added an independent two-account browser check for live squad HUD/nameplates and disconnect/rejoin, plus pure rules tests (four checks). Prepared `docs/nextgen/M03-FINAL-ACCEPTANCE.md` covering complete extraction, persistent rewards, real teammate revival (success/interruption), controls/aim/feel and four-player lifecycle.
+- Verification on exported source: **19/19** relevant shared expansion, room combat and new squad tests passed; new browser test syntax passes. Full TypeScript/build/browser checks remain **pending on the operator's full Windows checkout** (export excludes npm lockfile/dependencies and binary models). Solo jump/dodge are not server-authoritative in online mode; this remains an explicit control-parity gap and is not falsely marked complete.
+- Exact next task: apply the guarded polish script, run tests/build/room browser suites on Windows, perform the manual revival/extraction checklist, record failures, then commit/push the task branch only after approval. No PR, merge, deployment or M04 edits.
+
+## M03 — presentation parity on the shared world
+
+- Operator confirmed Windows NEXTGEN entry, 4-client room combat, 2-client field and 2-client shotgun/resonance browser tests all pass on home PC. Both modes now show the same heightfield and forest; co-op retained a separate HUD and floating field symbols.
+- Unified solo/co-op HUD component, including lower-left stamina/HP/weapons/wave and lower-right companion/resonance, with online data sourced only from authenticated room packets. Online now has a read-only `I` inventory (server ammo, bandages and cloud materials) with disabled combat inputs while inspected. Co-op retains mission progress, roster, live revival prompts and 1/2/3 gun slots. Solo controls and inventory are unchanged.
+- Added `FieldItemArt` for solo loot and online physical samples, supplies and habitats, keeping the server-owned marker lifecycle and extraction ring. Co-op character no longer shows an unearned rifle on its back before a primary is selected. No room protocol or account schema changes; weapons available on the co-op server are intentionally unchanged.
+- Added built Worker browser checks for the shared HUD and physical online markers. Pending operator checks: Windows typecheck/build and all four rendered browser suites, solo/co-op feel, successful live teammate revive and a full manual expedition/extraction. M03 is **not** signed off until these pass. No M04 work, PR, push or deploy.
 
 ## M03 — shared NEXTGEN world (operator-requested correction)
 
@@ -574,3 +597,14 @@ under `src/nextgen/` with fixed render loop and lifecycle tests.
 - Verification: 178 pure Node tests pass including 42 focused combat/equipment/companion tests; real Three.js visual unit tests, browser smoke, full typecheck/build and co-op validation pending on operator PC.
 - NEXTGEN-only; no server/shared-rule/protocol/save/deploy changes. No persistent creature ownership, evolution or companion health model yet. M03 remains open.
 - Exact next unfinished task: validate M03 combat/survival against existing authoritative co-op contracts, address downed/revive and multiplayer integration gaps without changing existing protocol or schemas; then M04 collection/evolution.
+
+### 2026-11-18 — M03: unified NEXTGEN interface checkpoint (pending operator build)
+
+- Inspected the operator's latest M03 source ZIP, including solo/co-op entry, gameplay sessions, HUD, extraction receipt, squad UI and cloud room protocol.
+- Added common main menu (Play / Co-op / Settings / Controls) with accessible co-op registration, sign-in and sign-out and a visible solo route even when co-op auth is required.
+- Added a shared in-game Esc/Menu overlay for both modes with graphics quality and mode-correct controls. Graphics preferences persist per-device only; no changes to account or Worker schemas.
+- Replaced the overly long top-of-screen key legends with a compact in-game hint and an actual controls panel.
+- Added pure menu/config tests and a two-mode menu browser smoke. The existing NEXTGEN terrain/lighting/actors/HUD remain shared.
+- Explicit parity limits and future actions recorded in `docs/nextgen/M03-UNIFIED-GAMEPLAY.md`. Added additive NEXTGEN-only server-owned jump/dodge actions, validated stamina/cooldowns, terrain constraints, and replicated animation state. No changes to legacy clients, DO bindings or account schema. No claim of full solo/co-op rules parity, complete M03 acceptance or M04 start.
+- Local verification in source-only archive: `npm test` 77 passed (existing source suite), new preferences/controls unit tests 3 passed, edited TypeScript parsed successfully. Full typecheck/build/browser suites are pending on the operator's Windows PC because dependencies are not present in this archive.
+- Next unfinished task: operator runs the unified menu smoke on Windows, then playtests online jump/dodge and resolves equipment/companion progression differences through server-validated extensions, and completes manual revive/extraction acceptance.

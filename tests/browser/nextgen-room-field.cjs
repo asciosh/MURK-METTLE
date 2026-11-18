@@ -27,6 +27,17 @@ const { launchBrowser } = require('./support.cjs');
       return page;
     }));
     const actor = pages[0];
+    for (const page of pages) {
+      await page.locator('.nextgen-hud[data-mode="coop"] .nextgen-health').waitFor();
+      await page.locator('.nextgen-hud[data-mode="coop"] .nextgen-ability-panel').waitFor();
+      await page.waitForFunction(() => {
+        const markers = window.__nextgenRoom?.getRoomInfo()?.fieldVisuals ?? [];
+        return markers.some(m => m.kind === 'resupply' && m.physical) &&
+          markers.some(m => m.kind === 'habitat' && m.physical) &&
+          markers.some(m => m.kind === 'sample' && m.physical);
+      }, null, wait);
+    }
+    console.log('Solo/co-op shared HUD and physical supply, habitat and sample art confirmed.');
     const id = await actor.evaluate(() => window.__nextgenRoom.getRoomInfo().id);
     console.log('Two field clients ready; server collection, mission and inventory received.');
 

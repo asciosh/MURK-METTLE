@@ -9,15 +9,15 @@ export type FieldTarget = Point & { id: string; kind: 'bond' | 'resupply' | 'pic
 
 /** UI hints only: all interactions still require acceptance by the room Durable Object. */
 export function roomFieldTargets(collection: CollectionState | null, mission: Mission | null): FieldTarget[] {
-  const result: FieldTarget[] = SUPPLIES.map(p => ({ ...p, id: p.id, kind: 'resupply', range: 2.8, label: `Resupply: ${p.id}`, available: true }));
+  const result: FieldTarget[] = SUPPLIES.map(p => ({ ...p, id: p.id, kind: 'resupply', range: 2.8, label: `Open supply cache · ${p.id}`, available: true }));
   if (collection) for (const species of SPECIES_IDS) {
     if (collection.creatures[species]?.owned) continue;
     const d = CREATURES[species];
-    result.push({ id: species, species, x: d.x, z: d.z, kind: 'bond', range: 2.7, label: `Bond with ${d.name}`, available: true });
+    result.push({ id: species, species, x: d.x, z: d.z, kind: 'bond', range: 2.7, label: `Bond creature · ${d.name}`, available: true });
   }
   if (mission) {
-    for (const p of mission.pickups) result.push({ ...p, kind: 'pickup', range: 2.7, label: `Recover ${p.id}`, available: mission.phase === 'active' });
-    result.push({ id: 'extraction', x: EXTRACTION.x, z: EXTRACTION.z, kind: 'extract', range: EXTRACTION.radius, label: mission.ready ? 'Extract with the party' : 'Extraction locked: complete objectives', available: mission.ready && mission.phase === 'active' });
+    for (const p of mission.pickups) result.push({ ...p, kind: 'pickup', range: 2.7, label: `Collect sample · ${p.id}`, available: mission.phase === 'active' });
+    result.push({ id: 'extraction', x: EXTRACTION.x, z: EXTRACTION.z, kind: 'extract', range: EXTRACTION.radius, label: mission.ready ? 'Extract · complete expedition' : 'Extraction locked · complete team objectives', available: mission.ready && mission.phase === 'active' });
   }
   return result;
 }

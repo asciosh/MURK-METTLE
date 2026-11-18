@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import type { EnemySnapshot } from '../../../shared/survival.mjs';
 import { InfectedModelPool, type InfectedModel } from './InfectedModel';
 import { InfectedAnimator } from './InfectedAnimator';
-import { enemyMotion, type RoomEnemyMotion } from './RoomPresentation';
+import { enemyMotion, smoothRoomPosition, type RoomEnemyMotion } from './RoomPresentation';
 import { roomToScene } from './RoomIntent';
 
 /** Snapshot-driven presentation only. No local infected controller or damage calls. */
@@ -12,6 +12,7 @@ export class RoomInfectedView {
   private model: InfectedModel | null = null;
   private animator: InfectedAnimator | null = null;
   private motion?: RoomEnemyMotion;
+  private visualPosition: { x: number; z: number } | null = null;
   constructor(geometry: THREE.BufferGeometry, material: THREE.Material) {
     this.fallback = new THREE.Mesh(geometry, material);
     this.fallback.position.y = 0.85;
@@ -26,8 +27,14 @@ export class RoomInfectedView {
         this.fallback.visible = false;
       }
     }
-    this.motion = enemyMotion(this.motion, enemy, dt, players);
-    this.root.position.set(...roomToScene(enemy.x, enemy.z,true));
+    // The server's hitbox stays at the authoritative snapshot; the mesh only
+    // eases between interpolated snapshots. A large correction still snaps.
+    const target = { x: enemy.x, z: enemy.z };
+    this.visualPosition = this.visualPosition
+      ? smoothRoomPosition(this.visualPosition, target, dt)
+      : target;
+    this.motion = enemyMotion(this.motion, { ...enemy, ...this.visualPosition }, dt, players);
+    this.root.position.set(...roomToScene(this.visualPosition.x, this.visualPosition.z,true));
     this.root.rotation.y = this.motion.yaw;
     this.animator?.update(dt, this.motion);
     if (!this.model) { this.fallback.rotation.z = enemy.hp <= 0 ? Math.PI / 2 : 0; this.fallback.position.y = enemy.hp <= 0 ? 0.3 : 0.85; }

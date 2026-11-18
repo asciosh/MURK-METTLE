@@ -5,6 +5,7 @@ export interface NextgenPlayerState {
   shotgun: { magazine: number; reserve: number; reloadAt: number; readyAt: number };
   charge: number; resonant: boolean; transitioning: boolean; downedMs: number;
   revivingTarget: string | null; reviveProgress: number; reviveBy: string | null;
+  dodging?: boolean; airborne?: boolean; jumpHeight?: number;
 }
 export const NEXTGEN_SHOTGUN: Readonly<{ name: string; capacity: number; reserve: number; damage: number; range: number; interval: number; reload: number; automatic: boolean }>;
 export const NEXTGEN_WEAPONS: Readonly<Record<NextgenWeapon, typeof NEXTGEN_SHOTGUN>>;

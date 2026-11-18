@@ -12,7 +12,17 @@ type Point3 = { x: number; y: number; z: number };
 export function enemyMotion(previous: RoomEnemyMotion | undefined, enemy: EnemySnapshot, elapsedMs: number, livingPlayers: readonly Point2[]): RoomEnemyMotion {
   const dt = Math.max(0, Math.min(100, Number.isFinite(elapsedMs) ? elapsedMs : 0));
   const dx = previous ? enemy.x - previous.x : 0, dz = previous ? enemy.z - previous.z : 0;
-  const speed = dt > 0 ? Math.min(4, Math.hypot(dx, dz) * 1000 / dt) : 0;
+  const observedSpeed = dt > 0 ? Math.min(4, Math.hypot(dx, dz) * 1000 / dt) : 0;
+  // A snapshot arriving slightly late must not restart the run/idle animation
+  // every few frames. Smooth cosmetic speed and use the server's locomotion
+  // state as a minimum while chasing or investigating. No AI is simulated here.
+  const response = 1 - Math.exp(-dt / 110);
+  const filteredSpeed = previous
+    ? previous.speed + (observedSpeed - previous.speed) * response
+    : observedSpeed;
+  const speed = enemy.state === 'chase' ? Math.max(2.25, filteredSpeed)
+    : enemy.state === 'investigate' ? Math.max(0.9, filteredSpeed)
+    : filteredSpeed;
   let yaw = previous?.yaw ?? 0;
   let hitMs = Math.max(0, (previous?.hitMs ?? 0) - dt);
   let attackMs = Math.max(0, (previous?.attackMs ?? 0) - dt);

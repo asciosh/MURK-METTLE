@@ -131,6 +131,7 @@ test('real room validates firearm direction, ammo, cooldown, range, cover and bo
     .replaceAll("'../../shared/survival.mjs'", JSON.stringify(new URL('../shared/survival.mjs', import.meta.url).href))
     .replaceAll("'../../shared/nextgen-combat.mjs'", JSON.stringify(new URL('../shared/nextgen-combat.mjs', import.meta.url).href))
     .replaceAll("'../../shared/nextgen-terrain.mjs'", JSON.stringify(new URL('../shared/nextgen-terrain.mjs', import.meta.url).href))
+    .replaceAll("'../../shared/nextgen-mobility.mjs'", JSON.stringify(new URL('../shared/nextgen-mobility.mjs', import.meta.url).href))
     .replaceAll(
       "'../../shared/actor-pose.mjs'",
       JSON.stringify(new URL('../shared/actor-pose.mjs', import.meta.url).href),

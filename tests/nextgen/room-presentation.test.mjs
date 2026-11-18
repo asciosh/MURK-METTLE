@@ -38,3 +38,35 @@ test('shoulder aim convergence returns a normalized forward direction', () => {
   const dir = roomAimDirection({ x: 0, z: 0 }, { x: 0.75, y: 1.32, z: 3 }, { x: 0, y: 0, z: -1 }, 65, [enemy({ x: 0.75 })]);
   assert.ok(dir.x > 0 && dir.z < 0); assert.ok(Math.abs(Math.hypot(dir.x, dir.y, dir.z) - 1) < 1e-9);
 });
+
+test('co-op chase retains run animation during one or two delayed room snapshots', () => {
+  let m = enemyMotion(undefined, enemy({ state: 'chase', x: 0 }), 16, []);
+  assert.equal(m.animation, 'run');
+  for (let i = 0; i < 16; i++) {
+    m = enemyMotion(m, enemy({ state: 'chase', x: 0 }), 16, []);
+    assert.equal(m.animation, 'run', `frame ${i} must not flicker to idle`);
+  }
+  m = enemyMotion(m, enemy({ state: 'chase', x: 0.4 }), 16, []);
+  assert.equal(m.animation, 'run');
+  assert.ok(m.speed >= 2.25);
+});
+test('investigating uses walk while delayed; genuine idle returns to idle', () => {
+  let m = enemyMotion(undefined, enemy({ state: 'investigate' }), 16, []);
+  for (let i = 0; i < 12; i++) {
+    m = enemyMotion(m, enemy({ state: 'investigate' }), 16, []);
+    assert.equal(m.animation, 'walk');
+  }
+  for (let i = 0; i < 20; i++) m = enemyMotion(m, enemy({ state: 'idle' }), 16, []);
+  assert.equal(m.animation, 'idle');
+  m = enemyMotion(m, enemy({ state: 'dead', hp: 0 }), 16, []);
+  assert.equal(m.animation, 'death');
+});
+test('a stepped visual target eases without affecting the network snapshot', () => {
+  const server = Object.freeze({ x: 0.8, z: -0.2 });
+  let visual = { x: 0, z: 0 };
+  visual = smoothRoomPosition(visual, server, 16);
+  assert.ok(visual.x > 0 && visual.x < server.x);
+  for (let i = 0; i < 40; i++) visual = smoothRoomPosition(visual, server, 16);
+  assert.ok(Math.abs(visual.x - server.x) < 1e-6);
+  assert.deepEqual(server, { x: 0.8, z: -0.2 });
+});

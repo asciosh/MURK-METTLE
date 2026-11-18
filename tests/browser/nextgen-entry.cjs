@@ -16,6 +16,8 @@ const {launchBrowser}=require('./support.cjs');
     await page.locator('a[href="/?nextgen=playable"]').click();
     await page.waitForFunction(()=>window.__m01DemoLoaded&&!!window.__m01Demo?.getPlayerState(),null,{timeout:90000});
     assert.equal(await page.locator('#game-viewport').count(),0);
+    await page.locator('.nextgen-hud[data-mode="solo"] .nextgen-health').waitFor();
+    await page.locator('.nextgen-hud[data-mode="solo"] .nextgen-ability-panel').waitFor();
     console.log('NEXTGEN ENTRY: dedicated lobby, unauthenticated room gate, production-built solo prototype passed.');
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

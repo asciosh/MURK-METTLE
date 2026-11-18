@@ -9,6 +9,8 @@ import { TerrainMaterial } from '../core/TerrainMaterial';
 import { VegetationRenderer } from '../core/VegetationRenderer';
 import { PlayableSession } from './PlayableSession';
 import { OnlineSession } from './OnlineSession';
+import { NextgenPauseMenu } from './NextgenPauseMenu';
+import { savedNextgenQuality } from '../core/NextgenOptions';
 import { NEXTGEN_TERRAIN_SEED, roomHeight } from '../../../shared/nextgen-terrain.mjs';
 
 /**
@@ -35,6 +37,7 @@ export class SimpleDemo {
   private vegetation?: VegetationRenderer;
   private session?: PlayableSession;
   private onlineSession?: OnlineSession;
+  private pauseMenu?: NextgenPauseMenu;
 
   private readonly qualityPresets = {
     low: {
@@ -125,9 +128,11 @@ async mount(): Promise<void> {
     sceneColor.a
   );
 
-  this.setQuality(new URLSearchParams(location.search).get('quality') ?? 'balanced');
+  this.setQuality(new URLSearchParams(location.search).get('quality') ?? savedNextgenQuality(window.localStorage));
   this.renderer.setRenderPipeline(this.pipeline);
 
+  // Solo and co-op now use the exact same in-game menu and graphics settings.
+  if (this.playable || this.roomCode !== undefined) this.pauseMenu = new NextgenPauseMenu(this.canvas, this.roomCode !== undefined ? 'coop' : 'solo', value => this.setQuality(value));
   this.renderer.start();
 
   window.addEventListener('resize', this._onResize);
@@ -515,6 +520,8 @@ private applyShadowPreset(): void {
     this.renderer.onSimulationStep = undefined;
     this.renderer.onBeforeRender = undefined;
 
+    this.pauseMenu?.dispose();
+    this.pauseMenu = undefined;
     this.session?.dispose();
     this.session = undefined;
     this.onlineSession?.dispose();

@@ -18,6 +18,7 @@ import {
 } from '../../shared/survival.mjs';
 import { sanitizeActorPose } from '../../shared/actor-pose.mjs';
 import { NEXTGEN_MAP, NEXTGEN_MAP_ID } from '../../shared/nextgen-terrain.mjs';
+import { NEXTGEN_MOBILITY, newNextgenMobility, beginNextgenDodge, beginNextgenJump, advanceNextgenDodge, nextgenMobilitySnapshot, nextgenJumpHeight } from '../../shared/nextgen-mobility.mjs';
 import { NEXTGEN_WEAPONS, NEXTGEN_SHOTGUN, REVIVE_RULES, COMPANION_STRIKE, newNextgenCombat, isNextgenWeapon, selectNextgenWeapon, toggleNextgenResonance, consumeNextgenResonance, reloadShotgun, fireShotgun, stepNextgenCombat, nextgenShots, canRevive } from '../../shared/nextgen-combat.mjs';
 import {
   WORLD_BOUNDARY,
@@ -289,10 +290,28 @@ export class GameRoom extends DurableObject {
     const now = Date.now();
     // Additive opt-in. Legacy clients never get new combat behavior or lose their existing restart semantics.
     if (msg.type === 'nextgen-hello') {
-      if (msg.version === 1 && !player.nextgen) player.nextgen = newNextgenCombat();
+      if (msg.version === 1) {
+        if (!player.nextgen) player.nextgen = newNextgenCombat();
+        player.nextgen.mobility ??= newNextgenMobility();
+      }
       return;
     }
     if (msg.type === 'revive-cancel') { this.cancelRevive(player); return; }
+    if (msg.type === 'nextgen-jump') {
+      if (!player.nextgen || !this.map || !beginNextgenJump(player.nextgen.mobility, player, now)) return;
+      this.cancelRevive(player, 'jump');
+      this.saveAttachment(socket, player);
+      return;
+    }
+    if (msg.type === 'nextgen-dodge') {
+      if (!player.nextgen || !this.map || !beginNextgenDodge(player.nextgen.mobility, player, msg.x, msg.z, now)) return;
+      cancelHealing(player.survival);this.cancelRevive(player, 'dodge');
+      player.movingUntil=now+NEXTGEN_MOBILITY.dodgeDuration;
+      this.send(socket, { type: 'survival', survival: player.survival });
+      this.saveAttachment(socket, player);
+      return;
+    }
+
     if (msg.type === 'revive') {
       const target = [...this.players.values()].find(p => p.id === msg.target);
       if (!canRevive(player, target, now,this.map) || target.nextgen.downedUntil - now < REVIVE_RULES.duration || player.nextgen.revive || player.survival.bandages <= 0 || [...this.players.values()].some(p => p.nextgen?.revive?.targetId === target?.id)) {
@@ -313,6 +332,7 @@ export class GameRoom extends DurableObject {
     }
     if (!['move', 'sync-equipment'].includes(msg.type)) this.cancelRevive(player);
     if (msg.type === 'move') {
+      if (player.nextgen?.mobility?.dodgeUntil > now) { this.send(socket, { type: 'correction', x: player.x, z: player.z }); return; }
       if (!isNumber(msg.x) || !isNumber(msg.z) || !isNumber(msg.yaw)) return;
       if (Math.abs(msg.x) > (this.map?.boundary??WORLD_BOUNDARY) || Math.abs(msg.z) > (this.map?.boundary??WORLD_BOUNDARY) || Math.abs(msg.yaw) > 1000) return;
       // Guard against high packet rates and large impossible teleports.
@@ -471,7 +491,7 @@ export class GameRoom extends DurableObject {
         player.moveBudget = 0.75;
         player.budgetAt = now;
         player.arsenal = newArsenal();
-        if (player.nextgen) player.nextgen = newNextgenCombat();
+        if (player.nextgen) { player.nextgen = newNextgenCombat(); player.nextgen.mobility = newNextgenMobility(); }
         if (wiped) this.horde.reset([player]);
         this.saveAttachment(socket, player);
         this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
@@ -500,7 +520,7 @@ export class GameRoom extends DurableObject {
       )
         return;
       const weapon = NEXTGEN_WEAPONS[msg.weapon],
-        origin = { x: player.x, y: 1.32+(this.map?.heightAt(player.x,player.z)??0), z: player.z };
+        origin = { x: player.x, y: 1.32+(this.map?.heightAt(player.x,player.z)??0)+nextgenJumpHeight(player.nextgen?.mobility,now), z: player.z };
       if (player.nextgen) {
         selectNextgenWeapon(player.nextgen, msg.weapon);
         if (player.nextgen.transitionUntil > now) return;
@@ -653,6 +673,12 @@ export class GameRoom extends DurableObject {
       }
       p.sprinting = p.survival.sprinting;
     }
+    // Optional online movement is owned by the server, including collision and stamina.
+    for (const [socket, p] of this.players) {
+      if (p.nextgen?.mobility && advanceNextgenDodge(p.nextgen.mobility,p,now,(this.map?.constrain??constrainPosition))) {
+        p.movingUntil=now+200; this.saveAttachment(socket,p);
+      }
+    }
     const hits = this.horde.step([...this.players.values()], dt, now);
     for (const hit of hits) {
       const entry = [...this.players].find(([, p]) => p.id === hit.playerId);
@@ -707,6 +733,7 @@ export class GameRoom extends DurableObject {
           revivingTarget: p.nextgen.revive?.targetId ?? null,
           reviveProgress: p.nextgen.revive ? Math.max(0, Math.min(1, (now - p.nextgen.revive.startedAt) / REVIVE_RULES.duration)) : 0,
           reviveBy: [...this.players.values()].find(other => other.nextgen?.revive?.targetId === p.id)?.id ?? null,
+          ...nextgenMobilitySnapshot(p.nextgen.mobility,now),
         } } : {}),
       })),
       horde: this.horde.packet(),

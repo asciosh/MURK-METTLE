@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { LOOT_KINDS, WEAPONS, type LootKind } from './EquipmentInventory.ts';
+import { FieldItemArt } from './FieldItemArt.ts';
 export type { LootKind } from './EquipmentInventory.ts';
 
 type Position = readonly [number, number, number];
@@ -23,14 +24,7 @@ export class LootField {
   static readonly PICKUP_RANGE = 2;
   static readonly LIMIT = 24;
   readonly root = new THREE.Group();
-  private readonly geometry = new THREE.BoxGeometry(0.42, 0.25, 0.32);
-  private readonly markerGeometry = new THREE.OctahedronGeometry(0.15, 0);
-  private readonly ammoMarker = new THREE.MeshBasicMaterial({ color: 0xffc34a, toneMapped: false });
-  private readonly bandageMarker = new THREE.MeshBasicMaterial({ color: 0x86ffbe, toneMapped: false });
-  private readonly ammoMaterial = new THREE.MeshStandardMaterial({ color: 0xc4a044, emissive: 0x543c0b, emissiveIntensity: 0.6 });
-  private readonly bandageMaterial = new THREE.MeshStandardMaterial({ color: 0xe6eedb, emissive: 0x235a39, emissiveIntensity: 0.35 });
-  private readonly rifleMaterial = new THREE.MeshStandardMaterial({ color: 0x46534b, roughness: 0.85 });
-  private readonly shotgunMaterial = new THREE.MeshStandardMaterial({ color: 0x79593a, roughness: 0.85 });
+  private readonly art = new FieldItemArt();
   private readonly items = new Map<number, { item: LootItem; mesh: THREE.Group }>();
   private nextId = 1;
   private disposed = false;
@@ -47,28 +41,8 @@ export class LootField {
     const id = this.nextId++;
     const item: LootItem = { id, kind, amount, position: [...position] };
     if (rounds !== undefined) item.loadedRounds = rounds;
-    const mesh = new THREE.Group();
-    mesh.name = 'Loot ' + kind;
+    const mesh = this.art.create(kind);
     mesh.position.set(...position);
-    const material = kind === 'bandage' ? this.bandageMaterial :
-      kind === 'rifle' || kind === 'rifle-ammo' ? this.rifleMaterial :
-      kind === 'shotgun' || kind === 'shotgun-ammo' ? this.shotgunMaterial : this.ammoMaterial;
-    const box = new THREE.Mesh(this.geometry,material);
-    box.position.y = 0.13;
-    if (weapon) {
-      box.scale.set(0.33,0.30,kind === 'rifle' ? 2.3 : 2.6);
-      const stock = new THREE.Mesh(this.geometry,material);
-      stock.scale.set(.25,.32,.55); stock.position.set(0,.13,.36);
-      const grip = new THREE.Mesh(this.geometry,material);
-      grip.scale.set(.28,.45,.20); grip.position.set(0,.09,.04);
-      mesh.add(stock,grip);
-    }
-    box.receiveShadow = true;
-    const marker = new THREE.Mesh(this.markerGeometry,
-      kind === 'bandage' ? this.bandageMarker : this.ammoMarker);
-    marker.name = 'Loot marker ' + kind;
-    marker.position.y = 0.72;
-    mesh.add(box, marker);
     this.root.add(mesh);
     this.items.set(id, { item, mesh });
     return true;
@@ -147,13 +121,6 @@ export class LootField {
     this.disposed = true;
     this.clear();
     this.root.removeFromParent();
-    this.geometry.dispose();
-    this.markerGeometry.dispose();
-    this.ammoMarker.dispose();
-    this.bandageMarker.dispose();
-    this.ammoMaterial.dispose();
-    this.bandageMaterial.dispose();
-    this.rifleMaterial.dispose();
-    this.shotgunMaterial.dispose();
+    this.art.dispose();
   }
 }

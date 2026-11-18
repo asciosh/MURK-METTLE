@@ -73,13 +73,21 @@ export type RoomEvent =
   | { type: 'creature-state'; owned: boolean; xp: number }
   | { type: 'error'; message: string };
 type Frame = { at: number; players: RemotePlayer[]; horde: HordePacket };
-const INTERPOLATION_DELAY_MS = 120;
+const DEFAULT_INTERPOLATION_DELAY_MS = 120;
 const blend = (a: number, b: number, t: number): number => a + (b - a) * t;
 function yawBlend(a: number, b: number, t: number): number {
   const delta = Math.atan2(Math.sin(b - a), Math.cos(b - a));
   return a + delta * t;
 }
 export class Multiplayer {
+  // Legacy multiplayer keeps its original 120ms delay. NEXTGEN may choose
+  // a larger jitter buffer so 100ms room snapshots interpolate continuously.
+  private readonly interpolationDelayMs: number;
+  constructor(visualDelayMs = DEFAULT_INTERPOLATION_DELAY_MS) {
+    this.interpolationDelayMs = Number.isFinite(visualDelayMs)
+      ? Math.max(0, Math.min(500, visualDelayMs))
+      : DEFAULT_INTERPOLATION_DELAY_MS;
+  }
   readonly arrivalMetrics = new SnapshotArrivals();
   private ws: WebSocket | null = null;
   private frames: Frame[] = [];
@@ -134,7 +142,7 @@ export class Multiplayer {
   // Holding the newest state briefly gives us two samples to interpolate instead of snapping.
   updateVisuals(): void {
     if (!this.frames.length) return;
-    const target = performance.now() - INTERPOLATION_DELAY_MS;
+    const target = performance.now() - this.interpolationDelayMs;
     const last = this.frames[this.frames.length - 1];
     let a = this.frames[0];
     let b = last;

@@ -3,7 +3,7 @@ import { Multiplayer, type RoomEvent, type RemotePlayer, type MissionState } fro
 import { CREATURES, creaturePower, type Arsenal } from '../../../shared/expansion.mjs';
 import { NEXTGEN_WEAPONS as WEAPONS, REVIVE_RULES, reviveInRange, type NextgenWeapon } from '../../../shared/nextgen-combat.mjs';
 import type { CollectionState } from '../../../shared/collection.mjs';
-import { MISSION_KILLS, MISSION_SALVAGE } from '../../../shared/coop-rules.mjs';
+import { MISSION_KILLS, MISSION_SALVAGE, EXTRACTION } from '../../../shared/coop-rules.mjs';
 import { canSprint } from '../../../shared/survival.mjs';
 import { KeyboardInput } from '../core/KeyboardInput';
 import { ThirdPersonCamera } from '../core/ThirdPersonCamera';
@@ -17,12 +17,17 @@ import { roomAimDirection, smoothRoomPosition } from '../core/RoomPresentation';
 import { CombatFeedback } from '../core/CombatFeedback';
 import { RoomCompanionView } from '../core/RoomCompanionView';
 import { RoomFieldView } from '../core/RoomFieldView';
+import { RoomSquadOverlay } from '../core/RoomSquadOverlay';
+import { squadRoster, objectiveDisplay } from '../core/RoomSquadState.mjs';
+import { PlayableHud } from './PlayableHud';
 import { NEXTGEN_MAP, NEXTGEN_MAP_ID, NEXTGEN_TERRAIN_SEED } from '../../../shared/nextgen-terrain.mjs';
 import { fieldIntent, nearestFieldTarget, nextOwnedSpecies, roomFieldTargets } from '../core/RoomFieldRules';
 
 /** Explicit co-op sandbox. No PlayableSession, local horde, loot or damage simulation. */
 export class OnlineSession {
-  private readonly net = new Multiplayer();
+  // 100ms authoritative horde ticks need more than one tick of jitter buffer.
+  // Local player input and server damage are unaffected by this visual delay.
+  private readonly net = new Multiplayer(190);
   private readonly keyboard = new KeyboardInput();
   private readonly follow = new ThirdPersonCamera();
   private readonly world = new THREE.Group();
@@ -36,22 +41,19 @@ export class OnlineSession {
   private readonly pendingPulses = new Map<string, number>();
   private readonly pendingStrikes = new Map<string, { x: number; z: number; at: number }>();
   private readonly field = new RoomFieldView();
+  private readonly squadOverlay = new RoomSquadOverlay();
+  private readonly requestedRoom: string | null;
   private collection: CollectionState | null = null;
   private mission: MissionState | null = null;
   private inventory: { scrap: number; fiber: number; spore: number } | null = null;
   private inventoryRevision = 0;
+  private accountXp: number|null = null;
+  private accountExtractions: number|null = null;
   private readonly geometry = new THREE.CapsuleGeometry(0.32, 1.05, 4, 8);
   private readonly enemyMaterial = new THREE.MeshStandardMaterial({ color: 0x864740 });
-  private readonly panel = document.createElement('div');
-  private readonly prompt = document.createElement('div');
-  private readonly staminaFill = document.createElement('div');
-  private readonly status = document.createElement('div');
-  private readonly detail = document.createElement('div');
-  private readonly objectives = document.createElement('div');
-  private readonly creatureStatus = document.createElement('div');
-  private readonly interaction = document.createElement('div');
-  private readonly inventoryStatus = document.createElement('div');
-  private readonly reticle = document.createElement('div');
+  private readonly hud = new PlayableHud(true);
+  private inventoryOpen = false;
+  private readonly primaryByPlayer = new Map<string, 'rifle' | 'shotgun'>();
   private readonly abort = new AbortController();
   private position = { x: 0, z: 0 };
   private visualPosition = { x: 0, z: 0 };
@@ -83,23 +85,16 @@ export class OnlineSession {
 
   constructor(private readonly scene: THREE.Scene, private readonly camera: THREE.PerspectiveCamera, private readonly canvas: HTMLCanvasElement, code: string) {
     const normalized = validateRoomCode(code);
+    this.requestedRoom = normalized;
+    this.hud.setReconnectHandler(() => {
+      if (this.disposed || !this.requestedRoom) return;
+      this.ready=false; this.net.disconnect(); clearTimeout(this.timeout);
+      this.note='Reconnecting to '+this.requestedRoom+'…';
+      void this.connect(this.requestedRoom);
+    });
     scene.add(this.world, this.avatar.root, this.effects.root, this.feedback.root, this.field.root);
     this.loadAvatar(this.avatar);
     void this.infectedPool.load(`${import.meta.env.BASE_URL}models/nextgen/${characterSkinFile('infected', 'classic')}`);
-    this.panel.style.cssText = 'position:fixed;bottom:28px;left:28px;z-index:10000;background:rgba(10,18,15,.85);color:#e7f4e8;padding:16px;width:260px;max-width:calc(100vw - 88px);font:14px Arial,sans-serif;border:1px solid #617b5c;border-radius:6px;line-height:1.5';
-    const heading = document.createElement('strong'); heading.textContent = 'NEXTGEN · CO-OP'; heading.style.cssText='font-size:12px;letter-spacing:2px;color:#a9c69a';
-    const staminaTrack=document.createElement('div');staminaTrack.style.cssText='height:8px;background:#25312a;border-radius:3px;overflow:hidden;margin:8px 0';this.staminaFill.style.cssText='height:100%;width:100%;background:#91c76a;transform-origin:left';staminaTrack.append(this.staminaFill);
-    this.status.style.cssText='font-size:18px;font-weight:bold;color:#eaa5a5';this.detail.style.cssText='font-size:14px;color:#e5d69a';
-    this.prompt.style.cssText='position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:10000;background:rgba(10,18,15,.8);padding:12px 20px;border-radius:6px;font:13px Arial,sans-serif;color:white;text-align:center;max-width:85vw;pointer-events:none';
-    const controls = document.createElement('div'); controls.textContent = 'Click field · WASD / Shift · RMB aim · LMB shoot · 1/2/3 guns · R reload · Q resonance · F melee · H bandage · E interact · C creature · G creature strike · X Pulse · V revive · Enter respawn';
-    this.interaction.style.color = '#eacb8a';
-    this.interaction.style.fontWeight = '700';
-    const exit = document.createElement('a'); exit.href = '/?nextgen=lobby'; exit.textContent = 'NEXTGEN lobby'; exit.style.color = '#bde5cf';
-    this.panel.append(heading, this.status, staminaTrack,this.detail, this.creatureStatus, this.inventoryStatus, this.objectives, this.interaction, exit);
-    this.prompt.append(controls);document.body.append(this.panel,this.prompt);
-    this.reticle.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999;color:#e9f4d7;font:24px monospace;pointer-events:none;display:none';
-    this.reticle.textContent = '+';
-    document.body.append(this.reticle);
     this.net.onEvent = this.onEvent;
     const signal = this.abort.signal;
     canvas.addEventListener('click', () => { this.feedback.unlockAudio(); if (this.isReady() && document.pointerLockElement !== canvas) { try { void Promise.resolve(canvas.requestPointerLock()).catch(() => {}); } catch {} } }, { signal });
@@ -135,6 +130,10 @@ export class OnlineSession {
       if (!response.ok) return;
       const data = await response.json();
       const inventory = data.inventory;
+      if (!this.disposed && revision === this.inventoryRevision && Number.isSafeInteger(data.stats?.xp) && data.stats.xp >= 0) {
+        this.accountXp=data.stats.xp;
+        this.accountExtractions=Number.isSafeInteger(data.stats.extractions) ? data.stats.extractions : 0;
+      }
       if (!this.disposed && revision === this.inventoryRevision && inventory && [inventory.scrap, inventory.fiber, inventory.spore].every(n => Number.isInteger(n) && n >= 0 && n <= 20)) this.inventory = { scrap: inventory.scrap, fiber: inventory.fiber, spore: inventory.spore };
     } catch { /* Account state stays at the most recent confirmed read. */ }
   }
@@ -145,16 +144,26 @@ export class OnlineSession {
         const me = this.net.self;
         if (!me) break;
         if (!this.ready) { this.position = { x: me.x, z: me.z }; this.visualPosition = { ...this.position }; this.ready = true; this.lastMove = performance.now(); clearTimeout(this.timeout); this.note = 'Server connected.'; }
-        if (me.hp <= 0 || Math.hypot(me.x - this.position.x, me.z - this.position.z) > 1.2) this.position = { x: me.x, z: me.z };
+        if (me.hp <= 0 || me.nextgen?.dodging || Math.hypot(me.x - this.position.x, me.z - this.position.z) > 1.2) this.position = { x: me.x, z: me.z };
         break;
       }
       case 'correction': this.position = { x: event.x, z: event.z }; this.visualPosition = { ...this.position }; break;
-      case 'respawn': this.position = { x: event.x, z: event.z }; this.visualPosition = { ...this.position }; this.weapon = 'pistol'; this.note = 'Respawn accepted.'; break;
+      case 'respawn': this.position = { x: event.x, z: event.z }; this.visualPosition = { ...this.position }; this.weapon = 'pistol'; if(this.net.id)this.primaryByPlayer.delete(this.net.id); this.inventoryOpen = false; this.note = 'Respawn accepted.'; break;
       case 'arsenal': this.arsenal = event.arsenal; break;
       case 'collection-state': this.collection = event.collection; if (event.bonded) this.note = `Bond confirmed: ${CREATURES[event.collection.active].name}`; break;
       case 'mission-state': if (this.mission && event.salvage > this.mission.salvage) this.note = 'Team sample recovered.'; this.mission = event; break;
-      case 'mission-extracted': this.note = `Team extraction confirmed. Expedition ${event.completed}.`; break;
-      case 'mission-reward': this.note = `Expedition reward: +${event.xp} XP`; void this.refreshInventory(); break;
+      case 'mission-extracted':
+        this.note=`Expedition ${event.completed} completed; verifying personal reward.`;
+        this.hud.startExtraction(event.completed,this.alive());
+        if (this.locked()) document.exitPointerLock();
+        break;
+      case 'mission-reward':
+        this.note=`Expedition reward confirmed: +${event.xp} XP`;
+        this.hud.confirmExtraction(event);
+        this.accountXp=event.totals.xp;
+        this.accountExtractions=event.completed;
+        void this.refreshInventory();
+        break;
       case 'shot': {
         this.fireEvents.add(event.by); this.acceptedShots++; if (event.hit) this.confirmedHits++;
         if (event.resonant) this.acceptedResonantShots++;
@@ -174,13 +183,13 @@ export class OnlineSession {
         }
         break;
       case 'reward': this.acceptedRewards++; this.note = event.duplicate ? 'Server reward already recorded.' : `Server reward: +${event.xp} XP · +${event.creatureXp} creature XP${event.material ? ' · ' + event.material : ''}`; void this.refreshInventory(); break;
-      case 'error': this.note = this.net.connected ? event.message : 'Connection unavailable/disconnected. Reload to retry.'; if (!this.net.connected) { this.ready = false; this.resetInput(); } break;
+      case 'error': if (event.message.includes('Party reward could not be credited')) this.hud.failExtraction(); this.note = this.net.connected ? event.message : 'Connection unavailable/disconnected. Reload to retry.'; if (!this.net.connected) { this.ready = false; this.resetInput(); } break;
     }
   };
   private locked() { return document.pointerLockElement === this.canvas; }
   private isReady() { return this.ready && this.net.connected && !!this.net.self; }
   private alive() { return this.isReady() && (this.net.self?.hp ?? 0) > 0; }
-  private readonly resetInput = () => { this.keyboard.reset(); this.aim = this.firing = false; if (this.net.self?.nextgen?.revivingTarget) this.net.send('revive-cancel'); };
+  private readonly resetInput = () => { this.keyboard.reset(); this.aim = this.firing = false; this.inventoryOpen = false; if (this.net.self?.nextgen?.revivingTarget) this.net.send('revive-cancel'); };
   private equip(weapon: NextgenWeapon) {
     if (weapon === 'shotgun' && !this.net.self?.nextgen) { this.note = 'Shotgun requires the NEXTGEN room extension.'; return; }
     this.weapon = weapon;
@@ -195,6 +204,28 @@ export class OnlineSession {
     if (!this.locked() || !this.isReady()) return;
     if (e.code === 'Enter' && !e.repeat && !this.alive()) { this.net.send('restart'); return; }
     if (!this.alive()) return;
+    if (e.code === 'KeyI' && !e.repeat) {
+      this.inventoryOpen = !this.inventoryOpen;
+      this.keyboard.reset(); this.aim = this.firing = false;
+      if (this.net.self?.nextgen?.revivingTarget) this.net.send('revive-cancel');
+      e.preventDefault(); return;
+    }
+    if (this.inventoryOpen) { e.preventDefault(); return; }
+    // NEXTGEN-only actions: send intent, never invent movement or height locally.
+    if (e.code === 'Space' || e.code === 'ControlLeft') {
+      e.preventDefault();
+      if (e.repeat || !this.net.self?.nextgen) return;
+      if (e.code === 'Space') this.net.send('nextgen-jump');
+      else {
+        const movement = this.keyboard.read();
+        const forward = movement.forward || (!movement.strafe ? 1 : 0);
+        const x = -Math.sin(this.yaw) * forward + Math.cos(this.yaw) * movement.strafe;
+        const z = -Math.cos(this.yaw) * forward - Math.sin(this.yaw) * movement.strafe;
+        const length = Math.hypot(x,z) || 1;
+        this.net.send('nextgen-dodge', { x:x/length, z:z/length });
+      }
+      return;
+    }
     if (this.keyboard.keyDown(e.code, e.repeat)) { e.preventDefault(); return; }
     if (e.repeat) return;
     switch (e.code) {
@@ -212,6 +243,8 @@ export class OnlineSession {
         const target = me ? nearestFieldTarget(me, roomFieldTargets(this.collection, this.mission)) : null;
         const intent = target ? fieldIntent(target) : null;
         if (intent) { this.net.send(intent.type, intent.body); this.note = `Requested: ${target!.label}`; }
+        else if (me && this.mission && !this.mission.ready && Math.hypot(me.x-EXTRACTION.x,me.z-EXTRACTION.z)<=EXTRACTION.radius)
+          this.note=`Extraction locked: ${this.mission.kills}/${MISSION_KILLS} kills, ${this.mission.salvage}/${MISSION_SALVAGE} samples.`;
         else this.note = 'Move closer to a field marker.';
         break;
       }
@@ -224,7 +257,7 @@ export class OnlineSession {
     }
   };
   private readonly mouseDown = (e: MouseEvent) => {
-    if (!this.locked() || !this.alive()) return;
+    if (!this.locked() || !this.alive() || this.inventoryOpen) return;
     if (e.button === 2) this.aim = true;
     if (e.button === 0 && this.aim) { this.firing = true; this.shoot(performance.now()); }
   };
@@ -240,16 +273,18 @@ export class OnlineSession {
   }
   private syncAvatar(avatar: PlayerAvatar, p: RemotePlayer, dt: number, pos = { x: p.x, z: p.z }, yaw = p.yaw) {
     const next = roomToScene(pos.x, pos.z,true);
+    next[1] += p.nextgen?.jumpHeight ?? 0;
     const initial = !this.previousHp.has(p.id);
     const speed = !initial && dt > 0 ? Math.min(9, Math.hypot(next[0] - avatar.root.position.x, next[2] - avatar.root.position.z) * 1000 / dt) : 0;
     const damaged = p.hp < (this.previousHp.get(p.id) ?? p.hp);
     if (damaged && p.id === this.net.id) this.feedback.damage();
     this.previousHp.set(p.id, p.hp);
     const weapon = p.nextgen?.weapon ?? (p.weapon === 'rifle' ? 'rifle' : 'pistol');
-    avatar.setEquipment(weapon, weapon === 'shotgun' ? 'shotgun' : 'rifle', !!p.nextgen?.transitioning, !!p.nextgen?.resonant);
+    if (weapon !== 'pistol') this.primaryByPlayer.set(p.id, weapon);
+    avatar.setEquipment(weapon, this.primaryByPlayer.get(p.id) ?? null, !!p.nextgen?.transitioning, !!p.nextgen?.resonant);
     avatar.update({ position: next, facing: [-Math.sin(yaw), 0, -Math.cos(yaw)] });
     const reloading = weapon === 'shotgun' ? !!p.nextgen?.shotgun.reloadAt : (p.reloadProgress ?? 0) > 0;
-    avatar.animate(dt, { speed: p.hp > 0 ? speed : 0, sprinting: !!p.sprinting, airborne: false, dodging: false, aiming: !!p.aiming, aimPitch: p.pitch, shoot: this.fireEvents.has(p.id), melee: this.meleeEvents.has(p.id), reload: reloading && !this.reloadEvents.has(p.id), healing: !!p.survival?.healEndsAt || !!p.nextgen?.revivingTarget, hit: damaged, dead: p.hp <= 0 });
+    avatar.animate(dt, { speed: p.hp > 0 ? speed : 0, sprinting: !!p.sprinting, airborne: !!p.nextgen?.airborne, dodging: !!p.nextgen?.dodging, aiming: !!p.aiming, aimPitch: p.pitch, shoot: this.fireEvents.has(p.id), melee: this.meleeEvents.has(p.id), reload: reloading && !this.reloadEvents.has(p.id), healing: !!p.survival?.healEndsAt || !!p.nextgen?.revivingTarget, hit: damaged, dead: p.hp <= 0 });
     if (reloading) this.reloadEvents.add(p.id); else this.reloadEvents.delete(p.id);
   }
   private syncCompanion(owner: RemotePlayer, dt: number, position = { x: owner.x, z: owner.z }, yaw = owner.yaw) {
@@ -274,15 +309,15 @@ export class OnlineSession {
       const orientation = this.follow.getOrientation();
       this.yaw = Math.atan2(-orientation.front[0], -orientation.front[2]);
       if (now - this.lastMove >= 65) {
-        const input = this.keyboard.read();
+        const input = this.inventoryOpen ? { forward: 0, strafe: 0, sprint: false } : this.keyboard.read();
         const sprint = !!input.sprint && !this.aim && !!me.survival && canSprint(me.survival);
-        if (this.alive() && this.locked()) {
+        if (this.alive() && this.locked() && !this.inventoryOpen && !me.nextgen?.dodging) {
           this.position = roomMove(this.position, input.forward, input.strafe, this.yaw, sprint, now - this.lastMove,true);
           this.net.send('move', { ...this.position, yaw: this.yaw, pitch: this.follow.getAimPitch(), aiming: this.aim, sprinting: sprint, weapon: this.weapon === 'shotgun' ? 'rifle' : this.weapon, ...(me.nextgen ? { nextgenWeapon: this.weapon } : {}) });
         }
         this.lastMove = now;
       }
-      if (this.alive() && this.locked() && this.aim && this.firing && WEAPONS[this.weapon].automatic) this.shoot(now);
+      if (this.alive() && this.locked() && !this.inventoryOpen && this.aim && this.firing && WEAPONS[this.weapon].automatic) this.shoot(now);
       this.net.updateVisuals();
       this.visualPosition = smoothRoomPosition(this.visualPosition, this.position, dt);
       this.syncAvatar(this.avatar, { ...me, weapon: this.weapon === 'shotgun' ? 'rifle' : this.weapon, aiming: this.aim, pitch: this.follow.getAimPitch() }, dt, this.visualPosition, this.yaw);
@@ -293,7 +328,7 @@ export class OnlineSession {
         this.syncAvatar(avatar, p, dt);
         this.syncCompanion(p, dt);
       }
-      for (const [id, a] of this.peers) if (!this.net.peers.has(id)) { a.dispose(); a.root.removeFromParent(); this.peers.delete(id); this.reloadEvents.delete(id); this.previousHp.delete(id); }
+      for (const [id, a] of this.peers) if (!this.net.peers.has(id)) { a.dispose(); a.root.removeFromParent(); this.peers.delete(id); this.reloadEvents.delete(id); this.previousHp.delete(id); this.primaryByPlayer.delete(id); }
       const current = new Set<string>();
       const living = [me, ...this.net.peers.values()].filter(p => p.hp > 0);
       for (const enemy of this.net.horde?.enemies ?? []) {
@@ -311,25 +346,40 @@ export class OnlineSession {
     this.fireEvents.clear(); this.meleeEvents.clear();
     this.effects.update(dt); this.feedback.update(dt, null);
     const p = roomToScene(this.visualPosition.x, this.visualPosition.z,true);
+    p[1] += me?.nextgen?.jumpHeight ?? 0;
     const pose = this.follow.update(dt, p, { heightAt: (x,z)=>NEXTGEN_MAP.heightAt(x-100,z-100) }, this.aim);
     this.camera.position.set(...pose.position); this.camera.lookAt(...pose.target); this.camera.fov = pose.fov; this.camera.updateProjectionMatrix();
-    this.status.textContent = this.isReady() ? `Room ${this.net.code} · ${this.net.peers.size + 1}/4 · HP ${me?.hp} · Wave ${this.net.horde?.wave ?? '–'}` : 'Not connected';
-    this.staminaFill.style.transform=`scaleX(${Math.max(0,Math.min(1,(me?.survival?.stamina??0)/100))})`;
-    this.staminaFill.style.background=me?.survival?.exhausted?'#cb5656':'#91c76a';
-    this.reticle.style.display = this.alive() && this.locked() && this.aim ? 'block' : 'none';
+    const squad=squadRoster(me, [...this.net.peers.values()]);
+    this.squadOverlay.update(this.isReady() ? squad.slice(1) : [], this.camera, this.isReady()?roomFieldTargets(this.collection,this.mission):[], me);
+    const objective=objectiveDisplay(this.mission, MISSION_KILLS, MISSION_SALVAGE);
     const ammo = this.weapon === 'shotgun' ? me?.nextgen?.shotgun : this.arsenal?.[this.weapon];
-    this.detail.textContent = `${this.weapon.toUpperCase()} ${ammo ? `${ammo.magazine}/${ammo.reserve}` : '–'} · Bandages ${me?.survival?.bandages ?? '–'} · Stamina ${Math.round(me?.survival?.stamina ?? 0)}${me?.survival?.healEndsAt ? ' · BANDAGING' : ''} · ${this.note}`;
-    this.creatureStatus.textContent = (me?.creatureOwned && me.species ? `Companion: ${creaturePower(me.species, me.creatureXp ?? 0).name} · ${me.creatureXp ?? 0} XP` : 'No bonded creature · find a green habitat marker') + (me?.nextgen ? ` · Resonance ${Math.round(me.nextgen.charge)}%${me.nextgen.resonant ? ' ACTIVE' : ''}${me.nextgen.transitioning ? ' SHIFTING' : ''}` : '');
-    this.inventoryStatus.textContent = this.inventory ? `Cloud materials · Scrap ${this.inventory.scrap} · Fiber ${this.inventory.fiber} · Spore ${this.inventory.spore}` : 'Cloud materials: synchronizing…';
-    this.objectives.textContent = this.mission ? `Team objective · Infected ${this.mission.kills}/${MISSION_KILLS} · Samples ${this.mission.salvage}/${MISSION_SALVAGE}${this.mission.ready ? ' · EXTRACTION READY' : ''}` : 'Waiting for team mission…';
     const target = this.alive() && me ? nearestFieldTarget(me, roomFieldTargets(this.collection, this.mission)) : null;
     const revive = this.reviveTarget();
-    this.interaction.textContent = me?.nextgen?.revivingTarget ? `REVIVING · ${Math.round(me.nextgen.reviveProgress * 100)}% · movement or damage cancels` : this.isReady() && !this.alive() ? (me?.nextgen?.downedMs ? `DOWNED · ${Math.ceil(me.nextgen.downedMs / 1000)}s to revive${me.nextgen.reviveBy ? ' · teammate reviving' : ''} · Enter to respawn` : 'Defeated · Enter to respawn') : revive ? 'V · Revive teammate (1 bandage)' : target ? `E · ${target.label}` : '';
+    const horde = this.net.horde;
+    this.hud.updateOnline({
+      connected:this.isReady(), room:this.net.code ?? '–', roster:this.net.peers.size + (me?1:0),
+      locked:this.locked(), inventoryOpen:this.inventoryOpen, alive:this.alive(), hp:me?.hp ?? 0,
+      stamina:me?.survival?.stamina ?? 0, exhausted:!!me?.survival?.exhausted, sprinting:!!me?.sprinting,
+      aiming:this.aim, weapon:this.weapon, magazine:ammo?.magazine ?? null, reserve:ammo?.reserve ?? null,
+      reloading:this.weapon==='shotgun'?!!me?.nextgen?.shotgun.reloadAt:!!me?.reloadProgress,
+      bandages:me?.survival?.bandages ?? 0, healing:!!me?.survival?.healEndsAt,
+      wave:horde?.wave ?? 0, infected:horde?.enemies.length ?? 0,
+      waveCountdown:horde?.nextWaveAt ? Math.max(0,horde.nextWaveAt-Date.now()) : 0,
+      kills:this.mission?.kills ?? 0, samples:this.mission?.salvage ?? 0,
+      killGoal:MISSION_KILLS, sampleGoal:MISSION_SALVAGE, extractionReady:!!this.mission?.ready,
+      materials:this.inventory, accountXp:this.accountXp, accountExtractions:this.accountExtractions, arsenal:{pistol:this.arsenal?.pistol ?? null,rifle:this.arsenal?.rifle ?? null,shotgun:me?.nextgen?.shotgun ?? null},
+      charge:me?.nextgen?.charge ?? 0, resonant:!!me?.nextgen?.resonant, transitioning:!!me?.nextgen?.transitioning,
+      creature:me?.creatureOwned && me.species ? creaturePower(me.species,me.creatureXp ?? 0).name : null,
+      creatureXp:me?.creatureXp ?? 0,
+      target:revive?'V · Revive teammate (1 bandage)':target?`E · ${target.label}`:this.note,
+      note:this.note, reviveProgress:me?.nextgen?.revivingTarget ? me.nextgen.reviveProgress : null,
+      downedSeconds:(me?.nextgen?.downedMs ?? 0)/1000, squad, objective:objective.label
+    });
   }
   getPosition() { return this.visualPosition; }
   getLandscapeInfo() { return {style:NEXTGEN_MAP_ID,seed:NEXTGEN_TERRAIN_SEED,groundHeight:NEXTGEN_MAP.heightAt(0,0),position:this.avatar.root.position.toArray()}; }
   getInfo() {
-    return { connected: this.isReady(), room: this.net.code, id: this.net.id, peers: [...this.net.peers.keys()], remotePlayers: [...this.net.peers.values()], self: this.net.self, horde: this.net.horde, arsenal: this.arsenal, collection: this.collection, mission: this.mission, inventory: this.inventory, fieldMarkers: this.field.info(), companionViews: [...this.companions].map(([id, view]) => ({ id, ...view.info() })), acceptedShots: this.acceptedShots, confirmedHits: this.confirmedHits, shotEffects: this.effects.count, infectedViews: [...this.enemies].map(([id, view]) => ({ id, ...view.info() })), acceptedActions: this.acceptedActions, acceptedPulses: this.acceptedPulses, acceptedStrikes: this.acceptedStrikes, acceptedRevives: this.acceptedRevives, acceptedResonantShots: this.acceptedResonantShots, acceptedShotgunShots: this.acceptedShotgunShots, acceptedRewards: this.acceptedRewards };
+    return { connected: this.isReady(), room: this.net.code, id: this.net.id, peers: [...this.net.peers.keys()], remotePlayers: [...this.net.peers.values()], self: this.net.self, horde: this.net.horde, arsenal: this.arsenal, collection: this.collection, mission: this.mission, inventory: this.inventory, fieldMarkers: this.field.info(), fieldVisuals: this.field.visualInfo(), inventoryOpen:this.inventoryOpen, companionViews: [...this.companions].map(([id, view]) => ({ id, ...view.info() })), acceptedShots: this.acceptedShots, confirmedHits: this.confirmedHits, shotEffects: this.effects.count, infectedViews: [...this.enemies].map(([id, view]) => ({ id, ...view.info() })), acceptedActions: this.acceptedActions, acceptedPulses: this.acceptedPulses, acceptedStrikes: this.acceptedStrikes, acceptedRevives: this.acceptedRevives, acceptedResonantShots: this.acceptedResonantShots, acceptedShotgunShots: this.acceptedShotgunShots, acceptedRewards: this.acceptedRewards, extraction:this.hud.getExtractionInfo(), accountXp:this.accountXp, accountExtractions:this.accountExtractions };
   }
   dispose() {
     this.disposed = true; this.abort.abort(); clearTimeout(this.timeout); this.net.disconnect(); this.resetInput();
@@ -340,6 +390,6 @@ export class OnlineSession {
     for (const view of this.companions.values()) view.dispose();
     this.companions.clear(); this.pendingPulses.clear(); this.pendingStrikes.clear(); this.field.dispose();
     this.peers.clear(); this.enemies.clear(); this.infectedPool.dispose(); this.effects.dispose(); this.feedback.dispose(); this.world.removeFromParent();
-    this.geometry.dispose(); this.enemyMaterial.dispose(); this.panel.remove(); this.prompt.remove();this.reticle.remove();
+    this.geometry.dispose(); this.enemyMaterial.dispose(); this.hud.dispose();this.squadOverlay.dispose();this.primaryByPlayer.clear();
   }
 }
