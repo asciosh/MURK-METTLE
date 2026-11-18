@@ -256,14 +256,18 @@ async mount(): Promise<void> {
     }
 
       if (this.playable) {
-      const session = new PlayableSession(
-        scene,
-        camera,
-        this.canvas,
-        terrain,
-        new URLSearchParams(window.location.search)
-          .get('training') === '1'
-      );
+        const params = new URLSearchParams(
+          window.location.search
+        );
+
+        const session = new PlayableSession(
+          scene,
+          camera,
+          this.canvas,
+          terrain,
+          params.get('training') === '1',
+          import.meta.env.DEV && params.get('benchmark') === '1'
+        );
 
     this.session = session;
 

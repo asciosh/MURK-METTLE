@@ -44,11 +44,11 @@ legacy game runnable.
 **Done when:** a nextgen scene renders PBR-lit terrain/vegetation at the perf budget
 with tests and a recorded benchmark.
 
-## M02 — Character & Animation Foundation ☐
+## M02 — Character & Animation Foundation ☑
 
 - [x] Third-person character controller: camera-relative movement, sprint/dodge/stamina,
       pointer-lock aim, collision against nextgen terrain.
-- [ ] Original survivor and infected character models with rigged skeletons and
+- [x] Original survivor and infected character models with rigged skeletons and
       locomotion/attack/hit/death animation sets (provenance recorded).
       Remaining: survivor hit and death animations.
 - [x] Animation state machine with blending, layering for aim/upper-body actions.

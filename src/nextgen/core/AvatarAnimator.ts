@@ -8,7 +8,9 @@ export type AvatarAnimation =
   | 'jumpstart'
   | 'jumploop'
   | 'jumpland'
-  | 'dodge';
+  |  'dodge'
+  | 'hit'
+  | 'death';
 
 export interface AvatarMotion {
   speed: number;
@@ -19,6 +21,8 @@ export interface AvatarMotion {
   shoot?: boolean;
   reload?: boolean;
   aimPitch?: number;
+  hit?: boolean;
+  dead?: boolean;
 }
 
 interface AimBone {
@@ -30,7 +34,9 @@ interface AimBone {
 const ONE_SHOT_MS: Partial<Record<AvatarAnimation, number>> = {
   jumpstart: 350,
   jumpland: 350,
-  dodge: 650
+  dodge: 650,
+  hit: 333,
+  death: 2375
 };
 
 const AIM_BLEND_MS = 150;
@@ -216,7 +222,7 @@ export class AvatarAnimator {
     this.activeClip === 'walk' ||
     this.activeClip === 'run';
 
-  if (
+  if ( motion.dead ||
     !locomotion ||
     motion.airborne ||
     motion.dodging ||
@@ -309,8 +315,14 @@ export class AvatarAnimator {
   this.aimApplied = true;
 }
 
-  private setAnimation(name: AvatarAnimation): void {
-    if (this.disposed || this.activeClip === name) {
+  private setAnimation(
+    name: AvatarAnimation,
+    restart = false
+  ): void {
+    if (
+      this.disposed ||
+      (this.activeClip === name && !restart)
+    ) {
       return;
     }
 
@@ -386,7 +398,18 @@ export class AvatarAnimator {
     // the base animation again. Prevents pose drift.
     this.restoreBasePose();
 
-    if (
+    if (motion.dead) {
+      this.setAnimation(
+        this.actions.has('death') ? 'death' : 'idle'
+      );
+    } else if (motion.hit && this.actions.has('hit')) {
+      this.setAnimation('hit', true);
+    } else if (
+      this.activeClip === 'hit' &&
+      this.elapsedMs < 333
+    ) {
+      // Finish the current hit reaction.
+    } else if (
       motion.dodging ||
       (
         !motion.airborne &&
@@ -429,7 +452,7 @@ export class AvatarAnimator {
       this.setAnimation(this.locomotion(motion));
     }
 
-    this.wasAirborne = motion.airborne;
+    this.wasAirborne = !motion.dead && motion.airborne;
 
     if (
       this.current &&

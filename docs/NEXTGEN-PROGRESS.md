@@ -6,6 +6,32 @@ what was done, how it was verified, and what remains. See the
 
 ---
 
+## 2026-11-18 — M02 Final Acceptance
+
+**Status:** Complete.
+
+- Survivor and infected rigged character models.
+- Survivor Hit and Death animations.
+- Damage reactions and terminal death pose.
+- Restart restores normal character animations.
+- Automated combat performance benchmark.
+
+**Hardware benchmark:**
+
+- GPU: Intel Arc (Xe-LPG).
+- Native WebGPU, 1920 × 1080, Balanced.
+- Duration: 30.08 seconds.
+- Average FPS: 60.
+- P95 frame time: 16.8 ms.
+- Worst frame time: 17.1 ms.
+- Frames over 25 ms: 0.
+- Peak draw calls: 325.
+- Peak triangles: 428,643.
+- Three active infected and 36 automated shots.
+- Benchmark-only player damage protection.
+
+**Next:** M03 — Combat & Survival Core.
+
 ## 2026-11-18 — M02/M03: Infected, Combat and Hordes
 
 **Status:** Implemented.

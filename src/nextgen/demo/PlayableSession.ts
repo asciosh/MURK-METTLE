@@ -56,7 +56,8 @@ export class PlayableSession {
     private readonly camera: THREE.PerspectiveCamera,
     private readonly canvas: HTMLCanvasElement,
     private readonly terrain: TerrainGenerator,
-    private readonly training = false
+    private readonly training = false,
+    private readonly benchmark = false
   ) {
     this.controller = new CharacterController({
       speed: SURVIVAL.walkSpeed,
@@ -430,6 +431,7 @@ step(deltaTimeMs: number): void {
   const combat = this.combat.step(deltaTimeMs, {
     enabled:
       aiming &&
+      this.avatar.getActiveClip() !== 'hit' &&
       !this.state.airborne &&
       !this.state.dodging,
 
@@ -441,18 +443,9 @@ step(deltaTimeMs: number): void {
     this.fireShot();
   }
 
-  this.avatar.animate(deltaTimeMs, {
-    speed: this.combat.alive ? speed : 0,
-    sprinting: this.combat.alive && this.state.sprinting,
-    airborne: this.combat.alive && this.state.airborne,
-    dodging: this.combat.alive && this.state.dodging,
-    aiming,
-    aimPitch: this.followCamera.getAimPitch(),
-    shoot: combat.shot,
-    reload: combat.reloadStarted
-  });
+  const healthBefore = this.combat.getState().health;
 
-  // Accumulate damage from every successful infected attack.
+  // Accumulate damage from every infected attack.
   let totalDamage = 0;
 
   for (const infected of this.infected) {
@@ -467,9 +460,9 @@ step(deltaTimeMs: number): void {
     }
   }
 
-  // Apply combined damage without shared damage immunity.
-  if (!this.training && totalDamage > 0) {
-    this.combat.takeDamage(totalDamage, 0);
+  // Apply combined damage without shared immunity.
+  if (!this.training && !this.benchmark && totalDamage > 0) {
+      this.combat.takeDamage(totalDamage, 0);
 
     if (!this.combat.alive) {
       this.onReset();
@@ -479,6 +472,25 @@ step(deltaTimeMs: number): void {
       }
     }
   }
+
+  // Animate using the updated combat state.
+  this.avatar.animate(deltaTimeMs, {
+    speed: this.combat.alive ? speed : 0,
+    sprinting: this.combat.alive && this.state.sprinting,
+    airborne: this.combat.alive && this.state.airborne,
+    dodging: this.combat.alive && this.state.dodging,
+    aiming: this.combat.alive && aiming,
+    aimPitch: this.followCamera.getAimPitch(),
+    shoot: this.combat.alive && combat.shot,
+    reload: this.combat.alive && combat.reloadStarted,
+    hit:
+      this.combat.alive &&
+      (
+        this.combat.getState().health < healthBefore ||
+        (this.benchmark && totalDamage > 0)
+      ),
+    dead: !this.combat.alive
+  });
 
   separateInfected(this.infected, deltaTimeMs);
 
@@ -563,10 +575,11 @@ step(deltaTimeMs: number): void {
     };
   }
 
-  getCombatInfo() {
+getCombatInfo() {
   return {
     ...this.combat.getState(),
-    training: this.training
+    training: this.training,
+    benchmark: this.benchmark
   };
 }
 
@@ -633,10 +646,6 @@ damageInfected(index: number, amount: number): boolean {
 
     this.clearInfected();
     this.infectedPool.dispose();
-
-    this.infected.length = 0;
-    this.infectedPool.dispose();
-
     this.avatar.dispose();
     this.hud.dispose();
   }

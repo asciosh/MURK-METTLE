@@ -164,6 +164,10 @@ getWeaponAction() {
   return this.animator?.getWeaponAction() ?? null;
 }
 
+getActiveClip() {
+  return this.animator?.getActiveClip() ?? null;
+}
+
     getModelInfo() {
       return {
         status: this.modelStatus,
