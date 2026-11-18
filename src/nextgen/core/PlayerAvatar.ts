@@ -2,6 +2,8 @@ import * as THREE from 'three/webgpu';
 import { SurvivorModel } from './SurvivorModel.ts';
 import type { CharacterControllerResult } from './CharacterController.ts';
 import { PistolProp } from './PistolProp.ts';
+import { LongGunProp, HAND_POSITION, HAND_ROTATION, supportLongGun } from './LongGunProp.ts';
+import type { PrimaryWeapon, WeaponId } from './EquipmentInventory.ts';
 import type { LootKind } from './LootField.ts';
 import {
   AvatarAnimator,
@@ -22,6 +24,16 @@ export class PlayerAvatar {
   private readonly model = new SurvivorModel();
   private animator: AvatarAnimator | null = null;
   private weapon: PistolProp | null = null;
+  private primaryProp: LongGunProp | null = null;
+  private selectedWeapon: WeaponId = 'pistol';
+  private primaryId: PrimaryWeapon | null = null;
+  private weaponHand: THREE.Bone | null = null;
+  private belt: THREE.Bone | null = null;
+  private back: THREE.Bone | null = null;
+  private drawnWeapon: WeaponId | null = null;
+  private heldKind: LootKind | null = null;
+  private drawAllowed = true;
+  private switchingWeapon = false;
   private heldAmmo: THREE.Mesh | null = null;
   private heldBandage: THREE.Mesh | null = null;
 
@@ -141,9 +153,15 @@ export class PlayerAvatar {
     const hand = this.model.root.getObjectByName('hand_r');
 
     if (hand instanceof THREE.Bone) {
+      this.weaponHand = hand;
       this.weapon = new PistolProp(hand);
       this.createHeldLoot(hand);
     }
+    const belt = this.model.root.getObjectByName('pelvis');
+    const back = this.model.root.getObjectByName('spine_03');
+    this.belt = belt instanceof THREE.Bone ? belt : null;
+    this.back = back instanceof THREE.Bone ? back : null;
+    this.setEquipment(this.selectedWeapon,this.primaryId);
 
     this.modelStatus = 'ready';
 
@@ -191,14 +209,45 @@ private createHeldLoot(hand: THREE.Bone): void {
 }
 
 setHeldLoot(kind: LootKind | null): void {
-  if (this.heldAmmo) this.heldAmmo.visible = kind === 'ammo';
+  this.heldKind = kind;
+  if (this.heldAmmo) this.heldAmmo.visible = kind === 'ammo' || kind === 'rifle-ammo' || kind === 'shotgun-ammo';
   if (this.heldBandage) this.heldBandage.visible = kind === 'bandage';
+  this.presentEquipment();
+}
+
+setEquipment(active: WeaponId, primary: PrimaryWeapon | null, switching = false): void {
+  this.switchingWeapon=switching;
+  this.selectedWeapon=active;this.primaryId=primary;
+  if (this.primaryProp && this.primaryProp.id !== primary) { this.primaryProp.dispose();this.primaryProp=null; }
+  if (primary && this.weaponHand && !this.primaryProp) this.primaryProp=new LongGunProp(primary);
+}
+
+private presentEquipment(): void {
+  if (!this.weaponHand) return;
+  const aiming=(this.animator?.getAimWeight()??0)>=.5 && this.drawAllowed && !this.heldKind && !this.switchingWeapon;
+  this.drawnWeapon=aiming?this.selectedWeapon:null;
+  if(this.weapon){
+    const r=this.weapon.root;
+    if(this.drawnWeapon==='pistol'){
+      if(r.parent!==this.weaponHand)this.weaponHand.add(r);
+      r.position.copy(HAND_POSITION);r.quaternion.copy(HAND_ROTATION);r.visible=true;
+    }else if(this.belt){
+      if(r.parent!==this.belt)this.belt.add(r);
+      r.position.set(-.195,-.039798,-.070232);r.quaternion.set(0,.483037,.8756,0).normalize();r.visible=true;
+    }else r.visible=false;
+  }
+  if(this.primaryProp){
+    if(this.drawnWeapon===this.primaryProp.id || this.heldKind===this.primaryProp.id) this.primaryProp.attachHand(this.weaponHand);
+    else if(this.back)this.primaryProp.attachBack(this.back);
+    else this.primaryProp.root.visible=false;
+  }
 }
 
 getMuzzlePosition(target: THREE.Vector3): boolean {
-  if (this.disposed || !this.weapon?.root.visible) return false;
-  this.weapon.getMuzzlePosition(target);
-  return true;
+  if (this.disposed) return false;
+  if (this.drawnWeapon==='pistol'&&this.weapon){this.weapon.getMuzzlePosition(target);return true;}
+  if (this.primaryProp&&this.drawnWeapon===this.primaryProp.id){this.primaryProp.muzzle.getWorldPosition(target);return true;}
+  return false;
 }
 
 getActiveClip() {
@@ -215,8 +264,10 @@ getActiveClip() {
         aimPitch: this.animator?.getAimPitch() ?? 0,
         weaponAttached: this.weapon !== null,
         backpackAttached: !!this.model.root.getObjectByName('SurvivalBackpack'),
-        heldLoot: this.heldAmmo?.visible ? 'ammo' : this.heldBandage?.visible ? 'bandage' : null,
-        weaponVisible: this.weapon?.root.visible ?? false,
+        heldLoot: this.weaponHand ? this.heldKind : null,
+        weaponVisible: this.drawnWeapon !== null,
+        equippedWeapon: this.selectedWeapon,
+        holsteredPrimary: this.primaryProp?.root.parent===this.back ? this.primaryId : null,
         weaponAction: this.animator?.getWeaponAction() ?? null
       };
     }
@@ -225,11 +276,12 @@ getActiveClip() {
       deltaTimeMs: number,
       motion: AvatarMotion
     ): void {
-      this.animator?.update(deltaTimeMs, motion);
-
-      this.weapon?.update(
-        this.animator?.getAimWeight() ?? 0
-      );
+      this.drawAllowed=!motion.dead&&!motion.pickingUp;
+      this.animator?.update(deltaTimeMs, { ...motion, weapon:this.selectedWeapon });
+      this.presentEquipment();
+      if(this.primaryProp&&this.drawnWeapon===this.primaryProp.id&&this.animator?.getWeaponAction()!=='reload'){
+        supportLongGun(this.model.root,this.primaryProp.support,this.animator?.getAimWeight()??0);
+      }
     }
 
   update(
@@ -264,6 +316,7 @@ getActiveClip() {
 
     this.weapon?.dispose();
     this.weapon = null;
+    this.primaryProp?.dispose();this.primaryProp=null;
 
     this.heldAmmo?.removeFromParent();
     this.heldBandage?.removeFromParent();

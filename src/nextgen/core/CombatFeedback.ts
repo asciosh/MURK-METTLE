@@ -1,7 +1,8 @@
 import * as THREE from 'three/webgpu';
+import type { WeaponId } from './EquipmentInventory.ts';
 
 type Position = readonly [number, number, number];
-type Sound = 'shot' | 'impact' | 'punch' | 'swing' | 'reload' |
+type Sound = 'shot' | 'rifle-shot' | 'shotgun-shot' | 'impact' | 'punch' | 'swing' | 'reload' |
   'bandage' | 'healed' | 'hurt' | 'pickup';
 
 interface SoundSpec {
@@ -15,6 +16,8 @@ interface SoundSpec {
 // Original synthesized sounds. No asset downloads or external audio files.
 const SOUNDS: Record<Sound, SoundSpec> = {
   shot:    { duration: 0.13, volume: 0.19, frequency: 1600, endFrequency: 180, noise: true },
+  'rifle-shot': { duration: 0.10, volume: 0.15, frequency: 2100, endFrequency: 240, noise: true },
+  'shotgun-shot': { duration: 0.21, volume: 0.24, frequency: 760, endFrequency: 85, noise: true },
   impact:  { duration: 0.08, volume: 0.10, frequency: 800, endFrequency: 160, noise: true },
   punch:   { duration: 0.10, volume: 0.14, frequency: 330, endFrequency: 75, noise: true },
   swing:   { duration: 0.14, volume: 0.05, frequency: 510, endFrequency: 220, noise: true },
@@ -162,10 +165,10 @@ export class CombatFeedback {
     try { this.audio.play(name); } catch { /* Audio unavailable. */ }
   }
 
-  shot(): void {
+  shot(weapon: WeaponId = 'pistol'): void {
     if (this.disposed) return;
     this.flashMs = 85;
-    this.sound('shot');
+    this.sound(weapon==='rifle'?'rifle-shot':weapon==='shotgun'?'shotgun-shot':'shot');
   }
 
   impact(position: Position, attacker: Position, melee: boolean): void {

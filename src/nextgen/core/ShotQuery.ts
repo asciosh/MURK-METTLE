@@ -1,3 +1,4 @@
+import { WEAPONS, type WeaponId } from './EquipmentInventory.ts';
 type Vec3 = readonly [number, number, number];
 
 export interface ShotTarget {
@@ -169,6 +170,29 @@ export function findShotTarget(
   }
 
   return nearest;
+}
+
+// One trigger pull; five deterministic pellets for the shotgun. Group damage
+// by target so a single blast cannot repeatedly restart its hit animation.
+export function findWeaponHits(weapon: WeaponId, origin: Vec3, direction: Vec3,
+  shooter: Vec3, targets: readonly ShotTarget[], heightAt: (x:number,z:number)=>number) {
+  const spec = WEAPONS[weapon];
+  const offsets: readonly (readonly [number,number])[] = weapon === 'shotgun'
+    ? [[0,0],[-.035,.02],[.035,.02],[-.025,-.025],[.025,-.025]] : [[0,0]];
+  const len = Math.hypot(...direction);
+  if (!Number.isFinite(len) || len < 1e-6) return [];
+  const [dx,dy,dz] = direction.map(v=>v/len) as [number,number,number];
+  const horizontal = Math.hypot(dx,dz);
+  const rx = horizontal > 1e-6 ? -dz/horizontal : 1;
+  const rz = horizontal > 1e-6 ? dx/horizontal : 0;
+  const up: Vec3 = [-rz*dy, rz*dx-rx*dz, rx*dy];
+  const hits = new Map<number,number>();
+  for (const [x,y] of offsets) {
+    const ray: Vec3 = [dx+rx*x+up[0]*y,dy+up[1]*y,dz+rz*x+up[2]*y];
+    const index = findShotTarget(origin,ray,shooter,targets,spec.range,heightAt);
+    if (index !== null) hits.set(index,(hits.get(index)??0)+1);
+  }
+  return [...hits].map(([index,pellets])=>({index,damage:spec.damage*pellets/offsets.length}));
 }
 
 // The legacy melee cone is retained, but visibility uses the NEXTGEN terrain.

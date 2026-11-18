@@ -502,3 +502,12 @@ under `src/nextgen/` with fixed render loop and lifecycle tests.
 - v0.27 "The Visual Leap" merged as PR #15; `main` deployable and playable.
 - Verified at M00 start: `npm test` (67 pass), `npm run typecheck` (pass),
   `npm run build` (pass) on `main` = `1bb0cd2`.
+
+
+### M03 — equipment and field inventory (2026-11-18)
+
+- Added local NEXTGEN primary/secondary slots, pistol/rifle/shotgun behavior, independent ammunition reserves, weapon pickups/drops preserving loaded magazines, and a keyboard field-inventory panel.
+- Added original procedural rifle/shotgun props, back/belt holsters, support-hand alignment, retimed compatible aim/fire/reload poses, distinct synthesized firing audio, recoil, and terrain-aware grouped shotgun pellets. Existing character GLBs and license records are unchanged.
+- Verification: 32 focused pure Node tests passed against the supplied source archive; TypeScript syntax and new browser test syntax parsed. Full repository typecheck/build and real browser equipment/loot/combat regression tests remain operator verification tasks.
+- NEXTGEN-only changes; no changes to shared/server rules, legacy gameplay, save schemas, room protocol or deployment. M03 remains open; these local equipment rules are not authoritative co-op validation.
+- Exact next unfinished task: weapon transformations and creature combat foundation (plus dedicated rifle/shotgun animation polish), then co-op validation according to the roadmap.

@@ -1,4 +1,5 @@
 import type { LootKind } from './LootField.ts';
+import { LOOT_KINDS } from './EquipmentInventory.ts';
 
 export const PICKUP = Object.freeze({
   durationMs: 1350,
@@ -23,7 +24,7 @@ export class PickupController {
 
   begin(id: number, kind: LootKind): boolean {
     if (this.active || !Number.isSafeInteger(id) || id < 1 ||
-        (kind !== 'ammo' && kind !== 'bandage')) return false;
+        !LOOT_KINDS.includes(kind)) return false;
     this.targetId = id;
     this.kind = kind;
     this.elapsedMs = 0;

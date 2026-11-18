@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { WeaponPoseLayer } from './WeaponPoseLayer.ts';
+import type { WeaponId } from './EquipmentInventory.ts';
 
 export type AvatarAnimation =
   | 'idle'
@@ -16,6 +17,7 @@ export type AvatarAnimation =
   | 'pickup';
 
 export interface AvatarMotion {
+  weapon?: WeaponId;
   speed: number;
   sprinting: boolean;
   airborne: boolean;
@@ -247,7 +249,8 @@ export class AvatarAnimator {
     dtMs,
     motion.aiming === true,
     motion.shoot === true,
-    motion.reload === true
+    motion.reload === true,
+    motion.weapon ?? 'pistol'
   );
 
   const step = dtMs / AIM_BLEND_MS;

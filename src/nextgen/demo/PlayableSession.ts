@@ -20,10 +20,11 @@ import {
   CombatController
 } from '../core/CombatController';
 
-import { findShotTarget, findMeleeTarget } from '../core/ShotQuery';
+import { findWeaponHits, findMeleeTarget } from '../core/ShotQuery';
 import { LootField, type LootItem } from '../core/LootField';
 import { PickupController, PICKUP } from '../core/PickupController';
 import { CombatFeedback } from '../core/CombatFeedback';
+import { WEAPONS, ammoKind, fullLootNotice, lootLabel, INVENTORY_ROWS, inventoryDropKind, type WeaponId, type LootKind } from '../core/EquipmentInventory';
 import {
   HordeDirector,
   createWaveSpawns,
@@ -55,11 +56,13 @@ export class PlayableSession {
   private previousPosition: [number, number, number];
   private aimPressed = false;
   private shootPressed = false;
+  private fireHeld = false;
   private reloadPressed = false;
   private meleePressed = false;
   private bandagePressed = false;
   private pickupPressed = false;
   private inventoryOpen = false;
+  private inventoryIndex = 0;
   private readonly loot = new LootField();
   private readonly pickup = new PickupController();
   private pickupFacing: [number, number, number] | null = null;
@@ -110,6 +113,7 @@ export class PlayableSession {
     });
 
   this.spawnWave();
+  this.seedEquipment();
 
     this.canvas.addEventListener('click', this.onClick);
 
@@ -246,9 +250,12 @@ restart(): void {
   this.lootNoticeMs = 0;
   this.feedback.reset();
   this.inventoryOpen = false;
+  this.inventoryIndex = 0;
+  this.avatar.setEquipment('pistol',null);
   this.infectedAttackHits = 0;
 
   this.spawnWave();
+  this.seedEquipment();
 
   this.avatar.animate(16, {
     speed: 0,
@@ -318,12 +325,31 @@ getHordeInfo() {
 
     if (!this.isLocked() || !this.combat.alive) return;
 
-    if (['KeyF', 'KeyH', 'KeyE', 'KeyI'].includes(event.code)) {
+    if (event.code === 'KeyI') {
+      if (!event.repeat) {
+        this.inventoryOpen = !this.inventoryOpen;
+        this.keyboard.reset(); this.clearAim(); this.combat.interruptActions();
+        if(this.pickup.active)this.cancelPickup();
+        this.meleePressed=this.bandagePressed=this.pickupPressed=false;
+      }
+      event.preventDefault();return;
+    }
+    if (event.code === 'Digit1' || event.code === 'Digit2') {
+      if (!event.repeat) this.requestWeapon(event.code==='Digit1'?'pistol':this.combat.getState().equipment.primary);
+      event.preventDefault();return;
+    }
+    if(this.inventoryOpen){
+      if(!event.repeat && (event.code==='ArrowUp'||event.code==='ArrowDown')) {
+        this.inventoryIndex=(this.inventoryIndex+(event.code==='ArrowUp'?-1:1)+INVENTORY_ROWS.length)%INVENTORY_ROWS.length;
+      }
+      if(!event.repeat&&event.code==='KeyG')this.dropSelectedItem();
+      event.preventDefault();return;
+    }
+    if (['KeyF', 'KeyH', 'KeyE'].includes(event.code)) {
       if (!event.repeat) {
         if (event.code === 'KeyF') this.meleePressed = true;
         if (event.code === 'KeyH') this.bandagePressed = true;
         if (event.code === 'KeyE') this.pickupPressed = true;
-        if (event.code === 'KeyI') this.inventoryOpen = !this.inventoryOpen;
       }
       event.preventDefault();
       return;
@@ -357,7 +383,7 @@ getHordeInfo() {
   };
 
   private readonly onMouseMove = (event: MouseEvent) => {
-    if (!this.isLocked()) return;
+    if (!this.isLocked() || this.inventoryOpen) return;
 
     this.followCamera.rotate(
       event.movementX,
@@ -366,7 +392,7 @@ getHordeInfo() {
   };
 
 private readonly onMouseDown = (event: MouseEvent) => {
-  if (this.disposed || !this.isLocked()) return;
+  if (this.disposed || !this.isLocked() || this.inventoryOpen) return;
 
   if (event.button === 2) {
     event.preventDefault();
@@ -376,10 +402,12 @@ private readonly onMouseDown = (event: MouseEvent) => {
   if (event.button === 0 && this.aimPressed) {
     event.preventDefault();
     this.shootPressed = true;
+    this.fireHeld = true;
   }
 };
 
 private readonly onMouseUp = (event: MouseEvent) => {
+  if(event.button===0)this.fireHeld=false;
   if (event.button === 2) {
     this.clearAim();
   }
@@ -392,6 +420,7 @@ private readonly onContextMenu = (event: MouseEvent) => {
 private clearAim(): void {
   this.aimPressed = false;
   this.shootPressed = false;
+  this.fireHeld = false;
   this.reloadPressed = false;
 
   this.controller.resetAim();
@@ -399,6 +428,7 @@ private clearAim(): void {
 }
 
 private readonly onReset = () => {
+  this.inventoryOpen = false;
   this.pickup.cancel();
   this.pickupFacing = null;
   this.avatar.setHeldLoot(null);
@@ -419,12 +449,6 @@ private readonly onPointerLockChange = () => {
 private fireShot(): void {
   this.camera.getWorldDirection(this.shotDirection);
 
-  const direction: [number, number, number] = [
-    this.shotDirection.x,
-    this.shotDirection.y,
-    this.shotDirection.z
-  ];
-
   const origin: [number, number, number] = [
     this.camera.position.x,
     this.camera.position.y,
@@ -437,25 +461,44 @@ private fireShot(): void {
     this.state.position[2]
   ];
 
-  const target = findShotTarget(
-    origin,
-    direction,
-    shooter,
-    this.infected.map(enemy => enemy.getState()),
-    COMBAT.range,
-    (x, z) => this.terrain.heightAt(x, z)
-  );
-
-  if (target === null) return;
-
-  const enemy = this.infected[target];
-
-  if (enemy.damage(COMBAT.bulletDamage)) {
-    const killed = enemy.getState().health === 0;
-    this.combat.recordHit(killed);
-    this.feedback.impact(enemy.getState().position, this.state.position, false);
-    if (killed) this.dropLoot(enemy);
+  const targets=this.infected.map(enemy=>enemy.getState());
+  const impacts=findWeaponHits(this.combat.weaponId,origin,
+    [this.shotDirection.x,this.shotDirection.y,this.shotDirection.z],shooter,targets,
+    (x,z)=>this.terrain.heightAt(x,z));
+  let hit=false;const killed:InfectedAvatar[]=[];
+  for(const {index,damage} of impacts){
+    const enemy=this.infected[index];if(!enemy||!enemy.damage(damage))continue;
+    hit=true;this.feedback.impact(enemy.getState().position,this.state.position,false);
+    if(enemy.getState().health===0)killed.push(enemy);
   }
+  if(hit){this.combat.recordShotHits(killed.length);for(const enemy of killed)this.dropLoot(enemy);}
+  if(this.combat.weaponId!=='pistol')this.followCamera.rotate(0,this.combat.weaponId==='shotgun'?-10:-3);
+}
+
+private requestWeapon(id:WeaponId|null):void {
+  if(!id){this.showLootNotice('NO PRIMARY WEAPON');return;}
+  if(id===this.combat.weaponId)return;
+  if(this.pickup.active||this.state.airborne||this.state.dodging||this.avatar.getActiveClip()==='hit'||this.avatar.getWeaponAction()!==null||!this.combat.selectWeapon(id)){
+    this.showLootNotice('WEAPON BUSY');return;
+  }
+  this.clearAim();this.feedback.sound('reload');this.showLootNotice('EQUIPPING '+WEAPONS[id].label.toUpperCase());
+}
+
+private dropSelectedItem():void {
+  const kind=inventoryDropKind(this.inventoryIndex,this.combat.getState().equipment.primary);
+  if(!kind){this.showLootNotice('EMPTY SLOT');return;}
+  const p=this.state.position, f=this.state.facing;
+  const x=p[0]+f[0]*.65,z=p[2]+f[2]*.65,y=this.terrain.heightAt(x,z);
+  const amount=kind==='ammo'?12:kind==='rifle-ammo'?24:kind==='shotgun-ammo'?5:1;
+  const ok=Number.isFinite(y)&&this.combat.dropItem(kind,amount,(k,n,loaded)=>this.loot.spawn(k,n,[x,y,z],loaded));
+  this.showLootNotice(ok?'DROPPED '+lootLabel(kind):'CANNOT DROP ITEM');
+}
+
+private seedEquipment():void {
+  if(this.benchmark||(this.training&&new URLSearchParams(window.location.search).get('equipment')!=='1'))return;
+  const p=this.state.position;
+  const drops: [LootKind,number,number,number][]=[['rifle',1,-1.7,-3.2],['rifle-ammo',48,-2.1,-3.5],['shotgun',1,1.7,-3.2],['shotgun-ammo',15,2.1,-3.5]];
+  for(const [kind,count,dx,dz] of drops){const x=p[0]+dx,z=p[2]+dz,y=this.terrain.heightAt(x,z);if(Number.isFinite(y))this.loot.spawn(kind,count,[x,y,z]);}
 }
 
 private dropLoot(enemy: InfectedAvatar): void {
@@ -463,7 +506,8 @@ private dropLoot(enemy: InfectedAvatar): void {
   const ground = this.terrain.heightAt(position[0], position[2]);
   if (!Number.isFinite(ground)) return;
   const bandage = this.combat.getState().kills % 2 === 0;
-  this.loot.spawn(bandage ? 'bandage' : 'ammo', bandage ? 1 : 12,
+  const activeAmmo=ammoKind(this.combat.weaponId);
+  this.loot.spawn(bandage ? 'bandage' : activeAmmo, bandage ? 1 : activeAmmo==='shotgun-ammo'?5:12,
     [position[0], ground, position[2]]);
 }
 
@@ -531,14 +575,14 @@ step(deltaTimeMs: number): void {
   const aiming =
     this.combat.alive &&
     this.state.aiming &&
-    this.isLocked();
+    this.isLocked() && !this.inventoryOpen && !this.combat.switching;
 
   const weaponReady =
     this.avatar.getWeaponAction() === null;
 
   const actionAllowed = this.combat.alive &&
     this.avatar.getActiveClip() !== 'hit' &&
-    !this.state.airborne && !this.state.dodging;
+    !this.state.airborne && !this.state.dodging && !this.inventoryOpen && !this.combat.switching;
 
   const combat = this.combat.step(deltaTimeMs, {
     enabled:
@@ -547,7 +591,7 @@ step(deltaTimeMs: number): void {
       !this.state.airborne &&
       !this.state.dodging,
 
-    shoot: this.shootPressed && weaponReady,
+    shoot: (this.shootPressed || (this.fireHeld && this.combat.weaponSpec.automatic)) && weaponReady,
     reload: this.reloadPressed && weaponReady,
     melee: this.meleePressed && weaponReady,
     bandage: this.bandagePressed && weaponReady,
@@ -558,7 +602,7 @@ step(deltaTimeMs: number): void {
   });
 
   if (combat.shot) {
-    this.feedback.shot();
+    this.feedback.shot(this.combat.weaponId);
     this.fireShot();
   }
   if (combat.meleeStarted) this.feedback.sound('swing');
@@ -602,6 +646,7 @@ step(deltaTimeMs: number): void {
   const damaged = this.combat.getState().health < healthBefore ||
     (this.benchmark && totalDamage > 0);
   if (damaged) this.feedback.damage();
+  if(damaged&&this.inventoryOpen)this.inventoryOpen=false;
   // Contact comes after damage resolution: an interrupted reach never transfers loot.
   const inventory = this.combat.getState();
   if (damaged || !actionAllowed || !this.combat.alive || !this.isLocked()) {
@@ -616,7 +661,7 @@ step(deltaTimeMs: number): void {
       const near = this.loot.nearby(this.state.position, this.canCollectLoot);
       if (!near) this.showLootNotice('NO LOOT NEARBY');
       else if (!this.canCollectLoot(near)) this.showLootNotice(
-        near.kind === 'ammo' ? 'AMMO RESERVE FULL' : 'BANDAGES FULL');
+        fullLootNotice(near.kind));
       else {
         const dx = near.position[0] - this.state.position[0];
         const dz = near.position[2] - this.state.position[2];
@@ -635,22 +680,23 @@ step(deltaTimeMs: number): void {
   }
   const contact = this.pickup.advance(deltaTimeMs);
   if (contact !== null) {
-    const picked = this.loot.collectById(contact, this.state.position, (kind, amount) =>
-      kind === 'ammo' ? this.combat.addReserveAmmo(amount) : this.combat.addBandages(amount),
+    const picked = this.loot.collectById(contact, this.state.position, (kind, amount, item) =>
+      this.combat.collectLoot(kind,amount,item.loadedRounds),
       PICKUP.reach);
     if (picked.status === 'collected') {
       this.pickup.markCollected();
-      this.showLootNotice('+' + picked.amount +
-        (picked.kind === 'ammo' ? ' AMMO' : (picked.amount === 1 ? ' BANDAGE' : ' BANDAGES')));
+      this.showLootNotice('+' + picked.amount + ' ' + lootLabel(picked.kind!,picked.amount));
       this.feedback.sound('pickup');
     } else {
       this.pickup.cancel();
       this.showLootNotice(picked.status === 'full'
-        ? (picked.kind === 'ammo' ? 'AMMO RESERVE FULL' : 'BANDAGES FULL')
+        ? fullLootNotice(picked.kind!)
         : 'LOOT NO LONGER AVAILABLE');
     }
   }
   // Animate using the updated combat state.
+  const equipped=this.combat.getState().equipment;
+  this.avatar.setEquipment(equipped.active,equipped.primary,this.combat.switching);
   this.avatar.animate(deltaTimeMs, {
     speed: this.combat.alive ? speed : 0,
     sprinting: this.combat.alive && this.state.sprinting,
@@ -745,7 +791,8 @@ step(deltaTimeMs: number): void {
       this.loot.nearby(position, this.canCollectLoot),
       this.inventoryOpen,
       this.lootNoticeMs > 0 ? this.lootNotice : '',
-      this.pickup.active
+      this.pickup.active,
+      this.inventoryIndex
     );
   }
 

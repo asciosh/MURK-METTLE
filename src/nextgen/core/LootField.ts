@@ -1,12 +1,14 @@
 import * as THREE from 'three/webgpu';
+import { LOOT_KINDS, WEAPONS, type LootKind } from './EquipmentInventory.ts';
+export type { LootKind } from './EquipmentInventory.ts';
 
 type Position = readonly [number, number, number];
-export type LootKind = 'ammo' | 'bandage';
 export interface LootItem {
   id: number;
   kind: LootKind;
   amount: number;
   position: [number, number, number];
+  loadedRounds?: number;
 }
 
 export interface LootPickupResult {
@@ -27,27 +29,43 @@ export class LootField {
   private readonly bandageMarker = new THREE.MeshBasicMaterial({ color: 0x86ffbe, toneMapped: false });
   private readonly ammoMaterial = new THREE.MeshStandardMaterial({ color: 0xc4a044, emissive: 0x543c0b, emissiveIntensity: 0.6 });
   private readonly bandageMaterial = new THREE.MeshStandardMaterial({ color: 0xe6eedb, emissive: 0x235a39, emissiveIntensity: 0.35 });
+  private readonly rifleMaterial = new THREE.MeshStandardMaterial({ color: 0x46534b, roughness: 0.85 });
+  private readonly shotgunMaterial = new THREE.MeshStandardMaterial({ color: 0x79593a, roughness: 0.85 });
   private readonly items = new Map<number, { item: LootItem; mesh: THREE.Group }>();
   private nextId = 1;
   private disposed = false;
 
   constructor() { this.root.name = 'NEXTGEN loot'; }
 
-  spawn(kind: LootKind, amount: number, position: Position): boolean {
+  spawn(kind: LootKind, amount: number, position: Position, loadedRounds?: number): boolean {
     if (this.disposed || this.items.size >= LootField.LIMIT ||
-        (kind !== 'ammo' && kind !== 'bandage') ||
+        !LOOT_KINDS.includes(kind) ||
         !Number.isSafeInteger(amount) || amount <= 0 || !position.every(Number.isFinite)) return false;
+    const weapon = kind === 'rifle' || kind === 'shotgun';
+    const rounds = weapon ? loadedRounds ?? WEAPONS[kind].magazine : undefined;
+    if (weapon && (amount !== 1 || !Number.isSafeInteger(rounds) || rounds! < 0 || rounds! > WEAPONS[kind].magazine)) return false;
     const id = this.nextId++;
     const item: LootItem = { id, kind, amount, position: [...position] };
+    if (rounds !== undefined) item.loadedRounds = rounds;
     const mesh = new THREE.Group();
     mesh.name = 'Loot ' + kind;
     mesh.position.set(...position);
-    const box = new THREE.Mesh(this.geometry,
-      kind === 'ammo' ? this.ammoMaterial : this.bandageMaterial);
+    const material = kind === 'bandage' ? this.bandageMaterial :
+      kind === 'rifle' || kind === 'rifle-ammo' ? this.rifleMaterial :
+      kind === 'shotgun' || kind === 'shotgun-ammo' ? this.shotgunMaterial : this.ammoMaterial;
+    const box = new THREE.Mesh(this.geometry,material);
     box.position.y = 0.13;
+    if (weapon) {
+      box.scale.set(0.33,0.30,kind === 'rifle' ? 2.3 : 2.6);
+      const stock = new THREE.Mesh(this.geometry,material);
+      stock.scale.set(.25,.32,.55); stock.position.set(0,.13,.36);
+      const grip = new THREE.Mesh(this.geometry,material);
+      grip.scale.set(.28,.45,.20); grip.position.set(0,.09,.04);
+      mesh.add(stock,grip);
+    }
     box.receiveShadow = true;
     const marker = new THREE.Mesh(this.markerGeometry,
-      kind === 'ammo' ? this.ammoMarker : this.bandageMarker);
+      kind === 'bandage' ? this.bandageMarker : this.ammoMarker);
     marker.name = 'Loot marker ' + kind;
     marker.position.y = 0.72;
     mesh.add(box, marker);
@@ -80,7 +98,7 @@ export class LootField {
   }
 
   collectDetailed(position: Position,
-    accept: (kind: LootKind, amount: number) => number,
+    accept: (kind: LootKind, amount: number, item: Readonly<LootItem>) => number,
     prefer?: LootPreference): LootPickupResult {
     const near = this.nearby(position, prefer);
     if (!near) return { status: 'not-nearby', kind: null, amount: 0 };
@@ -88,7 +106,7 @@ export class LootField {
   }
 
   collectById(id: number, position: Position,
-    accept: (kind: LootKind, amount: number) => number,
+    accept: (kind: LootKind, amount: number, item: Readonly<LootItem>) => number,
     reach: number = LootField.PICKUP_RANGE): LootPickupResult {
     const entry = this.items.get(id);
     if (this.disposed || !entry || !position.every(Number.isFinite) ||
@@ -98,7 +116,7 @@ export class LootField {
       return { status: 'not-nearby', kind: null, amount: 0 };
     }
     const near = entry.item;
-    const accepted = accept(near.kind, near.amount);
+    const accepted = accept(near.kind, near.amount, { ...near, position: [...near.position] });
     if (accepted === 0) return { status: 'full', kind: near.kind, amount: 0 };
     if (!Number.isSafeInteger(accepted) || accepted < 0 || accepted > near.amount) {
       return { status: 'unavailable', kind: near.kind, amount: 0 };
@@ -111,7 +129,7 @@ export class LootField {
     return { status: 'collected', kind: near.kind, amount: accepted };
   }
 
-  collect(position: Position, accept: (kind: LootKind, amount: number) => number,
+  collect(position: Position, accept: (kind: LootKind, amount: number, item: Readonly<LootItem>) => number,
     prefer?: LootPreference): number {
     return this.collectDetailed(position, accept, prefer).amount;
   }
@@ -135,5 +153,7 @@ export class LootField {
     this.bandageMarker.dispose();
     this.ammoMaterial.dispose();
     this.bandageMaterial.dispose();
+    this.rifleMaterial.dispose();
+    this.shotgunMaterial.dispose();
   }
 }

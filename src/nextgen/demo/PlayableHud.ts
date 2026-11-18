@@ -5,6 +5,7 @@ import type { CombatState } from '../core/CombatController';
 import type { HordeState } from '../core/HordeDirector';
 import type { LootItem } from '../core/LootField';
 import { PICKUP } from '../core/PickupController';
+import { WEAPONS, ammoWeapon, lootLabel, fullLootNotice } from '../core/EquipmentInventory';
 
 export class PlayableHud {
   private readonly root = document.createElement('div');
@@ -19,6 +20,9 @@ export class PlayableHud {
   private readonly inventory = document.createElement('div');
   private readonly lootPrompt = document.createElement('div');
   private readonly lootToast = document.createElement('div');
+  private readonly inventoryOverlay = document.createElement('div');
+  private readonly equipmentSummary = document.createElement('div');
+  private readonly inventoryRows: HTMLDivElement[] = [];
 
   constructor() {
     this.root.style.cssText = `
@@ -149,6 +153,20 @@ this.hordeStatus.style.cssText = `
       'border-radius:6px;font-weight:bold;font-size:16px;display:none;white-space:nowrap';
     this.root.append(panel, this.prompt, this.crosshair, this.lootToast);
 
+    this.inventoryOverlay.className='nextgen-inventory-panel';
+    this.inventoryOverlay.setAttribute('role','region');this.inventoryOverlay.setAttribute('aria-label','Field inventory');
+    this.inventoryOverlay.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(520px,90vw);max-height:85vh;overflow:hidden;background:rgba(12,20,17,.96);border:1px solid #74856d;border-radius:8px;padding:22px;box-shadow:0 14px 50px #0009;display:none';
+    const heading=document.createElement('div');heading.textContent='FIELD INVENTORY';heading.style.cssText='font-size:20px;font-weight:700;letter-spacing:3px;color:#c7d8b9;margin-bottom:14px';
+    this.equipmentSummary.style.cssText='white-space:pre-line;font:14px/1.65 Arial;color:#e2dfc9;padding:10px;background:#202e26;border-radius:4px;margin-bottom:10px';
+    const caption=document.createElement('div');caption.textContent='PACK CONTENTS';caption.style.cssText='font-size:11px;letter-spacing:2px;color:#a5b7a0;margin:16px 0 6px';
+    this.inventoryOverlay.append(heading,this.equipmentSummary,caption);
+    for(let i=0;i<5;i++){
+      const row=document.createElement('div');row.style.cssText='padding:12px 10px;margin:4px 0;border:1px solid #31413a;border-radius:4px;font-size:14px;white-space:pre-line';
+      row.className='nextgen-inventory-row';this.inventoryRows.push(row);this.inventoryOverlay.append(row);
+    }
+    const controls=document.createElement('div');controls.textContent='1 Secondary · 2 Primary · ↑/↓ Select · G Drop · I Close (combat still running)';controls.style.cssText='font-size:12px;color:#b8c8b0;line-height:1.6;margin-top:14px';this.inventoryOverlay.append(controls);
+    this.root.append(this.inventoryOverlay);
+
     document.body.appendChild(this.root);
   }
 
@@ -160,7 +178,8 @@ this.hordeStatus.style.cssText = `
     loot: LootItem | null = null,
     inventoryOpen = false,
     lootNotice = '',
-    pickingUp = false
+    pickingUp = false,
+    inventoryIndex = 0
   ): void {
     const fraction = Math.max(
       0,
@@ -195,9 +214,10 @@ this.hordeStatus.style.cssText = `
     this.health.style.color =
       combat.health <= 25 ? '#ff5555' : '#eaa5a5';
 
-    this.ammunition.textContent = combat.reloading
-      ? 'PISTOL  RELOADING...'
-      : `PISTOL  ${combat.ammo} / ${combat.reserve}`;
+    const weapon = combat.weaponName.toUpperCase();
+    this.ammunition.textContent = combat.switching ? weapon+' EQUIPPING...' : combat.reloading
+      ? weapon+'  RELOADING...'
+      : `${weapon}  ${combat.ammo} / ${combat.reserve}`;
 
   this.hordeStatus.textContent = horde.training
     ? `TRAINING | KILLS ${horde.kills}`
@@ -210,19 +230,30 @@ this.hordeStatus.style.cssText = `
     : 'BANDAGES ' + combat.bandages + ' / ' + combat.maxBandages;
   if (combat.meleeRemainingMs > 0) this.inventory.textContent += '\nMELEE WINDUP';
   if (inventoryOpen) {
-    this.inventory.textContent += '\nINVENTORY\nPistol ammunition: ' + combat.ammo +
-      ' loaded / ' + combat.reserve + '/' + combat.reserveCapacity + ' reserve\nMelee hits: ' + combat.meleeHits;
+    this.inventory.textContent += '\nINVENTORY OPEN';
+    const e=combat.equipment;
+    const main=e.primary?WEAPONS[e.primary].label+' · '+e[e.primary].loaded+'/'+WEAPONS[e.primary].magazine:'EMPTY';
+    this.equipmentSummary.textContent='[1] SECONDARY  Pistol · '+e.pistol.loaded+'/12'+(e.active==='pistol'?'  • EQUIPPED':'')+'\n[2] PRIMARY  '+main+(e.primary===e.active?'  • EQUIPPED':'');
+    const rows=[
+      '01   PRIMARY WEAPON   '+(e.primary?WEAPONS[e.primary].label:'Empty slot'),
+      '02   PISTOL ROUNDS   '+e.pistol.reserve+' / '+WEAPONS.pistol.reserve,
+      '03   RIFLE ROUNDS   '+e.rifle.reserve+' / '+WEAPONS.rifle.reserve,
+      '04   SHOTGUN SHELLS   '+e.shotgun.reserve+' / '+WEAPONS.shotgun.reserve,
+      '05   BANDAGES   '+combat.bandages+' / '+combat.maxBandages
+    ];
+    this.inventoryRows.forEach((r,i)=>{r.textContent=rows[i]??'';r.style.background=i===inventoryIndex?'#394c35':'#19231e';r.style.borderColor=i===inventoryIndex?'#a1bc83':'#31413a';});
   }
+  this.inventoryOverlay.style.display=inventoryOpen&&combat.alive?'block':'none';
   this.lootPrompt.textContent = '';
   if (loot && combat.alive) {
-    const room = loot.kind === 'ammo'
-      ? combat.reserveCapacity - combat.reserve
-      : combat.maxBandages - combat.bandages;
+    const ammo=ammoWeapon(loot.kind);
+    const room = ammo ? WEAPONS[ammo].reserve-combat.equipment[ammo].reserve : loot.kind==='bandage'
+      ? combat.maxBandages-combat.bandages : combat.equipment.primary===null?1:0;
     const amount = Math.min(loot.amount, Math.max(0, room));
     this.lootPrompt.textContent = amount > 0
       ? 'E: Take ' + amount + ' ' +
-        (loot.kind === 'ammo' ? 'rounds' : (amount === 1 ? 'bandage' : 'bandages'))
-      : (loot.kind === 'ammo' ? 'AMMO RESERVE FULL' : 'BANDAGES FULL');
+        (loot.kind === 'ammo' ? 'rounds' : lootLabel(loot.kind,amount).toLowerCase())
+      : fullLootNotice(loot.kind);
     this.lootPrompt.style.color = amount > 0 ? '#f3db90' : '#eaa5a5';
     const distance = Math.hypot(loot.position[0] - state.position[0],
       loot.position[1] - state.position[1], loot.position[2] - state.position[2]);
@@ -242,7 +273,7 @@ this.hordeStatus.style.cssText = `
     this.crosshair.style.display = 'none';
   } else if (locked) {
     this.prompt.textContent =
-      'WASD | Shift Sprint | Ctrl Dodge | Space Jump | RMB Aim | LMB Fire | R Reload | F Melee | H Bandage | E Loot | I Inventory';
+      'WASD | Shift Sprint | Ctrl Dodge | Space Jump | RMB Aim | LMB Fire | R Reload | F Melee | H Bandage | E Loot | 1/2 Weapon | I Inventory';
   }
   }
 

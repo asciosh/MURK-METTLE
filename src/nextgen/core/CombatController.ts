@@ -1,6 +1,7 @@
 import {
   SURVIVAL, newVitals, beginHealing, cancelHealing, stepVitals
 } from '../../../shared/survival.mjs';
+import { EquipmentInventory, WEAPONS, SWITCH_MS, ammoKind, type LootKind, type WeaponId } from './EquipmentInventory.ts';
 
 export const COMBAT = Object.freeze({
   maxHealth: 100,
@@ -31,8 +32,15 @@ export interface CombatInput {
 
 export class CombatController {
   private health: number = COMBAT.maxHealth;
-  private ammo: number = COMBAT.magazineCapacity;
-  private reserve: number = COMBAT.reserveAmmo;
+  private readonly equipment = new EquipmentInventory();
+  private switchRemainingMs = 0;
+  private get ammo() { return this.equipment.current.loaded; }
+  private set ammo(value: number) { this.equipment.current.loaded = value; }
+  private get reserve() { return this.equipment.current.reserve; }
+  private set reserve(value: number) { this.equipment.current.reserve = value; }
+  get weaponId(): WeaponId { return this.equipment.active; }
+  get weaponSpec() { return WEAPONS[this.weaponId]; }
+  get switching(): boolean { return this.switchRemainingMs > 0; }
 
   private cooldown = 0;
   private reloadRemainingMs = 0;
@@ -88,6 +96,7 @@ export class CombatController {
     if (dt === 0) return result;
 
     this.clockMs += dt;
+    this.switchRemainingMs = Math.max(0, this.switchRemainingMs - dt);
     this.meleeCooldown = Math.max(0, this.meleeCooldown - dt);
     this.cooldown = Math.max(0, this.cooldown - dt);
 
@@ -102,6 +111,7 @@ export class CombatController {
       this.reloadRemainingMs = 0;
       return result;
     }
+    if (this.switching) return result;
 
     const allowed = input.actionAllowed !== false;
     const interruptHeal = !allowed || input.moving || input.aiming ||
@@ -159,7 +169,7 @@ export class CombatController {
 
       if (this.reloadRemainingMs === 0) {
         const rounds = Math.min(
-          COMBAT.magazineCapacity - this.ammo,
+          this.weaponSpec.magazine - this.ammo,
           this.reserve
         );
 
@@ -172,11 +182,11 @@ export class CombatController {
 
     if (input.reload) {
       if (
-        this.ammo < COMBAT.magazineCapacity &&
+        this.ammo < this.weaponSpec.magazine &&
         this.reserve > 0 &&
         this.cooldown === 0
       ) {
-        this.reloadRemainingMs = this.reloadDurationMs;
+        this.reloadRemainingMs = this.weaponId === 'pistol' ? this.reloadDurationMs : this.weaponSpec.reloadMs;
         result.reloadStarted = true;
       }
 
@@ -190,7 +200,7 @@ export class CombatController {
     ) {
       this.ammo--;
       this.shotsFired++;
-      this.cooldown = this.fireIntervalMs;
+      this.cooldown = this.weaponId === 'pistol' ? this.fireIntervalMs : this.weaponSpec.intervalMs;
       result.shot = true;
     }
 
@@ -209,6 +219,7 @@ export class CombatController {
 
     cancelHealing(this.vitals);
     this.meleeRemainingMs = 0;
+    this.reloadRemainingMs = 0;
     this.health = Math.max(0, this.health - amount);
 
     this.damageGraceRemainingMs = Number.isFinite(graceMs)
@@ -230,6 +241,11 @@ export class CombatController {
     }
   }
 
+  recordShotHits(kills: number): void {
+    this.shotsHit++;
+    this.kills += Math.max(0, Math.trunc(kills));
+  }
+
   recordMeleeHit(killed: boolean): void {
     this.meleeHits++;
     if (killed) this.kills++;
@@ -241,18 +257,40 @@ export class CombatController {
     this.reloadRemainingMs = 0;
   }
 
-  pickupCapacity(kind: 'ammo' | 'bandage'): number {
+  selectWeapon(id: WeaponId): boolean {
+    if (!this.alive || this.switching || this.cooldown > 0 || this.reloadRemainingMs > 0 ||
+        this.meleeCooldown > 0 || this.vitals.healEndsAt) return false;
+    if (!this.equipment.switchTo(id)) return false;
+    this.switchRemainingMs = SWITCH_MS;
+    return true;
+  }
+
+  dropItem(kind: LootKind, amount: number, place: (kind: LootKind, amount: number, loadedRounds?: number) => boolean): boolean {
+    if (!this.alive || this.switching || this.reloadRemainingMs > 0 || this.vitals.healEndsAt ||
+        this.cooldown > 0 || this.meleeCooldown > 0 || !Number.isSafeInteger(amount) || amount <= 0) return false;
+    if (kind === 'bandage') {
+      const n = Math.min(amount,this.vitals.bandages);
+      if (!n || !place(kind,n)) return false;
+      this.vitals.bandages -= n; return true;
+    }
+    const old = this.weaponId;
+    const dropped = this.equipment.drop(kind,amount,place);
+    if (dropped && old !== this.weaponId) this.switchRemainingMs = SWITCH_MS;
+    return dropped;
+  }
+
+  pickupCapacity(kind: LootKind): number {
     if (!this.alive) return 0;
-    return kind === 'ammo'
-      ? Math.max(0, COMBAT.reserveCapacity - this.reserve)
-      : Math.max(0, SURVIVAL.bandages - this.vitals.bandages);
+    return kind === 'bandage' ? Math.max(0, SURVIVAL.bandages - this.vitals.bandages) : this.equipment.capacity(kind);
+  }
+
+  collectLoot(kind: LootKind, amount: number, loadedRounds?: number): number {
+    if (!this.alive) return 0;
+    return kind === 'bandage' ? this.addBandages(amount) : this.equipment.collect(kind,amount,loadedRounds);
   }
 
   addReserveAmmo(amount: number): number {
-    if (!this.alive || !Number.isSafeInteger(amount) || amount <= 0) return 0;
-    const accepted = Math.min(amount, this.pickupCapacity('ammo'));
-    this.reserve += accepted;
-    return accepted;
+    return this.collectLoot(ammoKind(this.weaponId),amount);
   }
 
   addBandages(amount: number): number {
@@ -270,7 +308,7 @@ export class CombatController {
     this.health + 20
   );
 
-  this.reserve = Math.max(this.reserve, Math.min(COMBAT.reserveAmmo, this.reserve + 24));
+  this.equipment.rewardPistol();
 }
 
   getState() {
@@ -279,9 +317,14 @@ export class CombatController {
       maxHealth: COMBAT.maxHealth,
       alive: this.alive,
       ammo: this.ammo,
-      magazineCapacity: COMBAT.magazineCapacity,
+      magazineCapacity: this.weaponSpec.magazine,
       reserve: this.reserve,
-      reserveCapacity: COMBAT.reserveCapacity,
+      reserveCapacity: this.weaponSpec.reserve,
+      weapon: this.weaponId,
+      weaponName: this.weaponSpec.label,
+      switching: this.switching,
+      switchRemainingMs: this.switchRemainingMs,
+      equipment: this.equipment.getState(),
       reloading: this.reloadRemainingMs > 0,
       reloadRemainingMs: this.reloadRemainingMs,
       shotsFired: this.shotsFired,
