@@ -256,12 +256,14 @@ async mount(): Promise<void> {
     }
 
       if (this.playable) {
-    const session = new PlayableSession(
-      scene,
-      camera,
-      this.canvas,
-      terrain
-    );
+      const session = new PlayableSession(
+        scene,
+        camera,
+        this.canvas,
+        terrain,
+        new URLSearchParams(window.location.search)
+          .get('training') === '1'
+      );
 
     this.session = session;
 
@@ -337,6 +339,10 @@ async mount(): Promise<void> {
 
   getCameraFov() {
   return this.session?.getCameraFov();
+}
+
+getCombatInfo() {
+  return this.session?.getCombatInfo();
 }
 
 getInfectedInfo() {

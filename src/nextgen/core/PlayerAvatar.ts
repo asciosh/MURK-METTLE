@@ -146,6 +146,24 @@ export class PlayerAvatar {
     return true;
     }
 
+    getWeaponTiming() {
+  const clips = this.model.getClips();
+
+  const duration = (name: string): number =>
+    (clips.find(
+      clip => clip.name.toLowerCase() === name
+    )?.duration ?? 0) * 1000;
+
+  return {
+    shootMs: duration('pistolshoot'),
+    reloadMs: duration('pistolreload')
+  };
+}
+
+getWeaponAction() {
+  return this.animator?.getWeaponAction() ?? null;
+}
+
     getModelInfo() {
       return {
         status: this.modelStatus,

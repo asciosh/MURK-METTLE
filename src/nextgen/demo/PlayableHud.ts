@@ -1,6 +1,7 @@
 import type {
   CharacterControllerResult
 } from '../core/CharacterController';
+import type { CombatState } from '../core/CombatController';
 
 export class PlayableHud {
   private readonly root = document.createElement('div');
@@ -9,6 +10,8 @@ export class PlayableHud {
   private readonly status = document.createElement('div');
   private readonly prompt = document.createElement('div');
   private readonly crosshair = document.createElement('div');
+  private readonly health = document.createElement('div');
+  private readonly ammunition = document.createElement('div');
 
   constructor() {
     this.root.style.cssText = `
@@ -93,12 +96,28 @@ export class PlayableHud {
 
     track.appendChild(this.fill);
 
-    panel.append(
-      title,
-      this.value,
-      track,
-      this.status
-    );
+    this.health.style.cssText = `
+  font-size:18px;
+  font-weight:bold;
+  margin-bottom:10px;
+  color:#eaa5a5;
+`;
+
+this.ammunition.style.cssText = `
+  font-size:16px;
+  font-weight:bold;
+  margin-top:16px;
+  color:#e5d69a;
+`;
+
+  panel.append(
+    this.health,
+    title,
+    this.value,
+    track,
+    this.status,
+    this.ammunition
+  );
 
     this.root.append(
       panel,
@@ -111,7 +130,8 @@ export class PlayableHud {
 
   update(
     state: CharacterControllerResult,
-    locked: boolean
+    locked: boolean,
+    combat: CombatState
   ): void {
     const fraction = Math.max(
       0,
@@ -139,6 +159,25 @@ export class PlayableHud {
 
     this.crosshair.style.display =
       locked && state.aiming ? 'block' : 'none';
+
+      this.health.textContent =
+  `HEALTH  ${Math.ceil(combat.health)} / ${combat.maxHealth}`;
+
+    this.health.style.color =
+      combat.health <= 25 ? '#ff5555' : '#eaa5a5';
+
+    this.ammunition.textContent = combat.reloading
+      ? 'PISTOL  RELOADING...'
+      : `PISTOL  ${combat.ammo} / ${combat.reserve}`;
+
+    if (!combat.alive) {
+      this.prompt.textContent = 'YOU DIED — Refresh to restart';
+      this.prompt.style.color = '#ff6666';
+      this.crosshair.style.display = 'none';
+    } else if (locked) {
+      this.prompt.textContent =
+        'WASD | Shift Sprint | Ctrl Dodge | Space Jump | RMB Aim | LMB Fire | R Reload';
+    }
   }
 
   dispose(): void {

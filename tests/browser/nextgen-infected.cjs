@@ -3,7 +3,7 @@ const { launchBrowser } = require('./support.cjs');
 
 const url =
   (process.env.GAME_URL || 'http://localhost:5174') +
-  '/tests/browser/nextgen.html?mode=playable';
+  '/tests/browser/nextgen.html?mode=playable&training=1';
 
 (async () => {
   const browser = await launchBrowser();
