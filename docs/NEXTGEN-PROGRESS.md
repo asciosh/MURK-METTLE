@@ -4,6 +4,15 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## M03 — co-op combat presentation and four-client validation (checkpoint B)
+
+- Checkpoint A operator verification: 67 legacy and 293 NEXTGEN tests, typecheck, build, and the real two-client rendered local Wrangler room smoke passed. Manual gameplay remained pending.
+- Replaced temporary online infected markers with shared-pool rigged infected instances driven by server snapshots. Presentation derives locomotion, windup attacks, hit reactions, terminal death poses and facing without running local AI or health simulation. Procedural fallback remains if a model cannot load.
+- Added bounded authoritative shot tracers, flash and hit effects using the actual room shot origin, direction, distance and hit flag; accepted melee/Pulse audio and server HP reactions. Shoulder-camera aim convergence and local-only render interpolation do not mutate network state or server rules.
+- Expanded the loopback-only browser test to four independent authenticated, rendered clients (optional two-client mode), server-confirmed movement, rigged infected, shot effects, ammunition decrement and accepted melee using the test page's actual room socket. Manual pointer-lock input and full expedition acceptance remain separate.
+- Verification in supplied source: 44 focused pure tests passed, including six new presentation tests; new TypeScript and browser script syntax checks passed. Operator full typecheck/build/browser verification pending. No server, shared rules, protocol, account schema, legacy client or deployment changes. Do not mark M03/M05 complete yet.
+- Exact next unfinished task: operator four-client combat acceptance, then online creature presentation and supported inventory/survival interactions; design compatible revive protocol separately before adding it.
+
 ## M03 — authoritative co-op foundation (checkpoint A)
 
 - Added an explicitly opt-in NEXTGEN online sandbox via `/?nextgenRoom=BLOOM` on the same authenticated local Worker origin. Normal URLs and solo NEXTGEN fixtures still use their existing paths.
