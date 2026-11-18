@@ -9,6 +9,9 @@ import {
 import { KeyboardInput } from '../core/KeyboardInput';
 import { ThirdPersonCamera } from '../core/ThirdPersonCamera';
 import { PlayerAvatar } from '../core/PlayerAvatar';
+import { InfectedController } from '../core/InfectedController';
+import { InfectedModelPool } from '../core/InfectedModel';
+import { InfectedAvatar } from '../core/InfectedAvatar';
 import { TerrainGenerator } from '../core/TerrainGenerator';
 import { PlayableHud } from './PlayableHud';
 
@@ -16,6 +19,9 @@ export class PlayableSession {
   private readonly keyboard = new KeyboardInput();
   private readonly followCamera = new ThirdPersonCamera();
   private readonly avatar = new PlayerAvatar();
+  private readonly infectedPool = new InfectedModelPool();
+  private readonly infected: InfectedAvatar[] = [];
+  private infectedAttackHits = 0;
   private readonly hud = new PlayableHud();
 
   private readonly controller: CharacterController;
@@ -54,6 +60,30 @@ export class PlayableSession {
     `${import.meta.env.BASE_URL}models/nextgen/survivor.glb`
     );
 
+      const enemy = new InfectedAvatar(
+    new InfectedController({
+      terrain,
+      spawn: {
+        x: this.state.position[0],
+        z: this.state.position[2] - 12
+      }
+    })
+  );
+
+  this.infected.push(enemy);
+
+  scene.add(enemy.root);
+
+  void this.infectedPool.load(
+    `${import.meta.env.BASE_URL}models/nextgen/infected.glb`
+  ).then(loaded => {
+    if (!loaded || this.disposed) return;
+
+    for (const infected of this.infected) {
+      infected.attachModel(this.infectedPool);
+    }
+  });
+
     this.canvas.addEventListener('click', this.onClick);
 
     window.addEventListener('keydown', this.onKeyDown);
@@ -74,7 +104,7 @@ export class PlayableSession {
 
     document.addEventListener(
       'pointerlockchange',
-      this.onReset
+      this.onPointerLockChange
     );
 
     document.addEventListener(
@@ -180,6 +210,12 @@ private readonly onReset = () => {
   this.clearAim();
 };
 
+private readonly onPointerLockChange = () => {
+  if (!this.isLocked()) {
+    this.onReset();
+  }
+};
+
     step(deltaTimeMs: number): void {
     if (this.disposed) return;
 
@@ -216,6 +252,17 @@ private readonly onReset = () => {
       shoot: aiming && this.shootPressed,
       reload: aiming && this.reloadPressed
     });
+
+    for (const infected of this.infected) {
+  const state = infected.update(
+    deltaTimeMs,
+    this.state.position
+  );
+
+  if (state.attackHit) {
+    this.infectedAttackHits++;
+  }
+}
 
     this.shootPressed = false;
     this.reloadPressed = false;
@@ -277,6 +324,21 @@ private readonly onReset = () => {
     };
   }
 
+  getInfectedInfo() {
+  return this.infected.map(enemy => ({
+    ...enemy.getState(),
+    ...enemy.getModelInfo()
+  }));
+}
+
+getInfectedAttackHits(): number {
+  return this.infectedAttackHits;
+}
+
+damageInfected(index: number, amount: number): boolean {
+  return this.infected[index]?.damage(amount) ?? false;
+}
+
   getCameraFov(): number {
   return this.camera.fov;
 }
@@ -309,7 +371,7 @@ private readonly onReset = () => {
 
     document.removeEventListener(
       'pointerlockchange',
-      this.onReset
+      this.onPointerLockChange
     );
 
     document.removeEventListener(
@@ -322,6 +384,13 @@ private readonly onReset = () => {
     if (this.isLocked()) {
       document.exitPointerLock();
     }
+
+    for (const infected of this.infected) {
+      infected.dispose();
+    }
+
+    this.infected.length = 0;
+    this.infectedPool.dispose();
 
     this.avatar.dispose();
     this.hud.dispose();
