@@ -187,3 +187,19 @@ test('Combat records hits and kills', () => {
   assert.equal(combat.getState().shotsHit, 2);
   assert.equal(combat.getState().kills, 1);
 });
+
+test('Wave rewards restore health without exceeding capacity', () => {
+  const combat = new CombatController();
+
+  combat.takeDamage(40, 0);
+
+  combat.rewardWave();
+
+  assert.equal(combat.getState().health, 80);
+
+  combat.rewardWave();
+  combat.rewardWave();
+
+  assert.equal(combat.getState().health, 100);
+  assert.equal(combat.getState().reserve, 48);
+});

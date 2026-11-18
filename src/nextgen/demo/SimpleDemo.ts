@@ -341,6 +341,10 @@ async mount(): Promise<void> {
   return this.session?.getCameraFov();
 }
 
+getHordeInfo() {
+  return this.session?.getHordeInfo();
+}
+
 getCombatInfo() {
   return this.session?.getCombatInfo();
 }
