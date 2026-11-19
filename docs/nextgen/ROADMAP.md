@@ -95,6 +95,9 @@ manual checklist in the progress log before checking off M03.
       roster foundation; C2 adds first native Lanternkin capture, selection, independent
       XP and explicit two-stage evolution. Operator browser acceptance and broader
       native species, capture devices, creature survival and tactical combat remain open.
+      C5 links live level and evolution progress to the individual journal and tests both
+      explicit evolutions across server-validated combat and redeployment. Real browser
+      acceptance remains pending; the other four native families are still open.
 
 **Done when:** collection state round-trips through existing cloud saves without schema
 changes.

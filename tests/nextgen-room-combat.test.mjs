@@ -22,6 +22,44 @@ function fixture() {
   return { room, add };
 }
 const shot = weapon => ({ type: 'shoot', weapon, direction: { x: 0, y: 0, z: -1 } });
+test('real room and account flow: capture, confirmed kills, two explicit evolutions and stronger redeployments',async()=>{
+  const {NEXTGEN_MAP}=await import('../shared/nextgen-terrain.mjs');
+  const {NATIVE_CAPTURE}=await import('../shared/nextgen-creature-roster.mjs');
+  const accountSource=(await readFile(new URL('../server/cloudflare/account.mjs',import.meta.url),'utf8'))
+    .replace("import { DurableObject } from 'cloudflare:workers';",'class DurableObject {constructor(ctx){this.ctx=ctx;}}')
+    .replaceAll(/'\.\.\/\.\.\/shared\/([^']+)'/g,(_,file)=>JSON.stringify(new URL('../shared/'+file,import.meta.url).href));
+  const {PlayerAccount}=await import(`data:text/javascript,${encodeURIComponent(accountSource)}`);
+  const values=new Map(),storage={get:async k=>structuredClone(values.get(k)),put:async(k,v)=>values.set(k,structuredClone(v)),transaction:async fn=>fn(storage)};
+  const account=new PlayerAccount({storage});
+  const {room,add}=fixture();room.map=NEXTGEN_MAP;
+  room.env.PLAYER_ACCOUNTS={idFromName:x=>x,get:()=>account};
+  const username='trainingaccount';let cookie='';
+  const request=async(op,body)=>account.fetch(new Request(`https://example.test/api/account/${op}`,{method:body?'POST':'GET',headers:{'X-MM-Account':username,...(cookie?{Cookie:cookie}:{})},...(body?{body:JSON.stringify(body)}:{})}));
+  const registration=await request('register',{pin:'12345678'});assert.equal(registration.status,200);cookie=registration.headers.get('Set-Cookie').split(';')[0];
+  const a=add(username,NATIVE_CAPTURE.x,NATIVE_CAPTURE.z);await room.accountCollection(a.p);await a.hello();
+  await a.send({type:'capture',id:NATIVE_CAPTURE.id});a.p.captureAttempt.endsAt=Date.now()-1;room.tick();await new Promise(resolve=>setImmediate(resolve));
+  const id=a.p.native.id;assert.equal(a.p.native.xp,0);assert.equal(a.p.nativeCombat.maxHp,80);
+  const journal=async()=> (await (await request('nextgen-roster')).json()).roster.instances.find(c=>c.id===id);
+  const evolve=targetId=>request('nextgen-roster-action',{id,action:'evolve',targetId});
+  assert.equal((await evolve('lanternkin-2')).status,409);
+  let kills=0;
+  async function train(player,n) {
+    for(let i=0;i<n;i++) {
+      const e=spawnHorde([player.p],1,`training-${kills++}`)[0];Object.assign(e,{x:player.p.x,z:player.p.z-1,hp:20});room.horde.enemies=[e];
+      player.p.pulseAt=Date.now()-10000;await player.send({type:'pulse',xp:99999,instanceId:'forged'});assert.equal(e.hp,0);
+    }
+    room.tick();
+    return player.packets.findLast(p=>p.type==='snapshot').players.find(p=>p.id===player.p.id);
+  }
+  let deployed=await train(a,3);assert.equal(deployed.creatureProgress.xp,120);assert.equal(deployed.creatureProgress.level,2);assert.equal(deployed.creatureProgress.evolutionReady,true);assert.equal(deployed.creatureFormXp,0);
+  assert.deepEqual((await journal()).training,deployed.creatureProgress);
+  assert.equal((await evolve('lanternkin-3')).status,409);assert.equal((await evolve('lanternkin-2')).status,200);assert.equal(a.p.native.formId,'lanternkin');
+  async function redeploy(previous, suffix) {room.players.delete(previous.socket);const next=add(`deployment-${suffix}`);next.p.username=username;await room.accountCollection(next.p);await next.hello();return next;}
+  const b=await redeploy(a,2);assert.equal(b.p.native.id,id);assert.equal(b.p.native.formId,'lanternkin-2');assert.equal(b.p.nativeCombat.maxHp,120);
+  deployed=await train(b,7);assert.equal(deployed.creatureProgress.xp,400);assert.equal(deployed.creatureProgress.evolutionReady,true);assert.equal(deployed.creatureFormXp,120);
+  assert.equal((await evolve('lanternkin-3')).status,200);const c=await redeploy(b,3);assert.equal(c.p.native.id,id);assert.equal(c.p.native.formId,'lanternkin-3');assert.equal(c.p.nativeCombat.maxHp,160);
+  assert.equal((await journal()).xp,400);assert.equal((await journal()).training.nextFormId,null);
+});
 test('wild capture requires negotiated NEXTGEN, living survivor and location; server owns encounter identity', async()=>{
   const {NEXTGEN_MAP}=await import('../shared/nextgen-terrain.mjs');
   const {NATIVE_CAPTURE}=await import('../shared/nextgen-creature-roster.mjs');

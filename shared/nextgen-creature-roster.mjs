@@ -59,6 +59,17 @@ export function activeNative(roster) {
   return roster.instances.find(c => c.id === roster.activeId && c.origin === 'native' && c.status === 'available' && c.familyId === NATIVE_CAPTURE.familyId && cleanXP(c.xp) && EVOLUTION_DEMO_CATALOG.forms[c.formId]?.familyId === c.familyId) ?? null;
 }
 export const nativeFormXP = record => record.formId === `${record.familyId}-3` ? 400 : record.formId === `${record.familyId}-2` ? 120 : 0;
+/** Read-only training view of the actual form, not an automatic evolution at high XP. */
+export function nativeTrainingProgress(record) {
+  const stageXP = nativeFormXP(record), xp = record.xp, level = levelFromXP(xp);
+  const nextXP = stageXP === 0 ? 120 : stageXP === 120 ? 400 : null;
+  const nextFormId = nextXP === null ? null : `${record.familyId}-${stageXP === 0 ? 2 : 3}`;
+  const levelStartXP = 60 * (level - 1) ** 2;
+  const nextLevelXP = level >= 100 || xp >= 250000 ? null : Math.min(250000, 60 * level ** 2);
+  return { xp, level, levelStartXP, nextLevelXP, formId: record.formId,
+    nextXP, nextFormId, nextFormName: nextFormId ? EVOLUTION_DEMO_CATALOG.forms[nextFormId].name : null,
+    evolutionReady: record.status === 'available' && nextXP !== null && xp >= nextXP };
+}
 export function captureNative(roster, id = crypto.randomUUID()) {
   // Reserve room for all five legacy imports even if the player hasn't bonded them yet.
   if (roster.instances.length >= MAX_INSTANCES - 5 || roster.instances.some(c => c.id === id)) throw Error('Creature collection is full or ID is invalid');
@@ -90,5 +101,6 @@ export function rosterView(roster) {
     familyName: EVOLUTION_DEMO_CATALOG.families[record.familyId].name,
     nextXP: record.origin === 'legacy' ? (record.xp < 120 ? 120 : record.xp < 400 ? 400 : null) : record.familyId === NATIVE_CAPTURE.familyId ? (nativeFormXP(record) === 0 ? 120 : nativeFormXP(record) === 120 ? 400 : null) : null,
     nextFormId: record.origin === 'native' && record.familyId === NATIVE_CAPTURE.familyId ? (nativeFormXP(record) === 0 ? `${record.familyId}-2` : nativeFormXP(record) === 120 ? `${record.familyId}-3` : null) : null,
+    ...(record.origin === 'native' && record.familyId === NATIVE_CAPTURE.familyId ? { training: nativeTrainingProgress(record) } : {}),
   })) };
 }

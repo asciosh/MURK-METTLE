@@ -2,12 +2,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { emptyCollection } from '../shared/collection.mjs';
-import { NEXTGEN_ROSTER_KEY, reconcileRoster, rosterView, nativeFormXP } from '../shared/nextgen-creature-roster.mjs';
+import { NEXTGEN_ROSTER_KEY, reconcileRoster, rosterView, nativeFormXP, nativeTrainingProgress } from '../shared/nextgen-creature-roster.mjs';
 
 const makeLegacy = (xp = 0) => {
   const collection = emptyCollection(); collection.creatures.lanternkin = { owned: true, xp };
   return collection;
 };
+test('native training tracks levels, actual form, next evolution and bounded lifetime XP', () => {
+  const specimen = { id:'native', familyId:'lanternkin', formId:'lanternkin', xp:0, origin:'native', status:'available' };
+  const view = (xp, formId=specimen.formId) => nativeTrainingProgress({...specimen,xp,formId});
+  assert.deepEqual(view(0), {xp:0,level:1,levelStartXP:0,nextLevelXP:60,formId:'lanternkin',nextXP:120,nextFormId:'lanternkin-2',nextFormName:'Luminbloom',evolutionReady:false});
+  assert.equal(view(59).level,1);assert.equal(view(60).level,2);assert.equal(view(60).nextLevelXP,240);
+  assert.equal(view(119).evolutionReady,false);assert.equal(view(120).evolutionReady,true);
+  assert.equal(view(400).nextFormId,'lanternkin-2','must not skip unconfirmed form');
+  assert.equal(view(399,'lanternkin-2').evolutionReady,false);assert.equal(view(400,'lanternkin-2').evolutionReady,true);
+  assert.equal(view(400,'lanternkin-3').nextXP,null);assert.equal(view(250000,'lanternkin-3').nextLevelXP,null);
+  assert.equal(nativeTrainingProgress({...specimen,xp:400,status:'lost'}).evolutionReady,false);
+});
 test('legacy ownership migrates once, preserves XP and existing stages, and never grants unowned creatures', () => {
   const legacy = makeLegacy(399); legacy.creatures.emberling.xp = 800;
   const snapshot = structuredClone(legacy);

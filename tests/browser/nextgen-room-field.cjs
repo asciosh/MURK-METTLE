@@ -10,6 +10,7 @@ const { launchBrowser } = require('./support.cjs');
   const suffix = Date.now().toString(36), room = `FD${suffix}`.toUpperCase();
   const browser = await launchBrowser();
   const spriteMode = process.env.NEXTGEN_SPRITE_TEST === '1';
+  const evolutionMode = process.env.NEXTGEN_EVOLUTION_TEST === '1';
   const wait = { timeout: 45000, polling: 100 };
   try {
     const pages = await Promise.all([0, 1].map(async i => {
@@ -176,19 +177,20 @@ const { launchBrowser } = require('./support.cjs');
       assert.equal(await card.getAttribute('data-creature-id'), roster.activeId);
     } finally { await journal.close(); }
     console.log('M04-C1: individual cloud roster identity and private journal persist across reload; account isolation confirmed.');
-    if (process.env.NEXTGEN_CAPTURE_TEST === '1' || process.env.NEXTGEN_COMPANION_TEST === '1') {
+    if (process.env.NEXTGEN_CAPTURE_TEST === '1' || process.env.NEXTGEN_COMPANION_TEST === '1' || evolutionMode) {
       const { NATIVE_CAPTURE } = await import('../../shared/nextgen-creature-roster.mjs');
       await actor.waitForFunction(() => {const s=window.__nextgenRoom.getRoomInfo();return s.self?.captureKit===1 && s.fieldVisuals.some(m=>m.id==='capture:wild-lanternkin'&&m.kind==='wild-creature'&&m.physical);},null,wait);
       const captured = await perform('capture',{...NATIVE_CAPTURE,radius:2.35},{id:NATIVE_CAPTURE.id});
       assert.equal(captured.captureStarted,true);assert.equal(captured.captureProgressSeen,true);
       const nativeId = captured.packet.id; assert.notEqual(nativeId,roster.activeId);
       await actor.waitForFunction(id=>{const s=window.__nextgenRoom.getRoomInfo();return s.self.creatureInstanceId===id && s.self.creatureFormXp===0 && s.self.captureKit===0 && !s.fieldMarkers.includes('capture:wild-lanternkin');},nativeId,wait);
+      await actor.waitForFunction(()=>{const p=window.__nextgenRoom.getRoomInfo().self,ui=document.querySelector('.nextgen-creature-training');return p.creatureProgress?.level===1 && ui?.dataset.level==='1' && ui.dataset.xp===String(p.creatureXp) && ui.dataset.form==='lanternkin';},null,wait);
       console.log('M04-C4: visible wild creature, timed server capture and capsule consumption confirmed.');
       await pages[1].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().remotePlayers.some(p=>p.creatureInstanceId===id),nativeId,wait);
       const after = await readRoster(actor); assert.equal(after.activeId,nativeId); assert.equal(after.instances.length,2);
       assert.equal(after.instances.find(c=>c.id===nativeId).origin,'native');
       assert.equal((await readRoster(pages[1])).instances.length,0);
-      if (process.env.NEXTGEN_COMPANION_TEST === '1') {
+      if (process.env.NEXTGEN_COMPANION_TEST === '1' || evolutionMode) {
         await actor.waitForFunction(()=>{const s=window.__nextgenRoom.getRoomInfo();return s.self?.nativeCompanion?.maxHp===80 && s.self.nativeCompanion.mode==='follow' && document.querySelector('.nextgen-companion-vitals')?.dataset.hp!==undefined;},null,wait);
         await perform('auto',null,{mode:'aggressive'});
         await Promise.all(pages.map(page=>page.waitForFunction(id=>{
@@ -211,6 +213,48 @@ const { launchBrowser } = require('./support.cjs');
         assert.equal((await readRoster(panel)).activeId,nativeId);
       } finally { await panel.close(); }
       console.log('M04-C2: real field capture, independent native/legacy IDs, replicated deployment, removed marker, account isolation, locked early evolution and collection selection passed.');
+      if (evolutionMode) {
+        // No XP injection or internal account endpoints: fight real infected with ordinary room packets.
+        const { NEXTGEN_MAP, roomHeight } = await import('../../shared/nextgen-terrain.mjs');
+        const { bulletTarget, pulseTargets } = await import('../../shared/survival.mjs');
+        const read = () => actor.evaluate(()=>window.__nextgenRoom.getRoomInfo());
+        const send = packet=>actor.evaluate(p=>window.__testRoomSocket.send(JSON.stringify(p)),packet);
+        const deadline=Date.now()+180000;let lastPulse=0,lastReload=0,restarts=0;
+        let trained=await read();
+        while(trained.self.creatureXp<120 && Date.now()<deadline) {
+          const p=trained.self, enemies=trained.horde.enemies.filter(e=>e.hp>0).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z));
+          const now=Date.now();
+          if(p.hp<=0) {await send({type:'restart'});restarts++;await new Promise(r=>setTimeout(r,750));}
+          else if(p.nativeCompanion?.hp>0 && now-lastPulse>8500 && pulseTargets(enemies,p,7.5,NEXTGEN_MAP).length) {await send({type:'pulse'});lastPulse=now;}
+          else if(trained.arsenal?.rifle?.magazine===0) {
+            if(now-lastReload>2500){await send({type:'reload',weapon:'rifle'});lastReload=now;}
+          } else if(enemies.length) {
+            const origin={x:p.x,y:roomHeight(p.x,p.z)+1.32,z:p.z};
+            const direction=enemies.map(e=>{const d={x:e.x-origin.x,y:roomHeight(e.x,e.z)+1.1-origin.y,z:e.z-origin.z};const l=Math.hypot(d.x,d.y,d.z);return l>.01?{x:d.x/l,y:d.y/l,z:d.z/l}:null;}).find(d=>d&&bulletTarget(enemies,origin,d,95,NEXTGEN_MAP));
+            if(direction) await send({type:'shoot',weapon:'rifle',direction});
+            else {const e=enemies[0], dx=e.x-p.x,dz=e.z-p.z,d=Math.hypot(dx,dz);if(d>.5)await send({type:'move',x:p.x+dx/d*.45,z:p.z+dz/d*.45,yaw:Math.atan2(-dx,-dz),sprinting:false,aiming:false,pitch:0,weapon:'rifle'});}
+          }
+          await new Promise(r=>setTimeout(r,230));trained=await read();
+        }
+        assert.ok(trained.self.creatureXp>=120,`Actual combat training timed out at ${trained.self.creatureXp} XP, ${restarts} restarts`);
+        assert.equal(trained.self.creatureFormXp,0);assert.equal(trained.self.creatureProgress.evolutionReady,true);
+        await actor.waitForFunction(()=>document.querySelector('.nextgen-creature-training')?.dataset.evolutionReady==='true',null,wait);
+        const savedXP=trained.self.creatureXp;
+        await actor.goto(new URL('/?nextgen=lobby&tab=collection',base).href);
+        const card=actor.locator(`article[data-creature-id="${nativeId}"]`);
+        await card.getByRole('button',{name:'EVOLVE'}).waitFor();
+        assert.equal(await card.getByRole('button',{name:'EVOLVE'}).isEnabled(),true);
+        await card.getByRole('button',{name:'EVOLVE'}).click();
+        await actor.waitForFunction(id=>document.querySelector(`article[data-creature-id="${id}"]`)?.dataset.form==='lanternkin-2',nativeId,wait);
+        const evolved=(await readRoster(actor)).instances.find(c=>c.id===nativeId);assert.ok(evolved.xp>=savedXP);assert.equal(evolved.formId,'lanternkin-2');
+        await actor.reload();await card.waitFor();assert.equal(await card.getAttribute('data-form'),'lanternkin-2');
+        const freshRoom=`EV${suffix}`.toUpperCase();
+        await Promise.all(pages.map(page=>page.goto(new URL(`/?nextgenRoom=${freshRoom}`,base).href)));
+        await actor.waitForFunction(id=>{const s=window.__nextgenRoom?.getRoomInfo();return s?.self?.creatureInstanceId===id&&s.self.creatureFormXp===120&&s.self.nativeCompanion?.maxHp===120&&s.companionViews.some(v=>v.id===s.id&&v.form==='Luminbloom');},nativeId,wait);
+        const newId=(await read()).id;
+        await pages[1].waitForFunction(({nativeId,newId})=>{const s=window.__nextgenRoom?.getRoomInfo();return s?.remotePlayers.some(p=>p.creatureInstanceId===nativeId&&p.nativeCompanion?.maxHp===120)&&s.companionViews.some(v=>v.id===newId&&v.form==='Luminbloom');},{nativeId,newId},wait);
+        console.log(`M04-C5: ${savedXP} real combat XP, explicit Luminbloom evolution, persistent identity and evolved 120 HP form rendered on both clients.`);
+      }
     }
     console.log('NEXTGEN FIELD: owned companion, rejected unowned Pulse/strike, synchronized Pulse and strike VFX, shared salvage and resupply passed. Full extraction and manual gameplay remain pending.');
   } finally { await browser.close(); }

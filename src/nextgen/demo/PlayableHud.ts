@@ -8,6 +8,7 @@ import { PICKUP } from '../core/PickupController';
 import { WEAPONS, ammoWeapon, lootLabel, fullLootNotice } from '../core/EquipmentInventory';
 import type { CompanionState } from '../core/CompanionController';
 import type { NativeCompanionSnapshot } from '../../../shared/nextgen-companion-combat.mjs';
+import type { NativeTrainingProgress } from '../../../shared/nextgen-creature-roster.mjs';
 import type { SquadView } from '../core/RoomSquadState.mjs';
 import { extractionStarted, extractionConfirmed, extractionFailed, extractionMessage, type ExtractionReceipt } from '../core/RoomExtractionReceipt.mjs';
 
@@ -47,6 +48,7 @@ export interface OnlineHudState {
   transitioning: boolean;
   creature: string | null;
   creatureXp: number;
+  creatureProgress?: NativeTrainingProgress;
   nativeCompanion?: NativeCompanionSnapshot;
   captureKit?:number;
   captureProgress?:number|null;
@@ -88,6 +90,10 @@ export class PlayableHud {
   private readonly companionVitals=document.createElement('div');
   private readonly companionHealthFill=document.createElement('div');
   private readonly companionHealthText=document.createElement('div');
+  private readonly trainingPanel=document.createElement('div');
+  private readonly trainingLabel=document.createElement('div');
+  private readonly trainingFill=document.createElement('div');
+  private readonly evolutionLabel=document.createElement('div');
   private readonly captureVitals=document.createElement('div');
   private readonly captureFill=document.createElement('div');
   private readonly captureLabel=document.createElement('div');
@@ -297,9 +303,14 @@ this.hordeStatus.style.cssText = `
     const petMeter=document.createElement('div');petMeter.style.cssText='height:6px;background:#263c31;border-radius:3px;overflow:hidden;margin-top:4px';
     this.companionHealthFill.style.cssText='height:100%;background:#8fe8b1;transform-origin:left';petMeter.append(this.companionHealthFill);
     this.companionVitals.append(this.companionHealthText,petMeter);
+    this.trainingPanel.className='nextgen-creature-training';this.trainingPanel.style.cssText='display:none;margin:8px 0;color:#d4e4cd';
+    const trainingTrack=document.createElement('div');trainingTrack.style.cssText='height:5px;background:#263c31;border-radius:3px;overflow:hidden;margin:4px 0';
+    this.trainingFill.style.cssText='height:100%;background:#e4c67d;transform-origin:left';trainingTrack.append(this.trainingFill);
+    this.evolutionLabel.style.cssText='font-size:12px;color:#e4c67d';
+    this.trainingPanel.append(this.trainingLabel,trainingTrack,this.evolutionLabel);
     this.captureVitals.className='nextgen-capture-vitals';this.captureVitals.style.cssText='display:none;border-top:1px solid #476657;margin-top:8px;padding-top:8px';
     const captureTrack=document.createElement('div');captureTrack.style.cssText='height:5px;background:#263c31;border-radius:3px;overflow:hidden;margin-top:4px';this.captureFill.style.cssText='height:100%;background:#9de4fa;transform-origin:left';captureTrack.append(this.captureFill);this.captureVitals.append(this.captureLabel,captureTrack);
-    this.abilityPanel.append(this.resonanceLabel,meter,this.companionLabel,this.companionVitals,this.pulseLabel,this.captureVitals);this.root.append(this.abilityPanel);
+    this.abilityPanel.append(this.resonanceLabel,meter,this.companionLabel,this.companionVitals,this.trainingPanel,this.pulseLabel,this.captureVitals);this.root.append(this.abilityPanel);
 
     document.body.appendChild(this.root);
   }
@@ -362,7 +373,19 @@ this.hordeStatus.style.cssText = `
     this.lootToast.style.display='none';
     this.resonanceLabel.textContent = `Q  ${s.transitioning?'TRANSFORMING':s.resonant?'RESONANCE ACTIVE':'RESONANCE'}  ${Math.round(s.charge)}%`;
     this.resonanceFill.style.transform = `scaleX(${Math.max(0,Math.min(1,s.charge/100))})`;
-    this.companionLabel.textContent = s.creature ? `C  ${s.creature.toUpperCase()} · ${s.creatureXp} XP` : 'C  NO COMPANION';
+    const training=s.creatureProgress;
+    this.companionLabel.textContent = s.creature ? `C  ${s.creature.toUpperCase()} · ${training ? `LV ${training.level}` : `${s.creatureXp} XP`}` : 'C  NO COMPANION';
+    this.trainingPanel.style.display=training?'block':'none';
+    if(training) {
+      this.trainingPanel.dataset.xp=String(training.xp);this.trainingPanel.dataset.level=String(training.level);
+      this.trainingPanel.dataset.form=training.formId;this.trainingPanel.dataset.evolutionReady=String(training.evolutionReady);
+      const levelSpan=training.nextLevelXP===null?0:training.nextLevelXP-training.levelStartXP;
+      const fraction=levelSpan>0?(training.xp-training.levelStartXP)/levelSpan:1;
+      this.trainingFill.style.transform=`scaleX(${Math.max(0,Math.min(1,fraction))})`;
+      this.trainingLabel.textContent=training.nextLevelXP===null?`${training.xp} XP · TRAINING MAX`:`${training.xp} / ${training.nextLevelXP} XP · NEXT LEVEL`;
+      this.evolutionLabel.textContent=training.evolutionReady?`EVOLUTION READY · ${training.nextFormName} · Collection menu`:
+        training.nextXP===null?'FINAL FORM':`${training.nextXP-training.xp} XP TO ${training.nextFormName?.toUpperCase()}`;
+    }
     const pet=s.nativeCompanion;
     this.companionVitals.style.display=pet?'block':'none';
     if(pet) {

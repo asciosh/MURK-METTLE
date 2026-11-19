@@ -1,5 +1,5 @@
 import { normalizeCollection } from '../../shared/collection.mjs';
-import { NATIVE_CAPTURE, nativeFormXP } from '../../shared/nextgen-creature-roster.mjs';
+import { NATIVE_CAPTURE, nativeFormXP, nativeTrainingProgress } from '../../shared/nextgen-creature-roster.mjs';
 import { ensureNativeCompanion, setNativeCompanionMode, recoverNativeCompanion, nativeCompanionTargetable, stepNativeCompanion, manualNativeStrike, nativeCompanionSnapshot } from '../../shared/nextgen-companion-combat.mjs';
 // Cloudflare Durable Object — shared four-player session state.
 // This is an authoritative combat prototype, not yet an account/inventory server.
@@ -847,6 +847,7 @@ export class GameRoom extends DurableObject {
         species: p.native?.familyId || p.collection?.active || 'lanternkin',
         creatureXp: p.native?.xp ?? (p.collection?.creatures[p.collection.active]?.xp || 0),
         ...(p.native ? { creatureInstanceId:p.native.id, creatureFormXp:nativeFormXP(p.native) } : {}),
+        ...(p.native && p.nextgen && this.map ? { creatureProgress:nativeTrainingProgress(p.native) } : {}),
         ...(p.native && p.nativeCombat && p.nextgen && this.map ? { nativeCompanion:nativeCompanionSnapshot(p.nativeCombat) } : {}),
         ...(p.nextgen && this.map ? { captureAvailable:p.captureSequence !== this.mission.sequence,
           captureKit:p.captureSequence!==this.mission.sequence?1:0,

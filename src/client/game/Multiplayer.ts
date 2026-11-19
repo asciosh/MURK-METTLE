@@ -5,6 +5,7 @@ import type { ActorPose } from '../../../shared/actor-pose.mjs';
 import type { Vitals, HordePacket } from '../../../shared/survival.mjs';
 import type { NextgenPlayerState, NextgenWeapon } from '../../../shared/nextgen-combat.mjs';
 import type { NativeCompanionSnapshot } from '../../../shared/nextgen-companion-combat.mjs';
+import type { NativeTrainingProgress } from '../../../shared/nextgen-creature-roster.mjs';
 export interface RemotePlayer extends Partial<ActorPose> {
   reloadProgress?: number;
   survival?: Vitals;
@@ -18,6 +19,7 @@ export interface RemotePlayer extends Partial<ActorPose> {
   creatureXp?: number;
   creatureInstanceId?: string;
   creatureFormXp?: number;
+  creatureProgress?: NativeTrainingProgress;
   captureAvailable?: boolean;
   captureKit?: number;
   captureProgress?: number|null;

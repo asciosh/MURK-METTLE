@@ -383,6 +383,7 @@ export class OnlineSession {
       charge:me?.nextgen?.charge ?? 0, resonant:!!me?.nextgen?.resonant, transitioning:!!me?.nextgen?.transitioning,
       creature:me?.creatureOwned && me.species ? creaturePower(me.species,me.creatureFormXp ?? me.creatureXp ?? 0).name : null,
       creatureXp:me?.creatureXp ?? 0,
+      creatureProgress:me?.creatureProgress,
       nativeCompanion:me?.nativeCompanion,
       captureKit:me?.captureKit, captureProgress:me?.captureProgress??null,
       target:revive?'V · Revive teammate (1 bandage)':target?`E · ${target.label}`:this.note,

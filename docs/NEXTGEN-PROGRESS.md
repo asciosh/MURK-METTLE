@@ -12,6 +12,14 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## 2026-11-19 — M04-C5: live creature training and evolution
+
+- Operator verified C4 on the actual local two-client stack: default NEXTGEN entry, legacy archive, visible wild creature, timed capture, capsule consumption, independent ownership, native autonomous combat and account isolation. Committed and pushed as `6196e0c`; portable transfer restored with a clean working tree.
+- Native specimen training now exposes a server-derived live level, lifetime XP, next-level progress and explicit next-form readiness in the co-op HUD. The private collection uses the same derived training rules and shows current and next-form maximum health and strike damage. Players may evolve eligible specimens in the Collection menu; selection and evolution take effect on next deployment, retaining the same ID and XP. No automatic form changes or new save fields.
+- Progression remains 12 XP per confirmed ordinary kill and 40 per Pulse kill. Lanternkin → Luminbloom at 120 XP → Grovewarden at 400 XP; actual forms have 80/120/160 HP and 12/18/24 strike damage. Solo practice and legacy progression are unchanged.
+- Local verification: 97/97 repository tests including a real room/account integration with both explicit evolution steps, forge rejection, live training snapshots, persistent identity and stronger redeployments. Browser script syntax passes. Windows typecheck/build and extended live two-client browser training/evolution test remain operator tasks; dependencies unavailable in the source-only workspace.
+- **Next task:** complete Windows acceptance of C5 and commit; then broaden the native species/encounter system and design secure extraction banking, definitive creature defeat and capture economy before shared headquarters. M04 is not complete yet; the five-family native roster and full expedition risk remain open.
+
 ## 2026-11-19 — M04-C4: default NEXTGEN entry and capture capsule
 
 - Operator verified C3 on the real local two-client browser: authoritative native HP/position, autonomous strike and existing capture/selection remain working. Manual C tactic cycling was confirmed.

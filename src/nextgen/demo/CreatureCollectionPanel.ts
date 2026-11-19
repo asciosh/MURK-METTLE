@@ -1,4 +1,5 @@
 import type { CreatureRosterView } from '../../../shared/nextgen-creature-roster.mjs';
+import { nativeCompanionStats } from '../../../shared/nextgen-companion-combat.mjs';
 
 /** Private account collection. Selection and evolution are server-validated intents. */
 export function mountCreatureCollectionPanel(host: HTMLElement) {
@@ -10,9 +11,9 @@ export function mountCreatureCollectionPanel(host: HTMLElement) {
   const list = make('div'); list.id = 'ng-creature-collection';
   const refreshButton = make('button', 'ng-button ng-secondary', 'REFRESH COLLECTION'); refreshButton.type = 'button';
   host.append(make('h2', '', 'Creature collection'),
-    make('p', 'ng-note', 'Capture wild Lanternkin in the field, train individual specimens and evolve eligible forms here. Selection and evolution take effect when you next enter a co-op room.'),
+    make('p', 'ng-note', 'Capture wild Lanternkin in the field. Each deployed specimen gains 12 XP per confirmed ordinary kill and 40 XP per Pulse kill. Evolve here when ready; changes take effect on your next co-op deployment.'),
     refreshButton, status, list,
-    make('p', 'ng-note', 'Solo practice remains local. Creature health, capture devices, market purchases and base assignments are future updates.'));
+    make('p', 'ng-note', 'Solo practice remains local. Captured specimens have expedition-local health; market purchases and base assignments are future updates.'));
   let generation = 0;
   function clear() {
     generation++; list.replaceChildren(); status.textContent = ''; refreshButton.disabled = false;
@@ -26,6 +27,7 @@ export function mountCreatureCollectionPanel(host: HTMLElement) {
       if (request !== generation) return;
       if (!response.ok) { const error = await response.json().catch(() => ({})); throw Error(error.error || 'Creature action failed.'); }
       await refresh();
+      if (request + 1 === generation) status.textContent = kind === 'evolve' ? 'Evolution confirmed! The new form will deploy when you next join a co-op room.' : 'Companion selected for your next co-op deployment.';
     } catch (error) {
       if (request !== generation) return;
       await refresh(); status.textContent = error instanceof Error ? error.message : 'Creature action failed.';
@@ -52,6 +54,20 @@ export function mountCreatureCollectionPanel(host: HTMLElement) {
         const label = creature.status === 'lost' ? 'Lost' : creature.id === roster.activeId ? 'Selected in co-op' : 'In collection';
         card.append(name, make('p', 'ng-smallcaps', `${creature.familyName} · Lv ${creature.level} · ${label}`),
           make('p', '', `${creature.xp} lifetime XP · ${creature.origin === 'native' ? 'Captured specimen' : 'Original bonded creature'}`));
+        if (creature.training) {
+          const training = creature.training, stats = nativeCompanionStats(creature);
+          card.dataset.level=String(training.level);card.dataset.xp=String(training.xp);card.dataset.form=training.formId;
+          card.append(make('p','ng-smallcaps',`${stats.maxHp} MAX HP · ${stats.damage} STRIKE DAMAGE`));
+          if (training.nextLevelXP !== null) {
+            const levelProgress=make('progress');levelProgress.max=training.nextLevelXP-training.levelStartXP;
+            levelProgress.value=training.xp-training.levelStartXP;levelProgress.setAttribute('aria-label',`Level progress for ${creature.name}`);
+            card.append(levelProgress,make('p','ng-note',`${training.nextLevelXP-training.xp} XP to level ${training.level+1}`));
+          }
+          if (training.nextFormId && training.nextFormName && creature.status === 'available') {
+            const nextStats=nativeCompanionStats({...creature,formId:training.nextFormId});
+            card.append(make('p','ng-note',`Next: ${training.nextFormName} · ${nextStats.maxHp} HP · ${nextStats.damage} strike damage`));
+          }
+        }
         if (creature.status === 'available' && creature.nextXP !== null) {
           const previousThreshold = creature.nextXP === 120 ? 0 : 120;
           const progress = make('progress'); progress.max = creature.nextXP - previousThreshold;
