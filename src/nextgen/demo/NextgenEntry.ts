@@ -1,10 +1,11 @@
 import './NextgenMenu.css';
 import { mountNextgenModsTab } from '../modding/NextgenModsTab';
+import { mountCreatureCollectionPanel } from './CreatureCollectionPanel';
 import { SimpleDemo } from './SimpleDemo';
 import { validateRoomCode } from '../core/RoomIntent';
 import { NEXTGEN_CONTROLS, QUALITY_OPTIONS, savedNextgenQuality, saveNextgenQuality } from '../core/NextgenOptions';
 
-type MenuTab = 'play' | 'coop' | 'settings' | 'controls' | 'mods';
+type MenuTab = 'play' | 'coop' | 'settings' | 'controls' | 'mods' | 'collection';
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', content = ''): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -51,6 +52,7 @@ export function mountLobby(roomCode = '') {
   const tabs = element('nav', 'ng-tabs'); tabs.setAttribute('aria-label', 'Main menu');
   const tabNames: { id: MenuTab; label: string }[] = [
     { id: 'play', label: 'Play' }, { id: 'coop', label: 'Co-op' },
+    { id: 'collection', label: 'Collection' },
     { id: 'settings', label: 'Settings' }, { id: 'controls', label: 'Controls' },
     { id: 'mods', label: 'Creature Mods' },
   ];
@@ -64,8 +66,10 @@ export function mountLobby(roomCode = '') {
     sections.set(id, section);
   }
   let closeModPreview: (() => void) | undefined;
+  const collection = mountCreatureCollectionPanel(sections.get('collection')!);
   const activate = (id: MenuTab) => {
     if (id !== 'mods') closeModPreview?.();
+    if (id === 'collection') void collection.refresh(); else collection.clear();
     for (const [name, section] of sections) section.hidden = name !== id;
     for (const [name, button] of tabButtons) button.setAttribute('aria-selected', String(name === id));
   };
@@ -135,7 +139,7 @@ export function mountLobby(roomCode = '') {
     try {
       const response = await fetch('/api/account/logout', { method: 'POST', credentials: 'same-origin' });
       if (!response.ok) throw Error('Log out failed.');
-      clearAccount();
+      collection.clear(); clearAccount();
     } catch { status.textContent = 'Could not log out. Check your connection.'; }
     finally { busy = false; logout.disabled = false; }
   })();
@@ -165,7 +169,8 @@ export function mountLobby(roomCode = '') {
     const value = saveNextgenQuality(window.localStorage, quality.value);
     backdrop.setQuality(value); settingStatus.textContent = `Saved: ${QUALITY_OPTIONS.find(o => o.id === value)?.label}.`;
   });
-  activate(roomCode ? 'coop' : new URLSearchParams(location.search).get('tab') === 'mods' ? 'mods' : 'play');
+  const requestedTab = new URLSearchParams(location.search).get('tab');
+  activate(roomCode ? 'coop' : requestedTab === 'mods' ? 'mods' : requestedTab === 'collection' ? 'collection' : 'play');
   window.addEventListener('beforeunload', () => backdrop.dispose(), { once: true });
   void fetch('/api/account/me', { credentials: 'same-origin', cache: 'no-store' }).then(async response => {
     if (response.ok) {

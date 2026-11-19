@@ -33,7 +33,7 @@ export class RoomCompanionView {
     scene.add(this.ring);
   }
   update(owner: { x: number; z: number; yaw: number; hp: number }, species: SpeciesId, xp: number, dt: number) {
-    this.species = species; this.xp = xp; this.cosmetic.setSpecies(species);
+    this.species = species; this.xp = xp; this.cosmetic.setSpecies(species, xp);
     this.pet.setForm(species, xp);
     this.visible = owner.hp > 0;
     this.pet.root.visible = this.visible && species !== 'lanternkin';
@@ -74,8 +74,8 @@ export class RoomCompanionView {
     const [x,y,z]=roomToScene(origin.x,origin.z,true); this.ring.position.set(x,y+0.3,z);
     this.ring.material.color.setHex(CREATURES[this.species].glow);
   }
-  strike(target: { x: number; z: number }) { this.strikeTarget = { ...target }; this.strikeMs = 400; this.strikeCount++; }
-  info() { return { species: this.species, xp: this.xp, form: creaturePower(this.species, this.xp).name, visible: this.visible, pulseCount: this.pulseCount, strikeCount: this.strikeCount }; }
+  strike(target: { x: number; z: number }) { this.strikeTarget = { ...target }; this.strikeMs = 400; this.strikeCount++; this.cosmetic.attack(); }
+  info() { return { species: this.species, xp: this.xp, form: creaturePower(this.species, this.xp).name, visible: this.visible, pulseCount: this.pulseCount, strikeCount: this.strikeCount, appearance: this.cosmetic.appearanceKind }; }
   hide() { this.nextgenPet.root.visible=this.pet.root.visible = this.ring.visible = false; this.cosmetic.hide(); }
   dispose() { this.cosmetic.dispose();this.nextgenPet.dispose();this.pet.dispose(); this.ring.removeFromParent(); this.ring.geometry.dispose(); this.ring.material.dispose(); }
 }

@@ -83,6 +83,11 @@ manual checklist in the progress log before checking off M03.
 - [ ] Companion behavior that participates in combat and survival.
 - [ ] Optional cosmetic creature asset packs imported locally in the browser
   (original or appropriately licensed only, provenance recorded).
+- [ ] Bounded multi-creature sprite packs and 3D/2.5D appearance parity; v2 supports
+      128 local form keys (current five families only until native species registration).
+- [ ] Independent persistent creature instances, stable ID, individual progression,
+      trusted capture and evolution, and private journal. C1 is the legacy-compatible
+      roster foundation; native captures, deployment and active evolution remain open.
 
 **Done when:** collection state round-trips through existing cloud saves without schema
 changes.
@@ -102,6 +107,8 @@ with the existing security tests passing.
 - [ ] Mission structure: deploy, objectives, extraction timer/zone, loss conditions.
 - [ ] Difficulty levels with scaled threat and reward.
 - [ ] Mission reward pipeline into permanent progression.
+- [ ] Escalating threat and defended extraction over 10–20 minute runs; hardcore
+      loss of unbanked rewards and endangered deployed creatures, with teammate recovery.
 
 **Done when:** a full deploy→objectives→extract loop is playable solo and in co-op with
 validated rewards.
@@ -111,6 +118,8 @@ validated rewards.
 - [ ] Hub base scene with upgradeable structures.
 - [ ] Base upgrade gameplay loop tied to mission earnings.
 - [ ] Persistence through the existing account schema (no migration unless approved).
+- [ ] Shared headquarters with personally owned creatures, creature jobs, training,
+      healing, storage, and cooperative defense expansion.
 
 **Done when:** base upgrades persist across sessions for a real account.
 
@@ -119,6 +128,8 @@ validated rewards.
 - [ ] Shops, currencies, crafting stations and recipes.
 - [ ] Permanent progression (unlocks, upgrades) server-validated.
 - [ ] Legacy save/progression compatibility.
+- [ ] In-game creature and equipment markets with upgradeable facilities, verified
+      currency and valuable wild-capture incentives.
 
 **Done when:** economy actions are server-validated and legacy accounts keep their value.
 

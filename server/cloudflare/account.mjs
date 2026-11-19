@@ -1,5 +1,6 @@
 import { SPECIES_IDS as SPECIES } from '../../shared/expansion.mjs';
 import { normalizeCollection } from '../../shared/collection.mjs';
+import { NEXTGEN_ROSTER_KEY, reconcileRoster, rosterView } from '../../shared/nextgen-creature-roster.mjs';
 import { DurableObject } from 'cloudflare:workers';
 
 // Private-beta identity: PIN-only authentication with per-account persistent lockout.
@@ -12,6 +13,21 @@ const SAVE_KEYS = [
 
 async function readCollection(storage) {
   return normalizeCollection(await storage.get('coop-collection'),await storage.get('coop-creature'));
+}
+// Caller must own the account storage transaction. Bridge only trusted legacy state.
+async function syncRoster(txn, collection, initialize = false) {
+  const previous = await txn.get(NEXTGEN_ROSTER_KEY);
+  if (previous === undefined && !initialize) return null;
+  let roster;
+  try { roster = reconcileRoster(previous, collection); }
+  catch (error) {
+    if (initialize) throw error;
+    // An invalid future roster must not prevent existing legacy rewards/bonding.
+    console.error('NEXTGEN creature roster requires review', error);
+    return null;
+  }
+  if (JSON.stringify(previous) !== JSON.stringify(roster)) await txn.put(NEXTGEN_ROSTER_KEY, roster);
+  return roster;
 }
 
 const MAX_BODY = 4096;
@@ -94,6 +110,7 @@ export class PlayerAccount extends DurableObject {
         entry.xp=Math.min(250000,entry.xp+gained);
         await txn.put('coop-collection',collection);
         if(species==='lanternkin'&&entry.owned){creature.xp=entry.xp;creature.owned=true;await txn.put('coop-creature',creature);}
+        await syncRoster(txn, collection);
         stats = { ...stats, xp: stats.xp + 50, kills: stats.kills + 1,
           creatureXp: Math.max(stats.creatureXp, creature.xp) };
         // Deterministic server loot: one material awarded per unique confirmed kill.
@@ -140,6 +157,7 @@ export class PlayerAccount extends DurableObject {
         entry.owned=true;collection.active=payload.species;
         await txn.put('coop-collection',collection);
         if(payload.species==='lanternkin')await txn.put('coop-creature',{species:'lanternkin',owned:true,xp:entry.xp});
+        await syncRoster(txn, collection);
         return {collection};
       });
       return result.error?json(result,409):json(result);
@@ -160,6 +178,7 @@ export class PlayerAccount extends DurableObject {
         const existing = await txn.get('coop-creature') || { species: 'lanternkin', owned: false, xp: (await txn.get('coop-stats'))?.creatureXp || 0 };
         if (!existing.owned) { existing.owned = true; await txn.put('coop-creature', existing); }
         const collection=await readCollection(txn);collection.creatures.lanternkin={owned:true,xp:existing.xp};await txn.put('coop-collection',collection);
+        await syncRoster(txn, collection);
         return existing;
       });
       return json({ ok: true, creature });
@@ -209,6 +228,16 @@ export class PlayerAccount extends DurableObject {
     const tokenHash = await sha256(token);
     const sessions = await storage.get('sessions') || {};
     if (!sessions[tokenHash] || sessions[tokenHash] <= now) return json({ error: 'Session expired; log in again' }, 401);
+    if (op === 'nextgen-roster') {
+      if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+      try {
+        const roster = await storage.transaction(async txn => syncRoster(txn, await readCollection(txn), true));
+        return json({ ok: true, roster: rosterView(roster) });
+      } catch (error) {
+        console.error('NEXTGEN roster unavailable', error);
+        return json({ error: 'Creature collection unavailable. Existing saves are unchanged.' }, 409);
+      }
+    }
     if (op === 'coop-state') {
       if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
       return json({ ok: true, collection:await readCollection(storage), ...coopState(await storage.get('coop-stats'),

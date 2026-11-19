@@ -12,6 +12,27 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## 2026-11-19 — M04 sprite test synchronization follow-up
+
+- Operator confirmed the solo sprite-pack and existing GLB mod browser suites pass. The optional co-op sprite test timed out waiting for a visible ability panel: one client entered the live room during the other's sprite import, allowing infected to down the idle survivor. The HUD correctly hides abilities at zero HP.
+- Test-only correction: complete both clients' setup before opening either room socket, and check the ability panel's visibility against authoritative HP; retain real bonding, room replication, sprite/original fallback and account isolation assertions. No production gameplay or cosmetic code changed. Browser rerun pending on the operator PC.
+- Visual direction recommendation: maintain 3D characters, creatures and environments as the production aesthetic, with optional 2.5D cosmetic imports retained.
+- Follow-up: on `127.0.0.1`, operator confirmed co-op sprite/original fallback for the same server-owned creature, but the roster GET assertion failed without an HTTP status. Read roster via browser same-origin authenticated fetch with explicit HTTP diagnostics (matching the journal). No server/cookie policy changes. Rerun pending.
+
+## 2026-11-19 — M04: multi-creature sprite-pack checkpoint (operator verification pending)
+
+- Operator verified M04-C1 real two-client field browser test, including persistent IDs and account isolation. Added a separate browser-local `.mmcreatures` v2 appearance format: 128 form entries, bounded ZIP/PNG worker validation, separate IndexedDB store, original CC0 procedural sprite demo and a single-pack import/enable/remove UI.
+- NEXTGEN solo and co-op use the validated local sprite billboard, animation tracks and ground shadow when the current official form matches; missing entries fall back to base sprite, existing GLB override or original art. The local pack cannot add species, award ownership or alter combat/evolution; existing v1 GLB limits and storage are unchanged. No third-party franchise assets included.
+- Source verification: 89/89 repository tests (including actual 100-entry ZIP and v1 isolation), 8/8 evolution engine tests, TypeScript syntax and browser script syntax pass. Full Windows typecheck/build and real rendered sprite tests pending. See [sprite packs guide](nextgen/M04-SPRITE-PACKS.md).
+- **Next task:** verify v2 UI and solo/co-op visuals, then M04-C2 trusted native capture, per-instance deployment and explicit evolution. No PR/deploy before operator verification.
+
+## 2026-11-19 — M04-C1: persistent individual creature roster (operator verification pending)
+
+- Operator approved a separate additive account roster and shared headquarters / medium-duration hardcore expedition direction. Added `nextgen-creature-roster-v1` with stable server-created UUIDs and canonical forms. Existing ownership, XP, legacy save keys, protocol and Cloudflare bindings are unchanged; initialized rosters reconcile verified rewards and bonding transactionally.
+- Added authenticated, read-only account journal via the NEXTGEN Collection tab. Existing species evolve automatically at the existing XP thresholds and retain their individual ID. Native duplicate capture, explicit branching evolution, real deployment, creature health, permanent loss and markets remain future work. Solo practice is still local.
+- Verified against exported commit `461b57b`: repository Node suite 85/85 passed, including four new roster/real-account tests. New browser assertions cover actual room bonding, account isolation and journal reload; full typecheck, build and browser execution require the operator PC (dependencies unavailable in this source-only environment).
+- See [M04-C1 design and verification](nextgen/M04-C1-CREATURE-ROSTER.md). **Next task:** operator verifies C1, then M04-C2 trusted native capture + per-instance deployment selection and explicit evolution; no PR or deployment yet.
+
 ## 2026-11-18 — M04-B: declarative evolution rules and local preview (operator verification pending)
 
 - Added `shared/creature-evolution.mjs` with guarded family/form catalog validation, branching evolution, level/XP, item, friendship, server-verified trade and day/night prerequisites. Pure transaction plans specify item requirements without writing inventory or saves. Reject cycles, duplicate forms, malformed conditions and oversized catalogs.

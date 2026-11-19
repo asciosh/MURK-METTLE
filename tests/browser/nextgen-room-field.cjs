@@ -9,6 +9,7 @@ const { launchBrowser } = require('./support.cjs');
   const { PICKUPS } = await import('../../shared/coop-rules.mjs');
   const suffix = Date.now().toString(36), room = `FD${suffix}`.toUpperCase();
   const browser = await launchBrowser();
+  const spriteMode = process.env.NEXTGEN_SPRITE_TEST === '1';
   const wait = { timeout: 45000, polling: 100 };
   try {
     const pages = await Promise.all([0, 1].map(async i => {
@@ -16,20 +17,39 @@ const { launchBrowser } = require('./support.cjs');
       const registration = await ctx.request.post(new URL(`/api/account/register?username=fd_${suffix}_${i}`, base).href, { headers: { Origin: base.origin }, data: { pin: '482716' } });
       assert.ok(registration.ok(), `Registration failed: ${registration.status()}`);
       const page = await ctx.newPage();
+      if (spriteMode && i === 0) {
+        await page.goto(new URL('/?nextgen=lobby&tab=mods&view=packs',base).href);
+        await page.locator('#ng-sprite-demo').click({timeout:60000});
+        await page.getByText('Original Pixel Companions',{exact:false}).waitFor({timeout:60000});
+        await page.locator('#ng-sprite-enable').click();
+        await page.locator('#ng-sprite-pack[data-enabled="true"]').waitFor();
+      }
       await page.addInitScript(() => {
         const Native = window.WebSocket;
         window.WebSocket = class extends Native {
           constructor(...args) { super(...args); if (new URL(args[0], location.href).pathname === '/room') window.__testRoomSocket = this; }
         };
       });
+      return page;
+    }));
+    // Finish both clients' account/cosmetic setup BEFORE either starts the live room.
+    // The horde does not wait for the other browser to import its appearance pack.
+    await Promise.all(pages.map(async page => {
       await page.goto(new URL(`/?nextgenRoom=${room}`, base).href);
       await page.waitForFunction(() => { const s = window.__nextgenRoom?.getRoomInfo(); return s?.connected && s.peers.length === 1 && s.collection && s.mission && s.inventory; }, null, wait);
-      return page;
     }));
     const actor = pages[0];
     for (const page of pages) {
       await page.locator('.nextgen-hud[data-mode="coop"] .nextgen-health').waitFor();
-      await page.locator('.nextgen-hud[data-mode="coop"] .nextgen-ability-panel').waitFor();
+      await page.locator('.nextgen-hud[data-mode="coop"] .nextgen-ability-panel').waitFor({state:'attached'});
+      // The actual HUD intentionally hides abilities when downed/dead. Assert the
+      // visibility contract against the real snapshot instead of waiting forever
+      // for a dead survivor to become alive without sending any input.
+      await page.waitForFunction(() => {
+        const info=window.__nextgenRoom?.getRoomInfo();
+        const panel=document.querySelector('.nextgen-hud[data-mode="coop"] .nextgen-ability-panel');
+        return !!info?.self && !!panel && (getComputedStyle(panel).display!=='none')===(info.self.hp>0);
+      },null,wait);
       await page.waitForFunction(() => {
         const markers = window.__nextgenRoom?.getRoomInfo()?.fieldVisuals ?? [];
         return markers.some(m => m.kind === 'resupply' && m.physical) &&
@@ -109,6 +129,27 @@ const { launchBrowser } = require('./support.cjs');
     await Promise.all(pages.map(page => page.waitForFunction(id => window.__nextgenRoom.getRoomInfo().companionViews.some(v => v.id === id && v.species === 'lanternkin'), id, wait)));
     await actor.waitForFunction(() => !window.__nextgenRoom.getRoomInfo().fieldMarkers.includes('bond:lanternkin'), null, wait);
     console.log('Server-owned Lanternkin bonded; both clients render the companion.');
+    if (spriteMode) {
+      await pages[0].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearance==='sprite'),id,wait);
+      await pages[1].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearance==='original'),id,wait);
+      console.log('NEXTGEN SPRITES: same authoritative creature, sprite on installed client and original fallback on second client.');
+    }
+    // Real authenticated roster: bonding imports exactly one unique instance, never another player's.
+    const readRoster = async page => {
+      // Use the browser cookie jar and same-origin fetch, just like the real journal.
+      // APIRequestContext may handle Secure cookies differently on HTTP loopback hosts.
+      const response = await page.evaluate(async () => {
+        const result = await fetch('/api/account/nextgen-roster', { credentials:'same-origin', cache:'no-store' });
+        return { ok:result.ok, status:result.status, body:await result.text() };
+      });
+      assert.ok(response.ok, `Roster GET returned HTTP ${response.status}: ${response.body.slice(0,240)}`);
+      return JSON.parse(response.body).roster;
+    };
+    const roster = await readRoster(actor);
+    assert.equal(roster.instances.length, 1);
+    assert.equal(roster.instances[0].familyId, 'lanternkin');
+    assert.equal(roster.activeId, roster.instances[0].id);
+    assert.deepEqual((await readRoster(pages[1])).instances, []);
     await perform('pulse', null, {});
     await Promise.all(pages.map(page => page.waitForFunction(id => { const s = window.__nextgenRoom.getRoomInfo(); return s.acceptedPulses >= 1 && s.companionViews.some(v => v.id === id && v.pulseCount >= 1); }, id, wait)));
     console.log('Server-confirmed Pulse broadcast and visual received on both clients.');
@@ -119,6 +160,16 @@ const { launchBrowser } = require('./support.cjs');
     console.log('Server confirmed reserve ammo and bandage resupply.');
     await perform('strike', null, {});
     await Promise.all(pages.map(page => page.waitForFunction(id => { const s = window.__nextgenRoom.getRoomInfo(); return s.acceptedStrikes >= 1 && s.companionViews.some(v => v.id === id && v.strikeCount >= 1); }, id, wait)));
+    const journal = await actor.context().newPage();
+    try {
+      await journal.goto(new URL('/?nextgen=lobby&tab=collection', base).href);
+      const card = journal.locator('#ng-creature-collection article');
+      await card.waitFor();
+      assert.equal(await card.getAttribute('data-creature-id'), roster.activeId);
+      await journal.reload(); await card.waitFor();
+      assert.equal(await card.getAttribute('data-creature-id'), roster.activeId);
+    } finally { await journal.close(); }
+    console.log('M04-C1: individual cloud roster identity and private journal persist across reload; account isolation confirmed.');
     console.log('NEXTGEN FIELD: owned companion, rejected unowned Pulse/strike, synchronized Pulse and strike VFX, shared salvage and resupply passed. Full extraction and manual gameplay remain pending.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

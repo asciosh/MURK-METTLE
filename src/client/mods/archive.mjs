@@ -1,9 +1,9 @@
 import { LIMITS, path, fail, crc32, inflateBounded, validateManifest, validatePNG } from './format.mjs';
 import { validateGLB } from './glb.mjs';
 const decoder = new TextDecoder('utf-8', { fatal: true });
-export async function readArchive(buffer) {
+export async function readArchive(buffer, limits = LIMITS) {
   const b = new Uint8Array(buffer);
-  if (b.length > LIMITS.archive || b.length < 22) fail('Archive exceeds 8 MiB or is not a ZIP');
+  if (b.length > limits.archive || b.length < 22) fail(`Archive exceeds ${limits.archive / 1024 / 1024} MiB or is not a ZIP`);
   const v = new DataView(buffer);
   const end = b.length - 22;
   if (
@@ -16,7 +16,7 @@ export async function readArchive(buffer) {
   const count = v.getUint16(end + 10, true),
     start = v.getUint32(end + 16, true),
     size = v.getUint32(end + 12, true);
-  if (!count || count > LIMITS.files || count !== v.getUint16(end + 8, true) || start + size !== end)
+  if (!count || count > limits.files || count !== v.getUint16(end + 8, true) || start + size !== end)
     fail('Archive file count or directory exceeds limits');
   let at = start,
     total = 0,
@@ -54,9 +54,9 @@ export async function readArchive(buffer) {
     if (!/\.(glb|png|json|txt)$/.test(name)) fail('Unsupported archive file type');
     total += expanded;
     if (
-      total > LIMITS.extracted ||
-      expanded > LIMITS.model ||
-      compressed > LIMITS.archive ||
+      total > limits.extracted ||
+      expanded > limits.model ||
+      compressed > limits.archive ||
       (method === 0 && compressed !== expanded) ||
       (compressed === 0 && expanded)
     )

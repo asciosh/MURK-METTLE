@@ -520,6 +520,7 @@ private stepCompanion(delta:number):void {
     this.companionAvatar.root.visible = !hasCosmetic;
   }
   if (strikes.some(hit => hit.kind === 'pulse')) this.companionCosmetic?.pulse();
+  else if (strikes.some(hit => hit.kind === 'basic')) this.companionCosmetic?.attack();
 }
 
 private requestWeapon(id:WeaponId|null):void {
@@ -864,6 +865,7 @@ getCombatInfo() {
     training: this.training,
     benchmark: this.benchmark,
     inventoryOpen: this.inventoryOpen,
+    companionAppearance: this.companionCosmetic?.appearanceKind ?? 'original',
     companion: this.companion?.getState()??null
   };
 }

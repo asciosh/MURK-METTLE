@@ -2,6 +2,8 @@ import { CREATURES } from '../../../shared/expansion.mjs';
 import { nextgenModRegistry } from './NextgenModBridge';
 import { mountCreatureEvolutionLab } from './CreatureEvolutionLab';
 import type { ModPreview } from '../../client/mods/ModPreview';
+import { mountSpritePackPanel } from './SpritePackPanel';
+import { nextgenSpriteRegistry } from './SpritePackRegistry';
 
 /** Browser-local cosmetic packs only; no JS mods, server uploads or gameplay overrides. */
 export function mountNextgenModsTab(host: HTMLElement): { closePreview(): void } {
@@ -45,6 +47,7 @@ export function mountNextgenModsTab(host: HTMLElement): { closePreview(): void }
   const pulse = create('button', 'ng-button ng-secondary', 'TEST PREVIEW PULSE'); pulse.type = 'button'; pulse.hidden = true;
   const toolbar = create('div', 'ng-mod-toolbar'); toolbar.append(install, demo, restore);
   packsPanel.append(input, toolbar, status, list, previewHost, pulse);
+  mountSpritePackPanel(packsPanel);
   mountCreatureEvolutionLab(labPanel);
   selectSection(new URLSearchParams(location.search).get('view') === 'packs' ? 'packs' : 'lab');
 
@@ -116,7 +119,7 @@ export function mountNextgenModsTab(host: HTMLElement): { closePreview(): void }
     status.textContent = `Original demo imported: ${id}. Preview and enable to test.`;
   });
   restore.onclick = () => void run(async () => {
-    closePreview(); await registry.restoreOriginals();
+    closePreview(); await registry.restoreOriginals(); await nextgenSpriteRegistry().setEnabled(false);
     status.textContent = 'All archived original appearances restored on this device.';
   });
   pulse.onclick = () => preview?.pulse();
