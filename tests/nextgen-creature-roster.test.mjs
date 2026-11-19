@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { emptyCollection } from '../shared/collection.mjs';
-import { NEXTGEN_ROSTER_KEY, reconcileRoster, rosterView } from '../shared/nextgen-creature-roster.mjs';
+import { NEXTGEN_ROSTER_KEY, reconcileRoster, rosterView, nativeFormXP } from '../shared/nextgen-creature-roster.mjs';
 
 const makeLegacy = (xp = 0) => {
   const collection = emptyCollection(); collection.creatures.lanternkin = { owned: true, xp };
@@ -105,4 +105,45 @@ test('ordinary legacy users do not create roster records until the account journ
   assert.equal(await storage.get(NEXTGEN_ROSTER_KEY), undefined);
   const initial = await client.send('nextgen-roster');
   assert.equal(initial.data.roster.instances.length, 1);
+});
+
+test('native captures are server-only, idempotent, independent, selectable and explicitly evolved', async () => {
+  const storage = new Storage(), client = createClient(storage,'capturetest'), other = createClient(new Storage(),'captureother');
+  await client.send('register','POST',{pin:'12345678'}); await other.send('register','POST',{pin:'12345678'});
+  await storage.put('coop-collection',makeLegacy(20));
+  const initial = (await client.send('nextgen-roster')).data.roster;
+  const capture = id => client.send('coop-native-capture','POST',{id},true);
+  assert.equal((await client.send('coop-native-capture','POST',{id:'capture:room-test:1'})).status,403);
+  const first = (await capture('capture:room-test:1')).data.native;
+  assert.equal(first.xp,0); assert.equal(first.formId,'lanternkin'); assert.notEqual(first.id,initial.activeId);
+  assert.equal((await capture('capture:room-test:1')).status,409);
+  const second = (await capture('capture:room-test:2')).data.native; assert.notEqual(first.id,second.id);
+  const select = id => client.send('nextgen-roster-action','POST',{action:'select',id});
+  const evolve = (id,targetId) => client.send('nextgen-roster-action','POST',{action:'evolve',id,targetId});
+  assert.equal((await select(first.id)).status,200);
+  assert.equal((await other.send('nextgen-roster-action','POST',{action:'select',id:first.id})).status,409);
+  assert.equal((await evolve(first.id,'lanternkin-2')).status,409);
+  assert.equal((await client.send('nextgen-roster-action','POST',{action:'evolve',id:first.id,targetId:'lanternkin-2',xp:400})).status,400);
+  for (let i=0;i<3;i++) {
+    const reward = {id:`kill:native-test-${i}`,pulse:true,species:'lanternkin',instanceId:first.id};
+    assert.equal((await client.send('coop-reward','POST',reward,true)).status,200);
+    assert.equal((await client.send('coop-reward','POST',reward,true)).data.duplicate,true);
+  }
+  let roster = (await client.send('nextgen-roster')).data.roster;
+  assert.equal(roster.activeId,first.id); assert.equal(roster.instances.length,3);
+  const ready = roster.instances.find(c=>c.id===first.id);
+  assert.equal(ready.xp,120); assert.equal(ready.formId,'lanternkin'); assert.equal(nativeFormXP(ready),0);
+  assert.equal(ready.nextFormId,'lanternkin-2');
+  assert.equal(roster.instances.find(c=>c.id===second.id).xp,0);
+  assert.equal(roster.instances.find(c=>c.id===initial.activeId).xp,20);
+  assert.equal((await evolve(first.id,'lanternkin-3')).status,409);
+  assert.equal((await evolve(first.id,'lanternkin-2')).status,200);
+  assert.equal((await evolve(first.id,'lanternkin-2')).status,409);
+  client.restart(); roster=(await client.send('nextgen-roster')).data.roster;
+  assert.equal(roster.instances.find(c=>c.id===first.id).formId,'lanternkin-2');
+  assert.equal(nativeFormXP(roster.instances.find(c=>c.id===first.id)),120);
+  assert.equal((await client.send('coop-collection?nextgen=1','GET',undefined,true)).data.native.id,first.id);
+  assert.equal((await select(initial.activeId)).status,200);
+  assert.equal((await client.send('coop-collection?nextgen=1','GET',undefined,true)).data.native,null);
+  assert.deepEqual(await storage.get('coop-collection'),makeLegacy(20));
 });

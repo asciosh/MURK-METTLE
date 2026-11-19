@@ -27,7 +27,7 @@ export class RoomFieldView {
           ring.rotation.x = -Math.PI / 2; ring.position.y = .25; root.add(ring);
           marker = { root, ring };
         } else {
-          const artKind = t.kind === 'bond' ? 'habitat' : t.kind === 'pickup' ? 'sample' : 'resupply';
+          const artKind = t.kind === 'bond' || t.kind === 'capture' ? 'habitat' : t.kind === 'pickup' ? 'sample' : 'resupply';
           marker = { root: this.art.create(artKind), artKind };
         }
         this.root.add(marker.root); this.markers.set(key, marker);

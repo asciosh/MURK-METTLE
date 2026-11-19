@@ -1,6 +1,6 @@
 import { SPECIES_IDS as SPECIES } from '../../shared/expansion.mjs';
 import { normalizeCollection } from '../../shared/collection.mjs';
-import { NEXTGEN_ROSTER_KEY, reconcileRoster, rosterView } from '../../shared/nextgen-creature-roster.mjs';
+import { NEXTGEN_ROSTER_KEY, reconcileRoster, rosterView, activeNative, captureNative, creditNative, selectNative, evolveNative } from '../../shared/nextgen-creature-roster.mjs';
 import { DurableObject } from 'cloudflare:workers';
 
 // Private-beta identity: PIN-only authentication with per-account persistent lockout.
@@ -15,11 +15,11 @@ async function readCollection(storage) {
   return normalizeCollection(await storage.get('coop-collection'),await storage.get('coop-creature'));
 }
 // Caller must own the account storage transaction. Bridge only trusted legacy state.
-async function syncRoster(txn, collection, initialize = false) {
+async function syncRoster(txn, collection, initialize = false, selectLegacy = false) {
   const previous = await txn.get(NEXTGEN_ROSTER_KEY);
   if (previous === undefined && !initialize) return null;
   let roster;
-  try { roster = reconcileRoster(previous, collection); }
+  try { roster = reconcileRoster(selectLegacy && previous ? { ...previous, activeId: null } : previous, collection); }
   catch (error) {
     if (initialize) throw error;
     // An invalid future roster must not prevent existing legacy rewards/bonding.
@@ -105,12 +105,24 @@ export class PlayerAccount extends DurableObject {
         const species=event.species===undefined?'lanternkin':event.species;
         if(!SPECIES.includes(species))return {error:'Invalid species'};
         const entry=collection.creatures[species];
-        if (event.pulse && !entry.owned) return { error: 'Creature not bonded' };
-        const gained=entry.owned?(event.pulse?40:event.species?12:0):0;
-        entry.xp=Math.min(250000,entry.xp+gained);
-        await txn.put('coop-collection',collection);
-        if(species==='lanternkin'&&entry.owned){creature.xp=entry.xp;creature.owned=true;await txn.put('coop-creature',creature);}
-        await syncRoster(txn, collection);
+        let native = null;
+        if (event.instanceId !== undefined) {
+          const roster = await syncRoster(txn, collection);
+          const deployed = roster?.instances.find(c => c.id === event.instanceId && c.familyId === species);
+          if (!deployed) return { error: 'Invalid deployed creature' };
+          let updated;
+          try { updated = creditNative(roster, event.instanceId, event.pulse ? 40 : 12); }
+          catch { return { error: 'Invalid deployed creature' }; }
+          native = updated.instances.find(c => c.id === event.instanceId);
+          await txn.put(NEXTGEN_ROSTER_KEY, updated);
+        } else {
+          if (event.pulse && !entry.owned) return { error: 'Creature not bonded' };
+          const gained=entry.owned?(event.pulse?40:event.species?12:0):0;
+          entry.xp=Math.min(250000,entry.xp+gained);
+          await txn.put('coop-collection',collection);
+          if(species==='lanternkin'&&entry.owned){creature.xp=entry.xp;creature.owned=true;await txn.put('coop-creature',creature);}
+          await syncRoster(txn, collection);
+        }
         stats = { ...stats, xp: stats.xp + 50, kills: stats.kills + 1,
           creatureXp: Math.max(stats.creatureXp, creature.xp) };
         // Deterministic server loot: one material awarded per unique confirmed kill.
@@ -119,7 +131,7 @@ export class PlayerAccount extends DurableObject {
         await txn.put(key, true);
         await txn.put('coop-stats', stats);
         await txn.put('coop-inventory', inventory);
-        return { ok: true, duplicate: false, material, collection, ...coopState(stats, inventory, upgrades) };
+        return { ok: true, duplicate: false, material, collection, native, ...coopState(stats, inventory, upgrades) };
       });
       return result.error ? json(result, 409) : json(result);
     }
@@ -145,9 +157,29 @@ export class PlayerAccount extends DurableObject {
       return json(result);
     }
 
+    if (op === 'coop-native-capture') {
+      if (request.method !== 'POST' || request.headers.get('X-MM-Reward-Source') !== 'game-room-v1') return json({ error: 'Forbidden' },403);
+      let event; try { event = await request.json(); } catch { return json({error:'Invalid payload'},400); }
+      if (typeof event?.id !== 'string' || !/^capture:[a-zA-Z0-9:_-]{6,110}$/.test(event.id)) return json({error:'Invalid capture ID'},400);
+      try {
+        const result = await storage.transaction(async txn => {
+          const key = `coop-native-capture:${event.id}`;
+          if (await txn.get(key)) return { error: 'Already captured in this expedition' };
+          const collection = await readCollection(txn);
+          const roster = captureNative(await syncRoster(txn, collection, true));
+          await txn.put(NEXTGEN_ROSTER_KEY, roster); await txn.put(key, roster.activeId);
+          return { native: activeNative(roster) };
+        });
+        return json(result, result.error ? 409 : 200);
+      } catch { return json({error:'Creature capture unavailable'},409); }
+    }
     if(op==='coop-collection') {
       if(request.headers.get('X-MM-Reward-Source')!=='game-room-v1')return json({error:'Forbidden'},403);
-      if(request.method==='GET')return json({collection:await readCollection(storage)});
+      if(request.method==='GET') {
+        const collection = await readCollection(storage);
+        const captureId = url.searchParams.get('captureId');
+        return json({collection, ...(url.searchParams.get('nextgen') === '1' ? { native: activeNative(await storage.get(NEXTGEN_ROSTER_KEY)), captured: !!captureId && !!(await storage.get(`coop-native-capture:${captureId}`)) } : {})});
+      }
       if(request.method!=='POST')return json({error:'Method not allowed'},405);
       let payload;try{payload=await request.json();}catch{return json({error:'Invalid payload'},400);}
       if(!SPECIES.includes(payload?.species)||!['bond','select'].includes(payload?.action))return json({error:'Invalid species or action'},400);
@@ -157,7 +189,7 @@ export class PlayerAccount extends DurableObject {
         entry.owned=true;collection.active=payload.species;
         await txn.put('coop-collection',collection);
         if(payload.species==='lanternkin')await txn.put('coop-creature',{species:'lanternkin',owned:true,xp:entry.xp});
-        await syncRoster(txn, collection);
+        await syncRoster(txn, collection, false, true);
         return {collection};
       });
       return result.error?json(result,409):json(result);
@@ -237,6 +269,32 @@ export class PlayerAccount extends DurableObject {
         console.error('NEXTGEN roster unavailable', error);
         return json({ error: 'Creature collection unavailable. Existing saves are unchanged.' }, 409);
       }
+    }
+    if (op === 'nextgen-roster-action') {
+      if (request.method !== 'POST') return json({ error: 'Method not allowed' },405);
+      const text = await request.text(); if (text.length > 512) return json({error:'Invalid creature action'},413);
+      let body; try { body = JSON.parse(text); } catch { return json({error:'Invalid payload'},400); }
+      if (!body || typeof body.id !== 'string' || body.id.length > 80 || !['select','evolve'].includes(body.action) ||
+        Object.keys(body).some(k => !['id','action','targetId'].includes(k)) || (body.action === 'evolve' && typeof body.targetId !== 'string')) return json({error:'Invalid creature action'},400);
+      try {
+        const roster = await storage.transaction(async txn => {
+          const collection = await readCollection(txn);
+          let current = await syncRoster(txn, collection, true);
+          if (body.action === 'evolve') current = evolveNative(current, body.id, body.targetId);
+          else {
+            const target = current.instances.find(c => c.id === body.id && c.status === 'available');
+            if (!target) throw Error('Creature unavailable');
+            if (target.origin === 'legacy') {
+              if (!collection.creatures[target.familyId]?.owned) throw Error('Creature unavailable');
+              collection.active = target.familyId;
+              await txn.put('coop-collection', collection);
+              current = reconcileRoster({ ...current, activeId: null }, collection);
+            } else current = selectNative(current, body.id);
+          }
+          await txn.put(NEXTGEN_ROSTER_KEY, current); return current;
+        });
+        return json({ok:true, roster:rosterView(roster)});
+      } catch { return json({error:'Creature action unavailable or requirements not met'},409); }
     }
     if (op === 'coop-state') {
       if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);

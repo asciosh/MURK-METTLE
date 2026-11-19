@@ -10,8 +10,8 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/api/account/')) {
       const op = url.pathname.split('/').at(-1);
-      if (!['register', 'login', 'me', 'logout', 'save', 'coop-state', 'coop-craft', 'nextgen-roster'].includes(op)) return new Response('Not found', { status: 404 });
-      if (['register', 'login', 'logout', 'coop-craft'].includes(op) && request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+      if (!['register', 'login', 'me', 'logout', 'save', 'coop-state', 'coop-craft', 'nextgen-roster', 'nextgen-roster-action'].includes(op)) return new Response('Not found', { status: 404 });
+      if (['register', 'login', 'logout', 'coop-craft', 'nextgen-roster-action'].includes(op) && request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
       if (op === 'save' && !['PUT', 'GET'].includes(request.method)) return new Response('Method not allowed', { status: 405 });
       if (['me', 'coop-state', 'nextgen-roster'].includes(op) && request.method !== 'GET') return new Response('Method not allowed', { status: 405 });
       // Prevent cross-site request forgery; same-origin requests only.

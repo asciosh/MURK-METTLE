@@ -51,8 +51,8 @@ export class RoomSquadOverlay {
       label.style.display=visible?'block':'none';
       if(!visible)continue;
       label.style.left=`${(this.point.x+1)*50}%`;label.style.top=`${(1-this.point.y)*50}%`;
-      label.textContent=target.kind==='pickup'?'SAMPLE':target.kind==='bond'?'CREATURE HABITAT':target.kind==='extract'?(target.available?'EXTRACT HERE':'EXTRACTION LOCKED'):'SUPPLY CACHE';
-      label.style.border=`1px solid ${target.kind==='extract'?(target.available?'#85ef9b':'#987a61'):target.kind==='bond'?'#75cba6':target.kind==='pickup'?'#e9c477':'#9cb8e4'}`;
+      label.textContent=target.kind==='pickup'?'SAMPLE':target.kind==='capture'?'WILD LANTERNKIN · CAPTURE':target.kind==='bond'?'CREATURE HABITAT':target.kind==='extract'?(target.available?'EXTRACT HERE':'EXTRACTION LOCKED'):'SUPPLY CACHE';
+      label.style.border=`1px solid ${target.kind==='extract'?(target.available?'#85ef9b':'#987a61'):target.kind==='bond'||target.kind==='capture'?'#75cba6':target.kind==='pickup'?'#e9c477':'#9cb8e4'}`;
     }
   }
 

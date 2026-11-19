@@ -79,6 +79,7 @@ const { launchBrowser } = require('./support.cjs');
           if (type === 'unowned-strike' && packet.type === 'error' && /bond/i.test(packet.message)) return done(packet);
           if (type === 'strike' && packet.type === 'companion-strike' && packet.by === id) return done(packet);
           if (type === 'bond' && packet.type === 'collection-state' && packet.bonded && packet.collection.creatures[body.species].owned) return done(packet);
+          if (type === 'capture' && packet.type === 'creature-captured') return done(packet);
           if (type === 'pulse' && packet.type === 'action' && packet.action === 'pulse' && packet.by === id) return done(packet);
           if (type === 'pickup' && packet.type === 'mission-state' && !packet.pickups.some(p => p.id === body.id)) return done(packet);
           if (type === 'resupply') {
@@ -170,6 +171,31 @@ const { launchBrowser } = require('./support.cjs');
       assert.equal(await card.getAttribute('data-creature-id'), roster.activeId);
     } finally { await journal.close(); }
     console.log('M04-C1: individual cloud roster identity and private journal persist across reload; account isolation confirmed.');
+    if (process.env.NEXTGEN_CAPTURE_TEST === '1') {
+      const { NATIVE_CAPTURE } = await import('../../shared/nextgen-creature-roster.mjs');
+      await actor.waitForFunction(() => window.__nextgenRoom.getRoomInfo().fieldMarkers.includes('capture:wild-lanternkin'),null,wait);
+      const captured = await perform('capture',{...NATIVE_CAPTURE,radius:2.35},{id:NATIVE_CAPTURE.id});
+      const nativeId = captured.packet.id; assert.notEqual(nativeId,roster.activeId);
+      await actor.waitForFunction(id=>{const s=window.__nextgenRoom.getRoomInfo();return s.self.creatureInstanceId===id && s.self.creatureFormXp===0 && !s.fieldMarkers.includes('capture:wild-lanternkin');},nativeId,wait);
+      await pages[1].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().remotePlayers.some(p=>p.creatureInstanceId===id),nativeId,wait);
+      const after = await readRoster(actor); assert.equal(after.activeId,nativeId); assert.equal(after.instances.length,2);
+      assert.equal(after.instances.find(c=>c.id===nativeId).origin,'native');
+      assert.equal((await readRoster(pages[1])).instances.length,0);
+      const panel = await actor.context().newPage();
+      try {
+        await panel.goto(new URL('/?nextgen=lobby&tab=collection',base).href);
+        const nativeCard=panel.locator(`article[data-creature-id="${nativeId}"]`);
+        await nativeCard.waitFor(); assert.equal(await nativeCard.getByRole('button',{name:'EVOLVE'}).isDisabled(),true);
+        const oldCard=panel.locator(`article[data-creature-id="${roster.activeId}"]`);
+        await oldCard.getByRole('button',{name:'SELECT COMPANION'}).click();
+        await nativeCard.getByRole('button',{name:'SELECT COMPANION'}).waitFor();
+        assert.equal((await readRoster(panel)).activeId,roster.activeId);
+        await nativeCard.getByRole('button',{name:'SELECT COMPANION'}).click();
+        await oldCard.getByRole('button',{name:'SELECT COMPANION'}).waitFor();
+        assert.equal((await readRoster(panel)).activeId,nativeId);
+      } finally { await panel.close(); }
+      console.log('M04-C2: real field capture, independent native/legacy IDs, replicated deployment, removed marker, account isolation, locked early evolution and collection selection passed.');
+    }
     console.log('NEXTGEN FIELD: owned companion, rejected unowned Pulse/strike, synchronized Pulse and strike VFX, shared salvage and resupply passed. Full extraction and manual gameplay remain pending.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

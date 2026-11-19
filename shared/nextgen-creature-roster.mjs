@@ -1,9 +1,10 @@
-import { legacyEvolutionPreview, levelFromXP, EVOLUTION_DEMO_CATALOG } from './creature-evolution.mjs';
+import { legacyEvolutionPreview, levelFromXP, EVOLUTION_DEMO_CATALOG, planEvolution } from './creature-evolution.mjs';
 
 // Independent account key. Never replace the legacy one-per-species collection.
 export const NEXTGEN_ROSTER_KEY = 'nextgen-creature-roster-v1';
 const MAX_INSTANCES = 256;
 const cleanXP = value => Number.isSafeInteger(value) && value >= 0 && value <= 250000;
+export const NATIVE_CAPTURE = Object.freeze({ id: 'wild-lanternkin', x: 8, z: -8, range: 2.7, familyId: 'lanternkin' });
 
 /** Reconcile verified legacy ownership; never accept a browser-supplied collection. */
 export function reconcileRoster(previous, legacyCollection, newId = () => crypto.randomUUID()) {
@@ -47,8 +48,38 @@ export function reconcileRoster(previous, legacyCollection, newId = () => crypto
     ids.add(id); instances.push(record); linked.set(entry.species, record);
   }
   const active = linked.get(legacyCollection?.active);
+  const selected = instances.find(c => c.id === previous?.activeId && c.origin === 'native' && c.status === 'available');
+  if (selected) return { version: 1, instances, activeId: selected.id };
   return { version: 1, instances, activeId: active?.status === 'available' &&
     legacyCollection?.creatures?.[active.familyId]?.owned === true ? active.id : null };
+}
+
+export function activeNative(roster) {
+  if (roster?.version !== 1 || !Array.isArray(roster.instances)) return null;
+  return roster.instances.find(c => c.id === roster.activeId && c.origin === 'native' && c.status === 'available' && c.familyId === NATIVE_CAPTURE.familyId && cleanXP(c.xp) && EVOLUTION_DEMO_CATALOG.forms[c.formId]?.familyId === c.familyId) ?? null;
+}
+export const nativeFormXP = record => record.formId === `${record.familyId}-3` ? 400 : record.formId === `${record.familyId}-2` ? 120 : 0;
+export function captureNative(roster, id = crypto.randomUUID()) {
+  // Reserve room for all five legacy imports even if the player hasn't bonded them yet.
+  if (roster.instances.length >= MAX_INSTANCES - 5 || roster.instances.some(c => c.id === id)) throw Error('Creature collection is full or ID is invalid');
+  const record = { id, familyId: NATIVE_CAPTURE.familyId, formId: NATIVE_CAPTURE.familyId, xp: 0, origin: 'native', status: 'available' };
+  return { ...roster, instances: [...roster.instances, record], activeId: id };
+}
+export function creditNative(roster, id, xp) {
+  const record = roster?.instances.find(c => c.id === id && c.origin === 'native' && c.status === 'available' && c.familyId === NATIVE_CAPTURE.familyId);
+  if (!record || ![12,40].includes(xp)) throw Error('Invalid deployed creature');
+  return { ...roster, instances: roster.instances.map(c => c.id === id ? { ...c, xp: Math.min(250000, c.xp + xp) } : c) };
+}
+export function selectNative(roster, id) {
+  if (!roster.instances.some(c => c.id === id && c.origin === 'native' && c.status === 'available' && c.familyId === NATIVE_CAPTURE.familyId)) throw Error('Creature unavailable');
+  return { ...roster, activeId: id };
+}
+export function evolveNative(roster, id, targetId) {
+  const record = roster.instances.find(c => c.id === id && c.origin === 'native' && c.status === 'available' && c.familyId === NATIVE_CAPTURE.familyId);
+  if (!record) throw Error('Creature unavailable');
+  const decision = planEvolution(EVOLUTION_DEMO_CATALOG, record.familyId, record.formId, targetId, { xp: record.xp });
+  if (!decision.ok || decision.consumes.length) throw Error('Evolution requirements not met');
+  return { ...roster, instances: roster.instances.map(c => c.id === id ? { ...c, formId: decision.to } : c) };
 }
 
 /** Client view is derived from server-owned records, not writable client input. */
@@ -57,6 +88,7 @@ export function rosterView(roster) {
     ...record, level: levelFromXP(record.xp),
     name: EVOLUTION_DEMO_CATALOG.forms[record.formId].name,
     familyName: EVOLUTION_DEMO_CATALOG.families[record.familyId].name,
-    nextXP: record.origin === 'legacy' ? (record.xp < 120 ? 120 : record.xp < 400 ? 400 : null) : null,
+    nextXP: record.origin === 'legacy' ? (record.xp < 120 ? 120 : record.xp < 400 ? 400 : null) : record.familyId === NATIVE_CAPTURE.familyId ? (nativeFormXP(record) === 0 ? 120 : nativeFormXP(record) === 120 ? 400 : null) : null,
+    nextFormId: record.origin === 'native' && record.familyId === NATIVE_CAPTURE.familyId ? (nativeFormXP(record) === 0 ? `${record.familyId}-2` : nativeFormXP(record) === 120 ? `${record.familyId}-3` : null) : null,
   })) };
 }

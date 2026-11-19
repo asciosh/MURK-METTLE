@@ -151,6 +151,7 @@ export class OnlineSession {
       case 'respawn': this.position = { x: event.x, z: event.z }; this.visualPosition = { ...this.position }; this.weapon = 'pistol'; if(this.net.id)this.primaryByPlayer.delete(this.net.id); this.inventoryOpen = false; this.note = 'Respawn accepted.'; break;
       case 'arsenal': this.arsenal = event.arsenal; break;
       case 'collection-state': this.collection = event.collection; if (event.bonded) this.note = `Bond confirmed: ${CREATURES[event.collection.active].name}`; break;
+      case 'creature-captured': this.note = 'Wild Lanternkin captured and deployed! Its individual progress is saved in your collection.'; break;
       case 'mission-state': if (this.mission && event.salvage > this.mission.salvage) this.note = 'Team sample recovered.'; this.mission = event; break;
       case 'mission-extracted':
         this.note=`Expedition ${event.completed} completed; verifying personal reward.`;
@@ -240,7 +241,7 @@ export class OnlineSession {
       case 'KeyH': this.net.send('heal'); break;
       case 'KeyE': {
         const me = this.net.self;
-        const target = me ? nearestFieldTarget(me, roomFieldTargets(this.collection, this.mission)) : null;
+        const target = me ? nearestFieldTarget(me, roomFieldTargets(this.collection, this.mission, me.captureAvailable === true)) : null;
         const intent = target ? fieldIntent(target) : null;
         if (intent) { this.net.send(intent.type, intent.body); this.note = `Requested: ${target!.label}`; }
         else if (me && this.mission && !this.mission.ready && Math.hypot(me.x-EXTRACTION.x,me.z-EXTRACTION.z)<=EXTRACTION.radius)
@@ -249,6 +250,7 @@ export class OnlineSession {
         break;
       }
       case 'KeyC': {
+        if (this.net.self?.creatureInstanceId) { this.note = 'Individual creature deployed. Select another specimen in the main menu collection.'; break; }
         const species = nextOwnedSpecies(this.collection);
         if (species) this.net.send('select-creature', { species }); else this.note = 'Bond with another creature to cycle companions.';
         break;
@@ -294,7 +296,7 @@ export class OnlineSession {
     }
     let view = this.companions.get(owner.id);
     if (!view) { view = new RoomCompanionView(this.scene, owner.species); this.companions.set(owner.id, view); }
-    view.update({ ...position, yaw, hp: owner.hp }, owner.species, owner.creatureXp ?? 0, dt);
+    view.update({ ...position, yaw, hp: owner.hp }, owner.species, owner.creatureFormXp ?? owner.creatureXp ?? 0, dt);
     const at = this.pendingPulses.get(owner.id);
     if (at !== undefined) { if (performance.now() - at < 2000) view.pulse(owner); this.pendingPulses.delete(owner.id); }
     const strike = this.pendingStrikes.get(owner.id);
@@ -339,7 +341,7 @@ export class OnlineSession {
       }
       for (const [id, view] of this.enemies) if (!current.has(id)) { view.dispose(); this.enemies.delete(id); }
       for (const [id, view] of this.companions) if (id !== me.id && !this.net.peers.has(id)) { view.dispose(); this.companions.delete(id); }
-      this.field.update(roomFieldTargets(this.collection, this.mission), dt);
+      this.field.update(roomFieldTargets(this.collection, this.mission, this.net.self?.captureAvailable === true), dt);
     } else { for (const a of this.peers.values()) a.root.visible = false; for (const e of this.enemies.values()) e.root.visible = false; for (const c of this.companions.values()) c.hide(); this.field.update([], dt); }
     for (const [id, at] of this.pendingPulses) if (now - at >= 2000) this.pendingPulses.delete(id);
     for (const [id, strike] of this.pendingStrikes) if (now - strike.at >= 2000) this.pendingStrikes.delete(id);
@@ -350,10 +352,10 @@ export class OnlineSession {
     const pose = this.follow.update(dt, p, { heightAt: (x,z)=>NEXTGEN_MAP.heightAt(x-100,z-100) }, this.aim);
     this.camera.position.set(...pose.position); this.camera.lookAt(...pose.target); this.camera.fov = pose.fov; this.camera.updateProjectionMatrix();
     const squad=squadRoster(me, [...this.net.peers.values()]);
-    this.squadOverlay.update(this.isReady() ? squad.slice(1) : [], this.camera, this.isReady()?roomFieldTargets(this.collection,this.mission):[], me);
+    this.squadOverlay.update(this.isReady() ? squad.slice(1) : [], this.camera, this.isReady()?roomFieldTargets(this.collection,this.mission,me?.captureAvailable === true):[], me);
     const objective=objectiveDisplay(this.mission, MISSION_KILLS, MISSION_SALVAGE);
     const ammo = this.weapon === 'shotgun' ? me?.nextgen?.shotgun : this.arsenal?.[this.weapon];
-    const target = this.alive() && me ? nearestFieldTarget(me, roomFieldTargets(this.collection, this.mission)) : null;
+    const target = this.alive() && me ? nearestFieldTarget(me, roomFieldTargets(this.collection, this.mission, me.captureAvailable === true)) : null;
     const revive = this.reviveTarget();
     const horde = this.net.horde;
     this.hud.updateOnline({
@@ -369,7 +371,7 @@ export class OnlineSession {
       killGoal:MISSION_KILLS, sampleGoal:MISSION_SALVAGE, extractionReady:!!this.mission?.ready,
       materials:this.inventory, accountXp:this.accountXp, accountExtractions:this.accountExtractions, arsenal:{pistol:this.arsenal?.pistol ?? null,rifle:this.arsenal?.rifle ?? null,shotgun:me?.nextgen?.shotgun ?? null},
       charge:me?.nextgen?.charge ?? 0, resonant:!!me?.nextgen?.resonant, transitioning:!!me?.nextgen?.transitioning,
-      creature:me?.creatureOwned && me.species ? creaturePower(me.species,me.creatureXp ?? 0).name : null,
+      creature:me?.creatureOwned && me.species ? creaturePower(me.species,me.creatureFormXp ?? me.creatureXp ?? 0).name : null,
       creatureXp:me?.creatureXp ?? 0,
       target:revive?'V · Revive teammate (1 bandage)':target?`E · ${target.label}`:this.note,
       note:this.note, reviveProgress:me?.nextgen?.revivingTarget ? me.nextgen.reviveProgress : null,

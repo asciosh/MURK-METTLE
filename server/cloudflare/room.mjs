@@ -1,4 +1,5 @@
 import { normalizeCollection } from '../../shared/collection.mjs';
+import { NATIVE_CAPTURE, nativeFormXP } from '../../shared/nextgen-creature-roster.mjs';
 // Cloudflare Durable Object — shared four-player session state.
 // This is an authoritative combat prototype, not yet an account/inventory server.
 import { DurableObject } from 'cloudflare:workers';
@@ -90,6 +91,8 @@ export class GameRoom extends DurableObject {
           collection: normalizeCollection(data.collection),
           upgrades: { sharpened: false, balanced: false },
           creatureOwned: data.creatureOwned === true,
+          native: data.map === NEXTGEN_MAP_ID ? data.native ?? null : null,
+          captureSequence: data.captureSequence ?? null,
         });
     }
     if (this.players.size) this.startTick();
@@ -132,6 +135,7 @@ export class GameRoom extends DurableObject {
       hurtUntil: 0,
       moveBudget: 0.75,
       budgetAt: Date.now(),
+      collectionPending: true,
     };
     this.players.set(server, player);
     this.saveAttachment(server, player);
@@ -146,7 +150,7 @@ export class GameRoom extends DurableObject {
     } catch (error) {
       player.creatureOwned = false;
       this.send(server, { type: 'error', message: 'Could not load cloud creature data.' });
-    }
+    } finally { player.collectionPending = false; }
     this.startTick();
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -186,6 +190,8 @@ export class GameRoom extends DurableObject {
       yaw: player.yaw,
       hp: player.hp,
       creatureOwned: player.creatureOwned === true,
+      native: player.native ?? null,
+      captureSequence: player.captureSequence ?? null,
       collection: player.collection,
       arsenal: player.arsenal,
       supplies: player.supplies,
@@ -246,7 +252,7 @@ export class GameRoom extends DurableObject {
   async accountCollection(player, action = null, species = null) {
     const account = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
     const response = await account.fetch(
-      new Request('https://internal/api/account/coop-collection', {
+      new Request(`https://internal/api/account/coop-collection${this.map && !action ? `?nextgen=1&captureId=${encodeURIComponent(`capture:${this.ctx.id.toString()}:${this.mission.sequence}`)}` : ''}`, {
         method: action ? 'POST' : 'GET',
         headers: {
           'X-MM-Account': player.username,
@@ -257,8 +263,11 @@ export class GameRoom extends DurableObject {
       }),
     );
     if (!response.ok) throw new Error(`Collection HTTP ${response.status}`);
-    player.collection = (await response.json()).collection;
-    player.creatureOwned = player.collection.creatures[player.collection.active].owned;
+    const data = await response.json();
+    player.collection = data.collection;
+    player.native = this.map && !action ? data.native ?? null : null;
+    if (this.map && !action && data.captured) player.captureSequence = this.mission.sequence;
+    player.creatureOwned = !!player.native || player.collection.creatures[player.collection.active].owned;
     return player.collection;
   }
   async accountCreature(player, action = null) {
@@ -401,7 +410,33 @@ export class GameRoom extends DurableObject {
       this.saveAttachment(socket, player);
       return;
     }
+    if (msg.type === 'capture') {
+      if (!this.map || !player.nextgen || player.hp <= 0 || this.mission.phase !== 'active' || msg.id !== NATIVE_CAPTURE.id || player.capturePending || player.collectionPending) return;
+      if (player.captureSequence === this.mission.sequence) { this.send(socket,{type:'error',message:'Already captured in this expedition.'}); return; }
+      if (Math.hypot(player.x-NATIVE_CAPTURE.x, player.z-NATIVE_CAPTURE.z) > NATIVE_CAPTURE.range) {
+        this.send(socket, { type:'error', message:'Move closer to the wild creature.' }); return;
+      }
+      const sequence = this.mission.sequence;
+      player.capturePending = true;
+      try {
+        const account = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
+        const response = await account.fetch(new Request('https://internal/api/account/coop-native-capture', {
+          method:'POST', headers:{ 'X-MM-Account':player.username, 'X-MM-Reward-Source':'game-room-v1', 'Content-Type':'application/json' },
+          body:JSON.stringify({ id:`capture:${this.ctx.id.toString()}:${sequence}` }),
+        }));
+        const result = await response.json();
+        if (!response.ok || !result.native) { this.send(socket,{ type:'error',message:result.error || 'Creature capture unavailable.' }); return; }
+        // The capture is already persistent. A disconnected player can deploy on next join.
+        if (this.players.get(socket) !== player) return;
+        player.native = result.native; player.creatureOwned = true; player.captureSequence = sequence;
+        this.saveAttachment(socket,player);
+        this.send(socket,{ type:'creature-captured', id:result.native.id });
+      } catch { this.send(socket,{ type:'error',message:'Creature capture unavailable.' }); }
+      finally { player.capturePending = false; }
+      return;
+    }
     if (msg.type === 'bond' || msg.type === 'select-creature') {
+      if (player.capturePending || player.collectionPending) return;
       const species = msg.species || 'lanternkin';
       if (!SPECIES_IDS.includes(species) || player.hp <= 0) return;
       const def = CREATURES[species];
@@ -409,13 +444,14 @@ export class GameRoom extends DurableObject {
         this.send(socket, { type: 'error', message: 'Move closer to this creature to bond.' });
         return;
       }
+      player.collectionPending = true;
       try {
         await this.accountCollection(player, msg.type === 'bond' ? 'bond' : 'select', species);
         this.send(socket, { type: 'collection-state', collection: player.collection, bonded: msg.type === 'bond' });
         this.saveAttachment(socket, player);
       } catch {
         this.send(socket, { type: 'error', message: 'Creature collection could not be updated.' });
-      }
+      } finally { player.collectionPending = false; }
       return;
     }
     if (msg.type === 'sync-equipment') {
@@ -502,8 +538,9 @@ export class GameRoom extends DurableObject {
     if (!['attack', 'pulse', 'shoot', 'companion-strike'].includes(msg.type) || player.hp <= 0) return;
     const pulse = msg.type === 'pulse',
       shooting = msg.type === 'shoot', companion = msg.type === 'companion-strike';
-    const species = player.collection?.active || 'lanternkin',
-      power = creaturePower(species, player.collection?.creatures[species]?.xp || 0);
+    const native = player.native ?? null;
+    const species = native?.familyId || player.collection?.active || 'lanternkin',
+      power = creaturePower(species, native ? nativeFormXP(native) : player.collection?.creatures[species]?.xp || 0);
     if ((pulse || companion) && !player.creatureOwned) {
       this.send(socket, { type: 'error', message: companion ? 'Bond with a creature before commanding a strike.' : 'Bond with a creature before using Pulse.' });
       return;
@@ -584,9 +621,9 @@ export class GameRoom extends DurableObject {
       await this.persistMission();
       this.broadcast(this.missionPacket());
     }
-    for (const enemy of killed) await this.creditKill(socket, player, enemy, pulse, species);
+    for (const enemy of killed) await this.creditKill(socket, player, enemy, pulse, species, native?.id);
   }
-  async creditKill(socket, player, enemy, pulse, species) {
+  async creditKill(socket, player, enemy, pulse, species, instanceId) {
     try {
       const target = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
       const response = await target.fetch(
@@ -597,11 +634,16 @@ export class GameRoom extends DurableObject {
             'X-MM-Account': player.username,
             'X-MM-Reward-Source': 'game-room-v1',
           },
-          body: JSON.stringify({ id: `kill:${enemy.encounterId}`, pulse, species }),
+          body: JSON.stringify({ id: `kill:${enemy.encounterId}`, pulse, species, ...(instanceId ? { instanceId } : {}) }),
         }),
       );
       if (!response.ok) throw new Error(`Reward store returned ${response.status}`);
       const result = await response.json();
+      if (result.native && player.native?.id === result.native.id) {
+        // Do not apply menu evolution mid-expedition; refresh the deployed form at next join.
+        player.native = { ...player.native, xp: Math.max(player.native.xp, result.native.xp) };
+        this.saveAttachment(socket, player);
+      }
       if (result.collection) {
         player.collection = result.collection;
         this.send(socket, { type: 'collection-state', collection: player.collection });
@@ -610,7 +652,7 @@ export class GameRoom extends DurableObject {
       this.send(socket, {
         type: 'reward',
         xp: 50,
-        creatureXp: pulse ? 40 : 0,
+        creatureXp: instanceId ? (pulse ? 40 : 12) : pulse ? 40 : 0,
         material: result.material || null,
         totals: result.stats,
         duplicate: !!result.duplicate,
@@ -725,8 +767,10 @@ export class GameRoom extends DurableObject {
           return end > now ? Math.max(0.001, Math.min(1, 1 - (end - now) / WEAPONS[weapon].reload)) : 0;
         })(),
         creatureOwned: p.creatureOwned === true,
-        species: p.collection?.active || 'lanternkin',
-        creatureXp: p.collection?.creatures[p.collection.active]?.xp || 0,
+        species: p.native?.familyId || p.collection?.active || 'lanternkin',
+        creatureXp: p.native?.xp ?? (p.collection?.creatures[p.collection.active]?.xp || 0),
+        ...(p.native ? { creatureInstanceId:p.native.id, creatureFormXp:nativeFormXP(p.native) } : {}),
+        ...(p.nextgen && this.map ? { captureAvailable:p.captureSequence !== this.mission.sequence } : {}),
         ...(p.nextgen ? { nextgen: {
           weapon: p.nextgen.weapon, shotgun: p.nextgen.shotgun, charge: p.nextgen.charge, resonant: p.nextgen.resonant, transitioning: p.nextgen.transitionUntil > now,
           downedMs: p.hp <= 0 ? Math.max(0, p.nextgen.downedUntil - now) : 0,

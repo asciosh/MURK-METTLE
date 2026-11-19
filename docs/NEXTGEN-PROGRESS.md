@@ -12,6 +12,14 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## 2026-11-19 — M04-C2: native captures, deployment and explicit evolution
+
+- Operator confirmed the final real two-client sprite fallback, combat, shared field and private roster browser test passes. Production visual direction is 3D; locally installed sprite packs remain optional.
+- Added the first native specimen capture: a wild Lanternkin field marker at room `(8,-8)`, validated by the NEXTGEN room and account Durable Objects, once per account per room expedition. Captures immediately deploy a new stable individual ID, start at zero XP, and do not change the original bonded creature. Duplicate capture and forged ownership/XP are rejected. The marker is removed on confirmation and restored for the next expedition.
+- Native deployed creatures gain 12 XP per server-confirmed ordinary kill or 40 per Pulse kill, independently of the legacy roster. Explicit Lanternkin → Luminbloom → Grovewarden evolution at 120/400 lifetime XP is revalidated transactionally; the actual form, not merely XP, drives room combat power and cosmetic rendering. Select and evolve from the private collection; menu selections/evolutions apply on next room join. Legacy species continue auto-evolving with their existing XP rules.
+- Source verification: 91/91 repository tests and 14/14 focused evolution/field tests passed; changed TS and browser scripts parse successfully. Full Windows typecheck, production build and opt-in real browser field capture test still pending. See [M04-C2 guide](nextgen/M04-C2-NATIVE-CAPTURE.md).
+- **Next task:** verify C2 locally, then implement native companion HP, autonomous tactical attacks/targeting and recovery; expedition-banked capture rewards, defeat/permadeath and shared headquarters/market progression remain later checkpoints. No deployment or new assets.
+
 ## 2026-11-19 — M04 sprite test synchronization follow-up
 
 - Operator confirmed the solo sprite-pack and existing GLB mod browser suites pass. The optional co-op sprite test timed out waiting for a visible ability panel: one client entered the live room during the other's sprite import, allowing infected to down the idle survivor. The HUD correctly hides abilities at zero HP.

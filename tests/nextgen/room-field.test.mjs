@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyCollection } from '../../shared/collection.mjs';
 import { CREATURES, SUPPLIES } from '../../shared/expansion.mjs';
 import { PICKUPS, EXTRACTION } from '../../shared/coop-rules.mjs';
+import { NATIVE_CAPTURE } from '../../shared/nextgen-creature-roster.mjs';
 import { roomFieldTargets, nearestFieldTarget, fieldIntent, nextOwnedSpecies, companionFollow } from '../../src/nextgen/core/RoomFieldRules.ts';
 
 const mission = { pickups: [...PICKUPS], ready: false, phase: 'active' };
@@ -40,4 +41,11 @@ test('supplies use existing IDs and authoritative range; presentation follow sta
   assert.deepEqual(fieldIntent(nearestFieldTarget(supply, roomFieldTargets(null, null))), { type: 'resupply', body: { id: supply.id } });
   const follow = companionFollow({ x: 89.6, z: 89.6 }, 0);
   assert.ok(follow.x < 90 && follow.z < 90);
+});
+test('wild capture hint exists only when the server confirms it is available',()=>{
+  const collection=emptyCollection();
+  const targets=roomFieldTargets(collection,mission,true);
+  assert.deepEqual(fieldIntent(nearestFieldTarget(NATIVE_CAPTURE,targets)),{type:'capture',body:{id:NATIVE_CAPTURE.id}});
+  assert.ok(!roomFieldTargets(collection,mission,false).some(t=>t.kind==='capture'));
+  assert.ok(!roomFieldTargets(collection,{...mission,phase:'extracting'},true).some(t=>t.kind==='capture'));
 });

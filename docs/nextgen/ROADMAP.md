@@ -87,7 +87,9 @@ manual checklist in the progress log before checking off M03.
       128 local form keys (current five families only until native species registration).
 - [ ] Independent persistent creature instances, stable ID, individual progression,
       trusted capture and evolution, and private journal. C1 is the legacy-compatible
-      roster foundation; native captures, deployment and active evolution remain open.
+      roster foundation; C2 adds first native Lanternkin capture, selection, independent
+      XP and explicit two-stage evolution. Operator browser acceptance and broader
+      native species, capture devices, creature survival and tactical combat remain open.
 
 **Done when:** collection state round-trips through existing cloud saves without schema
 changes.

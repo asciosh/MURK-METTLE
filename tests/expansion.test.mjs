@@ -125,6 +125,7 @@ test('real room validates firearm direction, ammo, cooldown, range, cover and bo
   const coopURL = new URL('../shared/coop-rules.mjs', import.meta.url).href;
   const roomSource = (await readFile(new URL('../server/cloudflare/room.mjs', import.meta.url), 'utf8'))
     .replace("import { DurableObject } from 'cloudflare:workers';", shim)
+    .replaceAll("'../../shared/nextgen-creature-roster.mjs'", JSON.stringify(new URL('../shared/nextgen-creature-roster.mjs', import.meta.url).href))
     .replaceAll("'../../shared/collection.mjs'", JSON.stringify(new URL('../shared/collection.mjs', import.meta.url).href))
     .replaceAll("'../../shared/expansion.mjs'", JSON.stringify(expansionURL))
     .replaceAll("'../../shared/coop-rules.mjs'", JSON.stringify(coopURL))

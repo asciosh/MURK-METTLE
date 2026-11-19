@@ -22,6 +22,28 @@ function fixture() {
   return { room, add };
 }
 const shot = weapon => ({ type: 'shoot', weapon, direction: { x: 0, y: 0, z: -1 } });
+test('wild capture requires negotiated NEXTGEN, living survivor and location; server owns encounter identity', async()=>{
+  const {NEXTGEN_MAP}=await import('../shared/nextgen-terrain.mjs');
+  const {NATIVE_CAPTURE}=await import('../shared/nextgen-creature-roster.mjs');
+  const {room,add}=fixture(), a=add('capturer'), b=add('observer'); room.map=NEXTGEN_MAP;
+  const calls=[]; const native={id:'server-owned-id',familyId:'lanternkin',formId:'lanternkin',xp:0,origin:'native',status:'available'};
+  room.env.PLAYER_ACCOUNTS={idFromName:x=>x,get:()=>({fetch:async req=>{calls.push(await req.json()); return Response.json({native:new URL(req.url).pathname.endsWith('coop-reward')?{...native,xp:40}:native});}})};
+  const capture={type:'capture',id:NATIVE_CAPTURE.id,xp:99999,instanceId:'spoofed'};
+  await a.send(capture); assert.equal(calls.length,0);
+  await a.hello(); await b.hello(); await a.send(capture); assert.equal(calls.length,0);
+  Object.assign(a.p,{x:NATIVE_CAPTURE.x,z:NATIVE_CAPTURE.z,hp:0}); await a.send(capture); assert.equal(calls.length,0);
+  a.p.hp=100; await a.send(capture); assert.deepEqual(calls,[{id:'capture:test-room:0'}]);
+  assert.equal(a.p.native.id,native.id); assert.equal(a.p.creatureOwned,true);
+  await a.send(capture); assert.equal(calls.length,1);
+  room.tick(); const snapshot=b.packets.findLast(p=>p.type==='snapshot');
+  assert.equal(snapshot.players.find(p=>p.id===a.p.id).creatureInstanceId,native.id);
+  assert.equal(snapshot.players.find(p=>p.id===a.p.id).captureAvailable,false);
+  assert.equal(snapshot.players.find(p=>p.id===b.p.id).captureAvailable,true);
+  const e=spawnHorde([a.p],1,'capture-fight')[0]; Object.assign(e,{x:a.p.x,z:a.p.z-1,hp:20,encounterId:'capture-fight-enemy'}); room.horde.enemies=[e];
+  await a.send({type:'pulse',instanceId:'spoofed',xp:99999});
+  assert.equal(e.hp,0); assert.equal(calls[1].instanceId,native.id); assert.equal(calls[1].pulse,true);
+  assert.equal(a.p.native.xp,40); assert.equal(a.p.native.formId,'lanternkin');
+});
 test('NEXTGEN room derives height from shared terrain and ignores client-provided Y', async()=>{
   const {NEXTGEN_MAP,roomHeight}=await import('../shared/nextgen-terrain.mjs');
   const {room,add}=fixture(),a=add('terrain');room.map=NEXTGEN_MAP;await a.hello();

@@ -15,6 +15,9 @@ export interface RemotePlayer extends Partial<ActorPose> {
   creatureOwned?: boolean;
   species?: SpeciesId;
   creatureXp?: number;
+  creatureInstanceId?: string;
+  creatureFormXp?: number;
+  captureAvailable?: boolean;
   nextgen?: NextgenPlayerState;
 }
 export interface RemoteZombie {
@@ -37,6 +40,7 @@ export type MissionState = {
 export type RoomEvent =
   | { type: 'action'; by: string; action: 'pulse' | 'melee' }
   | { type: 'collection-state'; collection: CollectionState; bonded?: boolean }
+  | { type: 'creature-captured'; id: string }
   | { type: 'arsenal'; arsenal: Arsenal }
   | {
       type: 'shot';
