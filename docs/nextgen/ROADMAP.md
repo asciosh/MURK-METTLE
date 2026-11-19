@@ -79,8 +79,13 @@ manual checklist in the progress log before checking off M03.
 ## M04 — Creatures: Collection & Evolution ◐
 
 - [ ] Five original species re-presented with nextgen models, animation and habitats.
-- [ ] Capture/befriending gameplay, journal UI, evolution forms.
-- [ ] Companion behavior that participates in combat and survival.
+- [ ] Capture/befriending gameplay, journal UI, evolution forms. C4 adds physical
+      wild Lanternkin, a starter capsule and an interruptible server-timed capture.
+      Broader creature encounters, varied devices and extraction banking remain open.
+- [ ] Companion behavior that participates in combat and survival. C3 adds native
+      Follow/Defend/Aggressive tactics, server-owned position, attacks, HP and supply
+      recovery. Operator acceptance, secure deployment, hardcore loss and roster-wide
+      integration remain open.
 - [ ] Optional cosmetic creature asset packs imported locally in the browser
   (original or appropriately licensed only, provenance recorded).
 - [ ] Bounded multi-creature sprite packs and 3D/2.5D appearance parity; v2 supports

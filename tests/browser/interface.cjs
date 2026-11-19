@@ -12,7 +12,7 @@ fs.mkdirSync(output, { recursive: true });
     const p = await ctx.newPage();
     p.on('pageerror', (e) => errors.push(String(e)));
     await p.route('**/api/account/**', (r) => r.fulfill({ json: {} }));
-    await p.goto(process.env.GAME_URL || 'http://localhost:5173');
+    await p.goto(new URL('/?legacy=1',process.env.GAME_URL || 'http://localhost:5173').href);
     await p.waitForTimeout(250);
     await p.screenshot({ path: path.join(output, `after-login-${w}-dpi${scale}.png`) });
     await p.locator('#account-username').fill('ui_test');

@@ -65,12 +65,12 @@ const { launchBrowser } = require('./support.cjs');
     const perform = (type, target, body) => actor.evaluate(({ type, target, body }) => new Promise((resolve, reject) => {
       const socket = window.__testRoomSocket;
       const id = window.__nextgenRoom.getRoomInfo().id;
-      let sent = false, restarting = false, restarts = 0, lastMove = 0, last = null;
+      let sent = false, restarting = false, restarts = 0, lastMove = 0, last = null, captureStarted=false, captureProgressSeen=false;
       let supplyVitals = false, supplyArsenal = false;
       const cleanup = () => { clearTimeout(timer); socket.removeEventListener('message', handle); };
-      const done = packet => { cleanup(); resolve({ type, restarts, packet }); };
+      const done = packet => { cleanup(); resolve({ type, restarts, packet,captureStarted,captureProgressSeen }); };
       const fail = message => { cleanup(); reject(new Error(`${type}: ${message}; last=${JSON.stringify(last)}`)); };
-      const timer = setTimeout(() => fail('no server acknowledgement'), 30000);
+      const timer = setTimeout(() => fail('no server acknowledgement'), type==='capture'?55000:30000);
       function handle(event) {
         let packet;
         try { packet = JSON.parse(event.data); } catch { return; }
@@ -80,6 +80,9 @@ const { launchBrowser } = require('./support.cjs');
           if (type === 'strike' && packet.type === 'companion-strike' && packet.by === id) return done(packet);
           if (type === 'bond' && packet.type === 'collection-state' && packet.bonded && packet.collection.creatures[body.species].owned) return done(packet);
           if (type === 'capture' && packet.type === 'creature-captured') return done(packet);
+          if(type==='capture'&& packet.type==='capture-state' && packet.status==='started')captureStarted=true;
+          if(type==='capture'&& packet.type==='capture-state' && packet.status==='cancelled') {sent=false;lastMove=0;socket.send(JSON.stringify({type:'pulse'}));return;}
+          if (type === 'auto' && packet.type === 'companion-strike' && packet.auto && packet.by === id) return done(packet);
           if (type === 'pulse' && packet.type === 'action' && packet.action === 'pulse' && packet.by === id) return done(packet);
           if (type === 'pickup' && packet.type === 'mission-state' && !packet.pickups.some(p => p.id === body.id)) return done(packet);
           if (type === 'resupply') {
@@ -91,10 +94,11 @@ const { launchBrowser } = require('./support.cjs');
         }
         if (packet.type !== 'snapshot') return;
         const me = packet.players.find(p => p.id === id); if (!me) return;
+        if(type==='capture'&&typeof me.captureProgress==='number'&&me.captureProgress>0&&me.captureProgress<1)captureProgressSeen=true;
         last = { hp: me.hp, x: me.x, z: me.z, stamina: me.survival?.stamina, sent };
         if (me.hp <= 0) {
           if (restarting) return;
-          if (restarts >= 2) return fail('repeated deaths before interaction');
+          if (restarts >= (type==='capture'?4:2)) return fail('repeated deaths before interaction');
           sent = false; supplyVitals = supplyArsenal = false; restarting = true; restarts++;
           socket.send(JSON.stringify({ type: 'restart' })); return;
         }
@@ -102,17 +106,18 @@ const { launchBrowser } = require('./support.cjs');
         // A range/line-of-sight miss does not acknowledge a strike. Retry against a
         // fresh snapshot, not a stale target, while respecting the server cooldown.
         if (type === 'strike' && sent && performance.now() - lastMove >= 1400) sent = false;
+        if (type === 'auto' && sent && performance.now()-lastMove>=2500 && !me.nativeCompanion?.targetId) sent=false;
         if (sent) return;
-        if (type === 'strike') {
+        if (type === 'strike' || type === 'auto') {
           const enemy = packet.horde.enemies.filter(e => e.hp > 0).sort((a,b) => Math.hypot(a.x-me.x,a.z-me.z)-Math.hypot(b.x-me.x,b.z-me.z))[0];
           if (!enemy) return;
-          target = { x: enemy.x, z: enemy.z, radius: 2.8 };
+          target = { x: enemy.x, z: enemy.z, radius: type === 'auto' ? 6 : 2.8 };
         }
         const dx = target ? target.x - me.x : 0, dz = target ? target.z - me.z : 0;
         const distance = Math.hypot(dx, dz);
         if (!target || distance <= target.radius) {
           sent = true; lastMove = performance.now();
-          socket.send(JSON.stringify({ type: type === 'unowned-pulse' ? 'pulse' : ['strike','unowned-strike'].includes(type) ? 'companion-strike' : type, ...body })); return;
+          socket.send(JSON.stringify({ type: type === 'auto' ? 'companion-mode' : type === 'unowned-pulse' ? 'pulse' : ['strike','unowned-strike'].includes(type) ? 'companion-strike' : type, ...body })); return;
         }
         const now = performance.now(); if (now - lastMove < 90) return; lastMove = now;
         const sprint = !!me.survival && !me.survival.exhausted && me.survival.stamina > 5;
@@ -171,16 +176,27 @@ const { launchBrowser } = require('./support.cjs');
       assert.equal(await card.getAttribute('data-creature-id'), roster.activeId);
     } finally { await journal.close(); }
     console.log('M04-C1: individual cloud roster identity and private journal persist across reload; account isolation confirmed.');
-    if (process.env.NEXTGEN_CAPTURE_TEST === '1') {
+    if (process.env.NEXTGEN_CAPTURE_TEST === '1' || process.env.NEXTGEN_COMPANION_TEST === '1') {
       const { NATIVE_CAPTURE } = await import('../../shared/nextgen-creature-roster.mjs');
-      await actor.waitForFunction(() => window.__nextgenRoom.getRoomInfo().fieldMarkers.includes('capture:wild-lanternkin'),null,wait);
+      await actor.waitForFunction(() => {const s=window.__nextgenRoom.getRoomInfo();return s.self?.captureKit===1 && s.fieldVisuals.some(m=>m.id==='capture:wild-lanternkin'&&m.kind==='wild-creature'&&m.physical);},null,wait);
       const captured = await perform('capture',{...NATIVE_CAPTURE,radius:2.35},{id:NATIVE_CAPTURE.id});
+      assert.equal(captured.captureStarted,true);assert.equal(captured.captureProgressSeen,true);
       const nativeId = captured.packet.id; assert.notEqual(nativeId,roster.activeId);
-      await actor.waitForFunction(id=>{const s=window.__nextgenRoom.getRoomInfo();return s.self.creatureInstanceId===id && s.self.creatureFormXp===0 && !s.fieldMarkers.includes('capture:wild-lanternkin');},nativeId,wait);
+      await actor.waitForFunction(id=>{const s=window.__nextgenRoom.getRoomInfo();return s.self.creatureInstanceId===id && s.self.creatureFormXp===0 && s.self.captureKit===0 && !s.fieldMarkers.includes('capture:wild-lanternkin');},nativeId,wait);
+      console.log('M04-C4: visible wild creature, timed server capture and capsule consumption confirmed.');
       await pages[1].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().remotePlayers.some(p=>p.creatureInstanceId===id),nativeId,wait);
       const after = await readRoster(actor); assert.equal(after.activeId,nativeId); assert.equal(after.instances.length,2);
       assert.equal(after.instances.find(c=>c.id===nativeId).origin,'native');
       assert.equal((await readRoster(pages[1])).instances.length,0);
+      if (process.env.NEXTGEN_COMPANION_TEST === '1') {
+        await actor.waitForFunction(()=>{const s=window.__nextgenRoom.getRoomInfo();return s.self?.nativeCompanion?.maxHp===80 && s.self.nativeCompanion.mode==='follow' && document.querySelector('.nextgen-companion-vitals')?.dataset.hp!==undefined;},null,wait);
+        await perform('auto',null,{mode:'aggressive'});
+        await Promise.all(pages.map(page=>page.waitForFunction(id=>{
+          const s=window.__nextgenRoom.getRoomInfo(),p=s.self?.id===id?s.self:s.remotePlayers.find(p=>p.id===id);
+          return s.acceptedAutoStrikes>=1 && p?.nativeCompanion?.maxHp===80 && Number.isFinite(p.nativeCompanion.x) && p.nativeCompanion.hp>=0&&p.nativeCompanion.hp<=80;
+        },id,wait)));
+        console.log('M04-C3: native companion HUD, replicated authoritative HP and position, and autonomous infected strike confirmed on both clients.');
+      }
       const panel = await actor.context().newPage();
       try {
         await panel.goto(new URL('/?nextgen=lobby&tab=collection',base).href);

@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { Multiplayer, type RoomEvent, type RemotePlayer, type MissionState } from '../../client/game/Multiplayer';
 import { CREATURES, creaturePower, type Arsenal } from '../../../shared/expansion.mjs';
+import { COMPANION_MODES } from '../../../shared/nextgen-companion-combat.mjs';
 import { NEXTGEN_WEAPONS as WEAPONS, REVIVE_RULES, reviveInRange, type NextgenWeapon } from '../../../shared/nextgen-combat.mjs';
 import type { CollectionState } from '../../../shared/collection.mjs';
 import { MISSION_KILLS, MISSION_SALVAGE, EXTRACTION } from '../../../shared/coop-rules.mjs';
@@ -74,6 +75,7 @@ export class OnlineSession {
   private acceptedActions = 0;
   private acceptedPulses = 0;
   private acceptedStrikes = 0;
+  private acceptedAutoStrikes = 0;
   private acceptedRevives = 0;
   private acceptedResonantShots = 0;
   private acceptedShotgunShots = 0;
@@ -152,6 +154,8 @@ export class OnlineSession {
       case 'arsenal': this.arsenal = event.arsenal; break;
       case 'collection-state': this.collection = event.collection; if (event.bonded) this.note = `Bond confirmed: ${CREATURES[event.collection.active].name}`; break;
       case 'creature-captured': this.note = 'Wild Lanternkin captured and deployed! Its individual progress is saved in your collection.'; break;
+      case 'capture-state': this.note = event.status==='started'?'Capture capsule deployed · hold position!':`Capture interrupted: ${event.reason??'cancelled'}. Capsule retained.`; break;
+      case 'companion-status': this.note = event.message; break;
       case 'mission-state': if (this.mission && event.salvage > this.mission.salvage) this.note = 'Team sample recovered.'; this.mission = event; break;
       case 'mission-extracted':
         this.note=`Expedition ${event.completed} completed; verifying personal reward.`;
@@ -174,7 +178,7 @@ export class OnlineSession {
         if (event.by === this.net.id) this.note = event.hit ? 'Server-confirmed HIT' : 'Server-confirmed shot'; break;
       }
       case 'action': this.acceptedActions++; if (event.action === 'melee') { this.meleeEvents.add(event.by); this.feedback.sound('swing'); } else { this.acceptedPulses++; this.pendingPulses.set(event.by, performance.now()); this.feedback.sound('pulse'); } if (event.by === this.net.id) this.note = `Server accepted ${event.action}.`; break;
-      case 'companion-strike': this.acceptedStrikes++; this.pendingStrikes.set(event.by, { x: event.x, z: event.z, at: performance.now() }); this.feedback.sound('punch'); break;
+      case 'companion-strike': this.acceptedStrikes++; if(event.auto)this.acceptedAutoStrikes++; this.pendingStrikes.set(event.by, { x: event.x, z: event.z, at: performance.now() }); this.feedback.sound('punch'); break;
       case 'revive-state':
         if (event.status === 'completed') this.acceptedRevives++;
         if (event.by === this.net.id || event.target === this.net.id) {
@@ -241,6 +245,7 @@ export class OnlineSession {
       case 'KeyH': this.net.send('heal'); break;
       case 'KeyE': {
         const me = this.net.self;
+        if(me?.captureProgress!==null && me?.captureProgress!==undefined) {this.net.send('capture-cancel');break;}
         const target = me ? nearestFieldTarget(me, roomFieldTargets(this.collection, this.mission, me.captureAvailable === true)) : null;
         const intent = target ? fieldIntent(target) : null;
         if (intent) { this.net.send(intent.type, intent.body); this.note = `Requested: ${target!.label}`; }
@@ -250,7 +255,11 @@ export class OnlineSession {
         break;
       }
       case 'KeyC': {
-        if (this.net.self?.creatureInstanceId) { this.note = 'Individual creature deployed. Select another specimen in the main menu collection.'; break; }
+        if (this.net.self?.creatureInstanceId) {
+          const pet=this.net.self.nativeCompanion;
+          if(!pet || pet.hp<=0) {this.note='Companion unavailable · recover at a supply cache.';break;}
+          this.net.send('companion-mode',{mode:COMPANION_MODES[(COMPANION_MODES.indexOf(pet.mode)+1)%COMPANION_MODES.length]}); break;
+        }
         const species = nextOwnedSpecies(this.collection);
         if (species) this.net.send('select-creature', { species }); else this.note = 'Bond with another creature to cycle companions.';
         break;
@@ -296,7 +305,7 @@ export class OnlineSession {
     }
     let view = this.companions.get(owner.id);
     if (!view) { view = new RoomCompanionView(this.scene, owner.species); this.companions.set(owner.id, view); }
-    view.update({ ...position, yaw, hp: owner.hp }, owner.species, owner.creatureFormXp ?? owner.creatureXp ?? 0, dt);
+    view.update({ ...position, yaw, hp: owner.hp }, owner.species, owner.creatureFormXp ?? owner.creatureXp ?? 0, dt, owner.nativeCompanion);
     const at = this.pendingPulses.get(owner.id);
     if (at !== undefined) { if (performance.now() - at < 2000) view.pulse(owner); this.pendingPulses.delete(owner.id); }
     const strike = this.pendingStrikes.get(owner.id);
@@ -332,7 +341,8 @@ export class OnlineSession {
       }
       for (const [id, a] of this.peers) if (!this.net.peers.has(id)) { a.dispose(); a.root.removeFromParent(); this.peers.delete(id); this.reloadEvents.delete(id); this.previousHp.delete(id); this.primaryByPlayer.delete(id); }
       const current = new Set<string>();
-      const living = [me, ...this.net.peers.values()].filter(p => p.hp > 0);
+      const livingPlayers = [me, ...this.net.peers.values()].filter(p => p.hp > 0);
+      const living = [...livingPlayers, ...livingPlayers.flatMap(p=>p.nativeCompanion && p.nativeCompanion.hp>0 && p.nativeCompanion.mode!=='follow' ? [p.nativeCompanion] : [])];
       for (const enemy of this.net.horde?.enemies ?? []) {
         current.add(enemy.id);
         let view = this.enemies.get(enemy.id);
@@ -341,7 +351,7 @@ export class OnlineSession {
       }
       for (const [id, view] of this.enemies) if (!current.has(id)) { view.dispose(); this.enemies.delete(id); }
       for (const [id, view] of this.companions) if (id !== me.id && !this.net.peers.has(id)) { view.dispose(); this.companions.delete(id); }
-      this.field.update(roomFieldTargets(this.collection, this.mission, this.net.self?.captureAvailable === true), dt);
+      this.field.update(roomFieldTargets(this.collection, this.mission, this.net.self?.captureAvailable === true), dt, me.captureProgress??null);
     } else { for (const a of this.peers.values()) a.root.visible = false; for (const e of this.enemies.values()) e.root.visible = false; for (const c of this.companions.values()) c.hide(); this.field.update([], dt); }
     for (const [id, at] of this.pendingPulses) if (now - at >= 2000) this.pendingPulses.delete(id);
     for (const [id, strike] of this.pendingStrikes) if (now - strike.at >= 2000) this.pendingStrikes.delete(id);
@@ -373,6 +383,8 @@ export class OnlineSession {
       charge:me?.nextgen?.charge ?? 0, resonant:!!me?.nextgen?.resonant, transitioning:!!me?.nextgen?.transitioning,
       creature:me?.creatureOwned && me.species ? creaturePower(me.species,me.creatureFormXp ?? me.creatureXp ?? 0).name : null,
       creatureXp:me?.creatureXp ?? 0,
+      nativeCompanion:me?.nativeCompanion,
+      captureKit:me?.captureKit, captureProgress:me?.captureProgress??null,
       target:revive?'V · Revive teammate (1 bandage)':target?`E · ${target.label}`:this.note,
       note:this.note, reviveProgress:me?.nextgen?.revivingTarget ? me.nextgen.reviveProgress : null,
       downedSeconds:(me?.nextgen?.downedMs ?? 0)/1000, squad, objective:objective.label
@@ -381,7 +393,7 @@ export class OnlineSession {
   getPosition() { return this.visualPosition; }
   getLandscapeInfo() { return {style:NEXTGEN_MAP_ID,seed:NEXTGEN_TERRAIN_SEED,groundHeight:NEXTGEN_MAP.heightAt(0,0),position:this.avatar.root.position.toArray()}; }
   getInfo() {
-    return { connected: this.isReady(), room: this.net.code, id: this.net.id, peers: [...this.net.peers.keys()], remotePlayers: [...this.net.peers.values()], self: this.net.self, horde: this.net.horde, arsenal: this.arsenal, collection: this.collection, mission: this.mission, inventory: this.inventory, fieldMarkers: this.field.info(), fieldVisuals: this.field.visualInfo(), inventoryOpen:this.inventoryOpen, companionViews: [...this.companions].map(([id, view]) => ({ id, ...view.info() })), acceptedShots: this.acceptedShots, confirmedHits: this.confirmedHits, shotEffects: this.effects.count, infectedViews: [...this.enemies].map(([id, view]) => ({ id, ...view.info() })), acceptedActions: this.acceptedActions, acceptedPulses: this.acceptedPulses, acceptedStrikes: this.acceptedStrikes, acceptedRevives: this.acceptedRevives, acceptedResonantShots: this.acceptedResonantShots, acceptedShotgunShots: this.acceptedShotgunShots, acceptedRewards: this.acceptedRewards, extraction:this.hud.getExtractionInfo(), accountXp:this.accountXp, accountExtractions:this.accountExtractions };
+    return { connected: this.isReady(), room: this.net.code, id: this.net.id, peers: [...this.net.peers.keys()], remotePlayers: [...this.net.peers.values()], self: this.net.self, horde: this.net.horde, arsenal: this.arsenal, collection: this.collection, mission: this.mission, inventory: this.inventory, fieldMarkers: this.field.info(), fieldVisuals: this.field.visualInfo(), inventoryOpen:this.inventoryOpen, companionViews: [...this.companions].map(([id, view]) => ({ id, ...view.info() })), acceptedShots: this.acceptedShots, confirmedHits: this.confirmedHits, shotEffects: this.effects.count, infectedViews: [...this.enemies].map(([id, view]) => ({ id, ...view.info() })), acceptedActions: this.acceptedActions, acceptedPulses: this.acceptedPulses, acceptedStrikes: this.acceptedStrikes, acceptedAutoStrikes:this.acceptedAutoStrikes, acceptedRevives: this.acceptedRevives, acceptedResonantShots: this.acceptedResonantShots, acceptedShotgunShots: this.acceptedShotgunShots, acceptedRewards: this.acceptedRewards, extraction:this.hud.getExtractionInfo(), accountXp:this.accountXp, accountExtractions:this.accountExtractions };
   }
   dispose() {
     this.disposed = true; this.abort.abort(); clearTimeout(this.timeout); this.net.disconnect(); this.resetInput();

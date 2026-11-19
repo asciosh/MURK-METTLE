@@ -4,7 +4,7 @@ import { legacyEvolutionPreview, levelFromXP, EVOLUTION_DEMO_CATALOG, planEvolut
 export const NEXTGEN_ROSTER_KEY = 'nextgen-creature-roster-v1';
 const MAX_INSTANCES = 256;
 const cleanXP = value => Number.isSafeInteger(value) && value >= 0 && value <= 250000;
-export const NATIVE_CAPTURE = Object.freeze({ id: 'wild-lanternkin', x: 8, z: -8, range: 2.7, familyId: 'lanternkin' });
+export const NATIVE_CAPTURE = Object.freeze({ id: 'wild-lanternkin', x: 8, z: -8, range: 2.7, familyId: 'lanternkin', duration: 1600, movementTolerance: .25 });
 
 /** Reconcile verified legacy ownership; never accept a browser-supplied collection. */
 export function reconcileRoster(previous, legacyCollection, newId = () => crypto.randomUUID()) {

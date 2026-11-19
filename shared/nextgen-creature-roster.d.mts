@@ -1,5 +1,5 @@
 export const NEXTGEN_ROSTER_KEY: 'nextgen-creature-roster-v1';
-export const NATIVE_CAPTURE: Readonly<{ id: 'wild-lanternkin'; x: number; z: number; range: number; familyId: 'lanternkin' }>;
+export const NATIVE_CAPTURE: Readonly<{ id: 'wild-lanternkin'; x: number; z: number; range: number; familyId: 'lanternkin'; duration:number; movementTolerance:number }>;
 export interface CreatureInstance {
   id: string; familyId: string; formId: string; xp: number;
   origin: 'legacy' | 'native'; status: 'available' | 'lost';

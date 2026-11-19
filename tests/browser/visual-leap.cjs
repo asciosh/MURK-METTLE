@@ -32,7 +32,7 @@ fs.mkdirSync(output, { recursive: true });
       .replace('game.start();', 'game.start();game.renderer.setAnimationLoop(null);');
     await route.fulfill({ response, body });
   });
-  await page.goto(base);
+  await page.goto(new URL('/?legacy=1',base).href);
   await page.waitForFunction(() => window.__visualGame?.player?.root.getObjectByName('body'), { timeout: 90000 });
   await page.addStyleTag({ content: '#game-viewport > :not(canvas) { visibility: hidden !important; } #title-screen, #account-screen, .topbar { display: none !important; }' });
   const report = { viewport: '1366x768', dpr: 1, quality: 'balanced', photos: false, views: {}, actors: {} };

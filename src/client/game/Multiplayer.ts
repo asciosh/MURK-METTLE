@@ -4,6 +4,7 @@ import type { CollectionState } from './Collection';
 import type { ActorPose } from '../../../shared/actor-pose.mjs';
 import type { Vitals, HordePacket } from '../../../shared/survival.mjs';
 import type { NextgenPlayerState, NextgenWeapon } from '../../../shared/nextgen-combat.mjs';
+import type { NativeCompanionSnapshot } from '../../../shared/nextgen-companion-combat.mjs';
 export interface RemotePlayer extends Partial<ActorPose> {
   reloadProgress?: number;
   survival?: Vitals;
@@ -18,6 +19,9 @@ export interface RemotePlayer extends Partial<ActorPose> {
   creatureInstanceId?: string;
   creatureFormXp?: number;
   captureAvailable?: boolean;
+  captureKit?: number;
+  captureProgress?: number|null;
+  nativeCompanion?: NativeCompanionSnapshot;
   nextgen?: NextgenPlayerState;
 }
 export interface RemoteZombie {
@@ -41,6 +45,7 @@ export type RoomEvent =
   | { type: 'action'; by: string; action: 'pulse' | 'melee' }
   | { type: 'collection-state'; collection: CollectionState; bonded?: boolean }
   | { type: 'creature-captured'; id: string }
+  | { type: 'capture-state'; status:'started'|'cancelled'; duration?:number; reason?:string }
   | { type: 'arsenal'; arsenal: Arsenal }
   | {
       type: 'shot';
@@ -54,7 +59,8 @@ export type RoomEvent =
       resonant?: boolean;
       pellets?: { direction: { x: number; y: number; z: number }; distance: number; hit: boolean }[];
     }
-  | { type: 'companion-strike'; by: string; x: number; z: number }
+  | { type: 'companion-strike'; by: string; x: number; z: number; auto?: boolean }
+  | { type: 'companion-status'; message: string }
   | { type: 'revive-state'; status: 'started' | 'cancelled' | 'completed'; by: string; target: string; reason?: string }
   | MissionState
   | { type: 'mission-extracted'; by: string; completed: number }

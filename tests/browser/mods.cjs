@@ -22,7 +22,7 @@ const fs = require('node:fs'),
       );
     await route.fulfill({ response, body });
   });
-  await page.goto('http://localhost:5173');
+  await page.goto('http://localhost:5173/?legacy=1');
   await page.waitForFunction(() => window.__game, { timeout: 90000 });
   await page.evaluate(async () => {
     await __game.cosmetics.ready;
@@ -164,7 +164,7 @@ const fs = require('node:fs'),
   const compactPage = await compact.newPage();
   compactPage.on('pageerror', (e) => errors.push(String(e)));
   await compactPage.route('**/api/account/**', (r) => r.fulfill({ json: {} }));
-  await compactPage.goto(process.env.GAME_URL || 'http://localhost:5173');
+  await compactPage.goto(new URL('/?legacy=1',process.env.GAME_URL || 'http://localhost:5173').href);
   await compactPage.evaluate(async () => {
     const { ModRegistry } = await import('/src/client/mods/ModRegistry.ts');
     const { ModManager } = await import('/src/client/mods/ModManager.ts');

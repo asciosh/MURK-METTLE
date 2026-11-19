@@ -12,6 +12,23 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## 2026-11-19 — M04-C4: default NEXTGEN entry and capture capsule
+
+- Operator verified C3 on the real local two-client browser: authoritative native HP/position, autonomous strike and existing capture/selection remain working. Manual C tactic cycling was confirmed.
+- NEXTGEN main menu is the default root route. The intact legacy v0.27 game is reachable via `/?legacy=1` and the Settings archive link; legacy browser checks explicitly request that route. Old NEXTGEN deep links remain supported.
+- The first native capture is now a visible original 3D wild Lanternkin with a field ring, not just a habitat crate. The starter capture capsule has one charge per account per room expedition, reserved until success. E starts a 1.6s server-timed channel; movement, damage, other actions, E cancellation or mission change interrupt it. The server consumes the encounter charge and deploys/persists the creature only on valid completion; interrupted attempts retain the capsule. Wild marker and UI progress reflect authoritative state.
+- Local verification: 95/95 repository tests including early, duplicate, moved and damaged capture rejection; focused tests and changed TS/browser script syntax. Windows build and live browser entry/capture acceptance pending. No new external assets, Cloudflare migration or deployment.
+- **Next task:** verify and commit C4, then design secure expedition length/threat, extraction banking, definitive creature defeat and capture devices/costs before shared base economy. The capsule is a bounded prototype, not a full wild-combat or hardcore capture system yet.
+
+## 2026-11-19 — M04-C3: autonomous native creature combat and health
+
+- Operator verified C2: 91/91 tests, Windows typecheck/build, real two-client capture, deployment, selection and account isolation browser test. C2 was committed and pushed on `cline/m04-creature-system` via GitHub Desktop.
+- Native captured specimens have server-owned position, HP and tactics. C cycles Follow → Defend → Aggressive; Follow recalls the creature, Defend targets enemies within 5m of its owner, Aggressive within 9m. Engaged creatures draw ordinary infected attacks and autonomously strike; the horde still scales with human players only. Creature attacks use the same server-confirmed kill/reward path and credit the deployed specimen only.
+- Actual native form sets max HP and strike damage (80/12, 120/18, 160/24). Manual G and automatic strikes share a cooldown; X requires an available creature. Infected can incapacitate a creature at 0 HP; supply caches recover it in Follow mode. This HP is deployment-local; no permanent death or extraction loss is enabled yet. Legacy bonded companions and solo practice retain existing behavior.
+- Co-op renders authoritative creature positions, attack animation and native HP/mode in the HUD. Optional 3D/sprite cosmetics continue to use the actual form. No new assets or Cloudflare migration changes.
+- Validation: 95/95 repository tests and 17/17 focused field/evolution/options tests pass; changed TS and browser scripts parse. Windows typecheck, build and two-client C3 browser test pending. See [M04-C3 guide](nextgen/M04-C3-COMPANION-COMBAT.md).
+- **Next task:** operator verifies C3, then strengthen the actual expedition risk loop (capture device/challenge, banked rewards, defeat and secure deployment lifecycle); integrate shared headquarters and creature jobs only after these authoritative rules are stable.
+
 ## 2026-11-19 — M04-C2: native captures, deployment and explicit evolution
 
 - Operator confirmed the final real two-client sprite fallback, combat, shared field and private roster browser test passes. Production visual direction is 3D; locally installed sprite packs remain optional.

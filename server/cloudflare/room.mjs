@@ -1,5 +1,6 @@
 import { normalizeCollection } from '../../shared/collection.mjs';
 import { NATIVE_CAPTURE, nativeFormXP } from '../../shared/nextgen-creature-roster.mjs';
+import { ensureNativeCompanion, setNativeCompanionMode, recoverNativeCompanion, nativeCompanionTargetable, stepNativeCompanion, manualNativeStrike, nativeCompanionSnapshot } from '../../shared/nextgen-companion-combat.mjs';
 // Cloudflare Durable Object — shared four-player session state.
 // This is an authoritative combat prototype, not yet an account/inventory server.
 import { DurableObject } from 'cloudflare:workers';
@@ -92,6 +93,7 @@ export class GameRoom extends DurableObject {
           upgrades: { sharpened: false, balanced: false },
           creatureOwned: data.creatureOwned === true,
           native: data.map === NEXTGEN_MAP_ID ? data.native ?? null : null,
+          nativeCombat: data.map === NEXTGEN_MAP_ID ? data.nativeCombat ?? null : null,
           captureSequence: data.captureSequence ?? null,
         });
     }
@@ -180,6 +182,30 @@ export class GameRoom extends DurableObject {
     player.nextgen.revive = null;
     this.broadcast({ type: 'revive-state', status: 'cancelled', by: player.id, target: attempt.targetId, reason });
   }
+  cancelCapture(socket,player,reason='interrupted') {
+    if(!player.captureAttempt)return;
+    player.captureAttempt=null;
+    this.send(socket,{type:'capture-state',status:'cancelled',reason});
+  }
+  async finishNativeCapture(socket,player,sequence) {
+    if (player.capturePending) return;
+    player.capturePending=true;
+    try {
+      const account=this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
+      const response=await account.fetch(new Request('https://internal/api/account/coop-native-capture',{
+        method:'POST',headers:{'X-MM-Account':player.username,'X-MM-Reward-Source':'game-room-v1','Content-Type':'application/json'},
+        body:JSON.stringify({id:`capture:${this.ctx.id.toString()}:${sequence}`}),
+      }));
+      const result=await response.json();
+      if (!response.ok || !result.native) {this.send(socket,{type:'error',message:result.error||'Creature capture unavailable.'});return;}
+      if(this.players.get(socket)!==player)return;
+      player.native=result.native;player.creatureOwned=true;player.captureSequence=sequence;
+      ensureNativeCompanion(player,this.map);
+      this.saveAttachment(socket,player);
+      this.send(socket,{type:'creature-captured',id:result.native.id});
+    } catch {this.send(socket,{type:'error',message:'Creature capture unavailable.'});}
+    finally {player.capturePending=false;}
+  }
   saveAttachment(socket, player) {
     socket.serializeAttachment({
       id: player.id,
@@ -191,6 +217,7 @@ export class GameRoom extends DurableObject {
       hp: player.hp,
       creatureOwned: player.creatureOwned === true,
       native: player.native ?? null,
+      nativeCombat: player.nativeCombat ?? null,
       captureSequence: player.captureSequence ?? null,
       collection: player.collection,
       arsenal: player.arsenal,
@@ -266,6 +293,7 @@ export class GameRoom extends DurableObject {
     const data = await response.json();
     player.collection = data.collection;
     player.native = this.map && !action ? data.native ?? null : null;
+    if (player.nativeCombat?.instanceId !== player.native?.id) player.nativeCombat = null;
     if (this.map && !action && data.captured) player.captureSequence = this.mission.sequence;
     player.creatureOwned = !!player.native || player.collection.creatures[player.collection.active].owned;
     return player.collection;
@@ -297,12 +325,22 @@ export class GameRoom extends DurableObject {
     }
     if (!msg || typeof msg.type !== 'string') return;
     const now = Date.now();
+    if(msg.type==='capture-cancel') {this.cancelCapture(socket,player,'cancelled by survivor');return;}
+    if(!['move','capture','sync-equipment','nextgen-hello'].includes(msg.type)) this.cancelCapture(socket,player,'another action');
     // Additive opt-in. Legacy clients never get new combat behavior or lose their existing restart semantics.
     if (msg.type === 'nextgen-hello') {
       if (msg.version === 1) {
         if (!player.nextgen) player.nextgen = newNextgenCombat();
         player.nextgen.mobility ??= newNextgenMobility();
+        ensureNativeCompanion(player,this.map);
       }
+      return;
+    }
+    if (msg.type === 'companion-mode') {
+      if(setNativeCompanionMode(player,msg.mode,this.map)) {
+        this.saveAttachment(socket,player);
+        this.send(socket,{type:'companion-status',message:`Companion tactics: ${msg.mode}.`});
+      } else if (player.native && player.nextgen) this.send(socket,{type:'error',message:'Companion tactics require a living creature and a valid mode.'});
       return;
     }
     if (msg.type === 'revive-cancel') { this.cancelRevive(player); return; }
@@ -366,6 +404,7 @@ export class GameRoom extends DurableObject {
       }
       player.x = msg.x;
       player.z = msg.z;
+      if(player.captureAttempt && Math.hypot(player.x-player.captureAttempt.x,player.z-player.captureAttempt.z)>NATIVE_CAPTURE.movementTolerance) this.cancelCapture(socket,player,'movement');
       player.yaw = msg.yaw;
       player.lastMove = now;
       player.pose = sanitizeActorPose(msg);
@@ -405,6 +444,8 @@ export class GameRoom extends DurableObject {
         this.send(socket, { type: 'survival', survival: player.survival });
         for (const id of Object.keys(WEAPONS)) player.arsenal[id].reserve = WEAPONS[id].reserve;
         if (player.nextgen) player.nextgen.shotgun.reserve = NEXTGEN_SHOTGUN.reserve;
+        const pet=ensureNativeCompanion(player,this.map);
+        if(pet && pet.hp<pet.maxHp && recoverNativeCompanion(player,this.map)) this.send(socket,{type:'companion-status',message:'Companion recovered at supply cache · follow mode.'});
       }
       this.send(socket, { type: 'arsenal', arsenal: player.arsenal });
       this.saveAttachment(socket, player);
@@ -412,27 +453,17 @@ export class GameRoom extends DurableObject {
     }
     if (msg.type === 'capture') {
       if (!this.map || !player.nextgen || player.hp <= 0 || this.mission.phase !== 'active' || msg.id !== NATIVE_CAPTURE.id || player.capturePending || player.collectionPending) return;
+      if(player.captureAttempt)return; // Repeated inputs cannot accelerate or restart the channel.
       if (player.captureSequence === this.mission.sequence) { this.send(socket,{type:'error',message:'Already captured in this expedition.'}); return; }
       if (Math.hypot(player.x-NATIVE_CAPTURE.x, player.z-NATIVE_CAPTURE.z) > NATIVE_CAPTURE.range) {
         this.send(socket, { type:'error', message:'Move closer to the wild creature.' }); return;
       }
-      const sequence = this.mission.sequence;
-      player.capturePending = true;
-      try {
-        const account = this.env.PLAYER_ACCOUNTS.get(this.env.PLAYER_ACCOUNTS.idFromName(player.username));
-        const response = await account.fetch(new Request('https://internal/api/account/coop-native-capture', {
-          method:'POST', headers:{ 'X-MM-Account':player.username, 'X-MM-Reward-Source':'game-room-v1', 'Content-Type':'application/json' },
-          body:JSON.stringify({ id:`capture:${this.ctx.id.toString()}:${sequence}` }),
-        }));
-        const result = await response.json();
-        if (!response.ok || !result.native) { this.send(socket,{ type:'error',message:result.error || 'Creature capture unavailable.' }); return; }
-        // The capture is already persistent. A disconnected player can deploy on next join.
-        if (this.players.get(socket) !== player) return;
-        player.native = result.native; player.creatureOwned = true; player.captureSequence = sequence;
-        this.saveAttachment(socket,player);
-        this.send(socket,{ type:'creature-captured', id:result.native.id });
-      } catch { this.send(socket,{ type:'error',message:'Creature capture unavailable.' }); }
-      finally { player.capturePending = false; }
+      if(player.survival.healEndsAt>now || player.nextgen.mobility?.dodgeUntil>now || nextgenJumpHeight(player.nextgen.mobility,now)>.01) {
+        this.send(socket,{type:'error',message:'Stand on the ground and finish other actions before capturing.'});return;
+      }
+      // One starter capture capsule per account per room expedition; reserved until confirmed.
+      player.captureAttempt={sequence:this.mission.sequence,x:player.x,z:player.z,startedAt:now,endsAt:now+NATIVE_CAPTURE.duration};
+      this.send(socket,{type:'capture-state',status:'started',duration:NATIVE_CAPTURE.duration});
       return;
     }
     if (msg.type === 'bond' || msg.type === 'select-creature') {
@@ -545,6 +576,9 @@ export class GameRoom extends DurableObject {
       this.send(socket, { type: 'error', message: companion ? 'Bond with a creature before commanding a strike.' : 'Bond with a creature before using Pulse.' });
       return;
     }
+    if ((pulse || companion) && native && !(ensureNativeCompanion(player,this.map)?.hp > 0)) {
+      this.send(socket,{type:'error',message:'Companion is incapacitated. Recover at a supply cache.'});return;
+    }
     let targets = [], damageByEnemy = null,
       damage = 0;
     if (shooting) {
@@ -592,10 +626,11 @@ export class GameRoom extends DurableObject {
       damage = weapon.damage;
     } else if (companion) {
       if (!player.nextgen || now - player.nextgen.companionAt < COMPANION_STRIKE.interval) return;
-      const target = pulseTargets(this.horde.enemies, player, COMPANION_STRIKE.range,this.map).sort((a,b) => Math.hypot(a.x-player.x,a.z-player.z)-Math.hypot(b.x-player.x,b.z-player.z))[0];
+      const nativeStrike=native?manualNativeStrike(player,this.horde.enemies,now,this.map):null;
+      const target = native ? nativeStrike?.target : pulseTargets(this.horde.enemies, player, COMPANION_STRIKE.range,this.map).sort((a,b) => Math.hypot(a.x-player.x,a.z-player.z)-Math.hypot(b.x-player.x,b.z-player.z))[0];
       if (!target) return;
       player.nextgen.companionAt = now; cancelHealing(player.survival);
-      targets = [target]; damage = COMPANION_STRIKE.damage;
+      targets = [target]; damage = nativeStrike?.damage ?? COMPANION_STRIKE.damage;
       this.broadcast({ type: 'companion-strike', by: player.id, x: target.x, z: target.z });
     } else {
       const cooldown = pulse ? power.cooldown * 1000 : 480;
@@ -622,6 +657,14 @@ export class GameRoom extends DurableObject {
       this.broadcast(this.missionPacket());
     }
     for (const enemy of killed) await this.creditKill(socket, player, enemy, pulse, species, native?.id);
+  }
+  async recordNativeKill(socket,player,enemy,record) {
+    // The caller marks death synchronously, before a subsequent input can hit the same enemy.
+    if(this.mission.phase==='active') {
+      this.mission.kills=Math.min(MISSION_KILLS,this.mission.kills+1);
+      await this.persistMission(); this.broadcast(this.missionPacket());
+    }
+    await this.creditKill(socket,player,enemy,false,record.familyId,record.id);
   }
   async creditKill(socket, player, enemy, pulse, species, instanceId) {
     try {
@@ -681,7 +724,7 @@ export class GameRoom extends DurableObject {
     this.players.delete(socket);
     if (!this.players.size) {
       this.stopTick();
-      this.horde = new HordeSimulation();
+      this.horde = new HordeSimulation(this.map);
     }
   }
 
@@ -721,19 +764,53 @@ export class GameRoom extends DurableObject {
         p.movingUntil=now+200; this.saveAttachment(socket,p);
       }
     }
-    const hits = this.horde.step([...this.players.values()], dt, now);
+    const companionTargets=[];
+    for(const [socket,p] of this.players) {
+      const pet=ensureNativeCompanion(p,this.map); if(!pet) continue;
+      const beforeMode=pet.mode;
+      const attack=stepNativeCompanion(p,this.horde.enemies,dt,now,this.map);
+      if(beforeMode!==pet.mode) this.saveAttachment(socket,p);
+      if(attack) {
+        this.broadcast({type:'companion-strike',by:p.id,x:attack.target.x,z:attack.target.z,auto:true});
+        if(damageEnemy(attack.target,attack.damage)) {
+          const work=this.recordNativeKill(socket,p,attack.target,p.native).catch(error=>console.error('Native companion reward failed',error));
+          this.ctx.waitUntil?.(work);
+        }
+        this.saveAttachment(socket,p);
+      }
+      const target=nativeCompanionTargetable(p,this.map); if(target) companionTargets.push(target);
+    }
+    const hits = this.horde.step([...this.players.values()], dt, now,companionTargets);
     for (const hit of hits) {
+      const creatureEntry=[...this.players].find(([,p])=>p.nativeCombat?.id===hit.playerId);
+      if(creatureEntry) {
+        const [socket,p]=creatureEntry, pet=p.nativeCombat;
+        if(pet.hp<=0) {pet.mode='follow';pet.targetId=null;this.send(socket,{type:'companion-status',message:'Companion incapacitated. Recover at a supply cache.'});}
+        this.saveAttachment(socket,p);continue;
+      }
       const entry = [...this.players].find(([, p]) => p.id === hit.playerId);
       if (!entry) continue;
       const [socket, p] = entry;
       cancelHealing(p.survival);
       this.cancelRevive(p, 'damage');
+      this.cancelCapture(socket,p,'infected damage');
       if (p.nextgen && p.hp <= 0) {
         p.nextgen.resonant = false; p.nextgen.transitionUntil = 0;
         p.nextgen.downedUntil = now + REVIVE_RULES.downedMs;
       }
       this.send(socket, { type: 'damage', hp: p.hp });
       this.saveAttachment(socket, p);
+    }
+    // Resolve capture only after server damage, including the final channel tick.
+    for(const [socket,p] of this.players) {
+      const attempt=p.captureAttempt;if(!attempt)continue;
+      if(p.hp<=0 || this.mission.phase!=='active' || attempt.sequence!==this.mission.sequence ||
+        Math.hypot(p.x-NATIVE_CAPTURE.x,p.z-NATIVE_CAPTURE.z)>NATIVE_CAPTURE.range ||
+        Math.hypot(p.x-attempt.x,p.z-attempt.z)>NATIVE_CAPTURE.movementTolerance) {this.cancelCapture(socket,p,'encounter interrupted');continue;}
+      if(now<attempt.endsAt)continue;
+      p.captureAttempt=null;
+      const work=this.finishNativeCapture(socket,p,attempt.sequence);
+      this.ctx.waitUntil?.(work);
     }
     // Resolve only after server damage for this tick, so a damaging hit cancels even on completion tick.
     for (const [socket, p] of this.players) {
@@ -770,7 +847,10 @@ export class GameRoom extends DurableObject {
         species: p.native?.familyId || p.collection?.active || 'lanternkin',
         creatureXp: p.native?.xp ?? (p.collection?.creatures[p.collection.active]?.xp || 0),
         ...(p.native ? { creatureInstanceId:p.native.id, creatureFormXp:nativeFormXP(p.native) } : {}),
-        ...(p.nextgen && this.map ? { captureAvailable:p.captureSequence !== this.mission.sequence } : {}),
+        ...(p.native && p.nativeCombat && p.nextgen && this.map ? { nativeCompanion:nativeCompanionSnapshot(p.nativeCombat) } : {}),
+        ...(p.nextgen && this.map ? { captureAvailable:p.captureSequence !== this.mission.sequence,
+          captureKit:p.captureSequence!==this.mission.sequence?1:0,
+          captureProgress:p.capturePending?1:p.captureAttempt?Math.max(0,Math.min(1,(now-p.captureAttempt.startedAt)/NATIVE_CAPTURE.duration)):null } : {}),
         ...(p.nextgen ? { nextgen: {
           weapon: p.nextgen.weapon, shotgun: p.nextgen.shotgun, charge: p.nextgen.charge, resonant: p.nextgen.resonant, transitioning: p.nextgen.transitionUntil > now,
           downedMs: p.hp <= 0 ? Math.max(0, p.nextgen.downedUntil - now) : 0,

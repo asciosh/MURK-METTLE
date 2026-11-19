@@ -106,7 +106,7 @@ export class HordeSimulation {
   relocateAt: number;
   reset(players?: Combatant[]): void;
   spawn(players: Combatant[]): void;
-  step(players: Combatant[], dt: number, now: number): HordeHit[];
+  step(players: Combatant[], dt: number, now: number, companions?:Combatant[]): HordeHit[];
   packet(): HordePacket;
 }
 

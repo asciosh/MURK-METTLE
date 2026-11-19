@@ -154,6 +154,8 @@ export function mountLobby(roomCode = '') {
   quality.value = savedNextgenQuality(window.localStorage);
   qualityLabel.append(quality); settings.append(qualityLabel);
   const settingStatus = element('p', 'ng-note', 'Changes are saved automatically.'); settings.append(settingStatus);
+  const legacy = element('a','ng-button ng-secondary','OPEN LEGACY V0.27'); legacy.href='/?legacy=1';
+  settings.append(element('p','ng-note','The original game is archived separately. Your 2.0 progression is not replaced.'),legacy);
 
   const controls = sections.get('controls')!;
   controls.append(element('h2', '', 'Controls'), renderControls('both'));

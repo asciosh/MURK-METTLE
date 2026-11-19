@@ -5,6 +5,7 @@ import { companionFollow } from './RoomFieldRules';
 import { roomToScene } from './RoomIntent';
 import { CompanionAvatar } from './CompanionAvatar';
 import { NextgenModBridge } from '../modding/NextgenModBridge';
+import type { NativeCompanionSnapshot } from '../../../shared/nextgen-companion-combat.mjs';
 
 /** Original five-species art; the room's ownership, species and XP are authoritative. */
 export class RoomCompanionView {
@@ -32,18 +33,18 @@ export class RoomCompanionView {
     this.ring.visible = false;
     scene.add(this.ring);
   }
-  update(owner: { x: number; z: number; yaw: number; hp: number }, species: SpeciesId, xp: number, dt: number) {
+  update(owner: { x: number; z: number; yaw: number; hp: number }, species: SpeciesId, xp: number, dt: number, native?: NativeCompanionSnapshot) {
     this.species = species; this.xp = xp; this.cosmetic.setSpecies(species, xp);
     this.pet.setForm(species, xp);
-    this.visible = owner.hp > 0;
+    this.visible = owner.hp > 0 && (!native || native.hp>0);
     this.pet.root.visible = this.visible && species !== 'lanternkin';
     this.nextgenPet.root.visible = this.visible && species === 'lanternkin';
-    const target = companionFollow(owner, owner.yaw,true);
+    const target = native ?? companionFollow(owner, owner.yaw,true);
     const previous = this.position ?? target;
     const distance = Math.hypot(target.x - previous.x, target.z - previous.z);
     const alpha = distance > 8 ? 1 : 1 - Math.exp(-Math.min(100, Math.max(0, dt)) / 150);
     this.position = { x: previous.x + (target.x - previous.x) * alpha, z: previous.z + (target.z - previous.z) * alpha };
-    let visual = this.position, facing = owner.yaw;
+    let visual = this.position, facing = native?.yaw ?? owner.yaw;
     if (this.strikeMs > 0 && this.strikeTarget) {
       this.strikeMs = Math.max(0, this.strikeMs - Math.min(100, Math.max(0, dt)));
       const dx = this.strikeTarget.x - this.position.x, dz = this.strikeTarget.z - this.position.z;

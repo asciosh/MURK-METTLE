@@ -1,0 +1,42 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { NEXTGEN_MAP } from '../shared/nextgen-terrain.mjs';
+import { NATIVE_COMPANION_RULES, ensureNativeCompanion, nativeCompanionStats, setNativeCompanionMode, stepNativeCompanion, manualNativeStrike, recoverNativeCompanion, nativeCompanionTargetable } from '../shared/nextgen-companion-combat.mjs';
+import { newNextgenCombat } from '../shared/nextgen-combat.mjs';
+import { HordeSimulation, spawnHorde } from '../shared/survival.mjs';
+const native=(formId='lanternkin')=>({ id:'specimen',familyId:'lanternkin',formId,xp:400,origin:'native',status:'available' });
+const owner=()=>({id:'survivor',x:0,z:0,yaw:0,hp:100,nextgen:newNextgenCombat(),native:native()});
+const enemy=(x,z)=>({id:'test-enemy',x,z,hp:100});
+test('native stats use actual evolved form, never lifetime XP; legacy and unnegotiated owners cannot deploy',()=>{
+  assert.deepEqual(nativeCompanionStats(native()),{maxHp:80,damage:12,stage:0});
+  assert.deepEqual(nativeCompanionStats(native('lanternkin-2')),{maxHp:120,damage:18,stage:1});
+  assert.deepEqual(nativeCompanionStats(native('lanternkin-3')),{maxHp:160,damage:24,stage:2});
+  assert.equal(ensureNativeCompanion({...owner(),native:null},NEXTGEN_MAP),null);
+  assert.equal(ensureNativeCompanion({...owner(),nextgen:null},NEXTGEN_MAP),null);
+  assert.equal(ensureNativeCompanion(owner(),undefined),null);
+});
+test('follow is passive, defend will not hunt distant infected, aggression has bounded movement and one shared attack cooldown',()=>{
+  const p=owner(),pet=ensureNativeCompanion(p,NEXTGEN_MAP),e=enemy(0,7);
+  assert.equal(setNativeCompanionMode(p,'impossible',NEXTGEN_MAP),false);
+  assert.equal(stepNativeCompanion(p,[e],.25,10000,NEXTGEN_MAP),null);
+  assert.equal(nativeCompanionTargetable(p,NEXTGEN_MAP),null);
+  setNativeCompanionMode(p,'defend',NEXTGEN_MAP);assert.equal(stepNativeCompanion(p,[e],.25,10000,NEXTGEN_MAP),null);assert.equal(pet.targetId,null);
+  const previous={x:pet.x,z:pet.z};setNativeCompanionMode(p,'aggressive',NEXTGEN_MAP);
+  stepNativeCompanion(p,[e],100,10000,NEXTGEN_MAP);
+  assert.equal(pet.targetId,e.id);assert.ok(Math.hypot(pet.x-previous.x,pet.z-previous.z)<=NATIVE_COMPANION_RULES.speed*.25+.001);
+  let attack=null;for(let i=0;i<10&&!attack;i++) attack=stepNativeCompanion(p,[e],.25,10000+i*250,NEXTGEN_MAP);
+  assert.equal(attack?.target,e);assert.equal(attack.damage,12);
+  assert.equal(manualNativeStrike(p,[e],pet.readyAt-1,NEXTGEN_MAP),null);
+  assert.equal(manualNativeStrike(p,[e],pet.readyAt,NEXTGEN_MAP)?.damage,12);
+  const distant=enemy(0,30);assert.equal(stepNativeCompanion(p,[distant],.25,20000,NEXTGEN_MAP),null);assert.equal(pet.targetId,null);
+});
+test('engaged pet receives ordinary infected windup hits, without increasing spawn count; recovery restores HP and follow',()=>{
+  const p=owner(),pet=ensureNativeCompanion(p,NEXTGEN_MAP),horde=new HordeSimulation(NEXTGEN_MAP);
+  setNativeCompanionMode(p,'aggressive',NEXTGEN_MAP);Object.assign(pet,{x:3,z:0});
+  const e=spawnHorde([p],1,'pet')[0];Object.assign(e,{x:3,z:1,hp:100,windupEndsAt:1000,damage:10});horde.enemies=[e];
+  const hits=horde.step([p],.1,1000,[pet]); assert.equal(hits[0]?.playerId,pet.id);assert.equal(pet.hp,70);assert.equal(p.hp,100);
+  pet.hp=0;assert.equal(stepNativeCompanion(p,[e],.25,2000,NEXTGEN_MAP),null);assert.equal(pet.mode,'follow');
+  assert.equal(setNativeCompanionMode(p,'aggressive',NEXTGEN_MAP),false);assert.equal(manualNativeStrike(p,[e],2000,NEXTGEN_MAP),null);
+  assert.equal(recoverNativeCompanion(p,NEXTGEN_MAP),true);assert.equal(pet.hp,pet.maxHp);assert.equal(pet.mode,'follow');
+  horde.enemies=[];horde.step([p],0,3000,[pet]);assert.equal(horde.enemies.length,spawnHorde([p],horde.wave,'compare',NEXTGEN_MAP).length);
+});

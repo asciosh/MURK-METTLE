@@ -7,6 +7,7 @@ import type { LootItem } from '../core/LootField';
 import { PICKUP } from '../core/PickupController';
 import { WEAPONS, ammoWeapon, lootLabel, fullLootNotice } from '../core/EquipmentInventory';
 import type { CompanionState } from '../core/CompanionController';
+import type { NativeCompanionSnapshot } from '../../../shared/nextgen-companion-combat.mjs';
 import type { SquadView } from '../core/RoomSquadState.mjs';
 import { extractionStarted, extractionConfirmed, extractionFailed, extractionMessage, type ExtractionReceipt } from '../core/RoomExtractionReceipt.mjs';
 
@@ -46,6 +47,9 @@ export interface OnlineHudState {
   transitioning: boolean;
   creature: string | null;
   creatureXp: number;
+  nativeCompanion?: NativeCompanionSnapshot;
+  captureKit?:number;
+  captureProgress?:number|null;
   target: string;
   note: string;
   reviveProgress: number | null;
@@ -81,6 +85,12 @@ export class PlayableHud {
   private readonly resonanceFill=document.createElement('div');
   private readonly companionLabel=document.createElement('div');
   private readonly pulseLabel=document.createElement('div');
+  private readonly companionVitals=document.createElement('div');
+  private readonly companionHealthFill=document.createElement('div');
+  private readonly companionHealthText=document.createElement('div');
+  private readonly captureVitals=document.createElement('div');
+  private readonly captureFill=document.createElement('div');
+  private readonly captureLabel=document.createElement('div');
   private readonly extractionPanel=document.createElement('section');
   private readonly extractionTitle=document.createElement('h2');
   private readonly extractionBody=document.createElement('p');
@@ -283,7 +293,13 @@ this.hordeStatus.style.cssText = `
     this.resonanceFill.style.cssText='height:100%;background:#8fe8b1;transform-origin:left';meter.append(this.resonanceFill);
     this.companionLabel.className='nextgen-companion-label';this.companionLabel.style.fontWeight='bold';
     this.pulseLabel.className='nextgen-pulse-label';
-    this.abilityPanel.append(this.resonanceLabel,meter,this.companionLabel,this.pulseLabel);this.root.append(this.abilityPanel);
+    this.companionVitals.className='nextgen-companion-vitals';this.companionVitals.style.cssText='display:none;margin:6px 0';
+    const petMeter=document.createElement('div');petMeter.style.cssText='height:6px;background:#263c31;border-radius:3px;overflow:hidden;margin-top:4px';
+    this.companionHealthFill.style.cssText='height:100%;background:#8fe8b1;transform-origin:left';petMeter.append(this.companionHealthFill);
+    this.companionVitals.append(this.companionHealthText,petMeter);
+    this.captureVitals.className='nextgen-capture-vitals';this.captureVitals.style.cssText='display:none;border-top:1px solid #476657;margin-top:8px;padding-top:8px';
+    const captureTrack=document.createElement('div');captureTrack.style.cssText='height:5px;background:#263c31;border-radius:3px;overflow:hidden;margin-top:4px';this.captureFill.style.cssText='height:100%;background:#9de4fa;transform-origin:left';captureTrack.append(this.captureFill);this.captureVitals.append(this.captureLabel,captureTrack);
+    this.abilityPanel.append(this.resonanceLabel,meter,this.companionLabel,this.companionVitals,this.pulseLabel,this.captureVitals);this.root.append(this.abilityPanel);
 
     document.body.appendChild(this.root);
   }
@@ -340,14 +356,27 @@ this.hordeStatus.style.cssText = `
     this.ammunition.textContent = `${s.weapon.toUpperCase()}  ${s.magazine ?? '–'} / ${s.reserve ?? '–'}${s.reloading?' · RELOADING':''}`;
     this.hordeStatus.textContent = `WAVE ${s.wave || '–'}${s.waveCountdown>0?' · NEXT '+Math.ceil(s.waveCountdown/1000)+'s':''}\nINFECTED ${s.infected}\nTEAM KILLS ${s.kills} / ${s.killGoal}\nSAMPLES ${s.samples} / ${s.sampleGoal}${s.extractionReady?' · EXTRACTION READY':''}`;
     this.inventory.textContent = `BANDAGES ${s.bandages} / 2\n${s.materials?`SCRAP ${s.materials.scrap} · FIBER ${s.materials.fiber} · SPORE ${s.materials.spore}`:'CLOUD INVENTORY SYNCING…'}`;
-    this.lootPrompt.textContent = s.reviveProgress!==null ? `REVIVING ${Math.round(s.reviveProgress*100)}% · Stay still` : s.target;
+    this.lootPrompt.textContent = s.reviveProgress!==null ? `REVIVING ${Math.round(s.reviveProgress*100)}% · Stay still` : s.captureProgress!=null?`CAPTURING ${Math.round(s.captureProgress*100)}% · Stand still · E cancel`:s.target;
     this.lootToast.textContent = s.note;
     // In online mode, the most recent confirmation stays visible in the main status strip.
     this.lootToast.style.display='none';
     this.resonanceLabel.textContent = `Q  ${s.transitioning?'TRANSFORMING':s.resonant?'RESONANCE ACTIVE':'RESONANCE'}  ${Math.round(s.charge)}%`;
     this.resonanceFill.style.transform = `scaleX(${Math.max(0,Math.min(1,s.charge/100))})`;
     this.companionLabel.textContent = s.creature ? `C  ${s.creature.toUpperCase()} · ${s.creatureXp} XP` : 'C  NO COMPANION';
-    this.pulseLabel.textContent = s.creature ? 'X PULSE · G STRIKE (SERVER VERIFIED)' : 'BOND AT GREEN HABITATS';
+    const pet=s.nativeCompanion;
+    this.companionVitals.style.display=pet?'block':'none';
+    if(pet) {
+      this.companionVitals.dataset.mode=pet.mode;
+      this.companionVitals.dataset.hp=String(pet.hp);
+      this.companionHealthText.textContent=pet.hp>0?`${pet.mode.toUpperCase()} · ${Math.ceil(pet.hp)} / ${pet.maxHp} HP`:'INCAPACITATED · 0 HP';
+      this.companionHealthFill.style.transform=`scaleX(${Math.max(0,Math.min(1,pet.hp/pet.maxHp))})`;
+      this.companionHealthFill.style.background=pet.hp/pet.maxHp<.3?'#e8877b':'#8fe8b1';
+    }
+    this.pulseLabel.textContent = pet ? pet.hp>0 ? 'C TACTICS · X PULSE · G STRIKE' : 'E RECOVER AT SUPPLY CACHE' : s.creature ? 'X PULSE · G STRIKE (SERVER VERIFIED)' : 'BOND AT GREEN HABITATS';
+    this.captureVitals.style.display=s.captureKit===undefined?'none':'block';
+    this.captureVitals.dataset.progress=s.captureProgress==null?'idle':String(s.captureProgress);
+    this.captureLabel.textContent=s.captureProgress!=null?`CAPTURING ${Math.round(s.captureProgress*100)}%`:`CAPTURE CAPSULE · ${s.captureKit??0}/1`;
+    this.captureFill.style.transform=`scaleX(${s.captureProgress??s.captureKit??0})`;
     this.abilityPanel.style.display = s.alive?'block':'none';
     this.crosshair.style.display = s.locked && s.aiming && !s.inventoryOpen && s.alive ? 'block' : 'none';
     this.prompt.style.color = s.alive ? '#fff' : '#ff6666';

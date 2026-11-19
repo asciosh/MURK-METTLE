@@ -20,11 +20,11 @@ const { launchBrowser } = require('./support.cjs');
       .replace('game.start();', 'game.start();game.renderer.setAnimationLoop(null);');
     await route.fulfill({ response, body });
   });
-  await page.goto('http://localhost:5173');
+  await page.goto('http://localhost:5173/?legacy=1');
   await page.waitForTimeout(200);
   if (requests.some((u) => u.includes('/game/Game.ts'))) throw Error('Game downloaded before authentication');
   authenticated = true;
-  await page.goto('http://localhost:5173/?perf=1');
+  await page.goto('http://localhost:5173/?legacy=1&perf=1');
   await page.waitForFunction(() => window.__perfGame, { timeout: 90000 });
   await page.waitForTimeout(100);
   const result = await page.evaluate(async () => {

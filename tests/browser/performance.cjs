@@ -23,7 +23,7 @@ const destination = process.env.PERF_OUTPUT || path.join(require('node:os').tmpd
       .replace('game.start();', 'game.start();game.renderer.setAnimationLoop(null);');
     await route.fulfill({ response, body });
   });
-  await page.goto(process.env.GAME_URL || 'http://localhost:5173');
+  await page.goto(new URL('/?legacy=1',process.env.GAME_URL || 'http://localhost:5173').href);
   await page.waitForFunction(() => window.__perfGame, { timeout: 90000 });
   await page.waitForTimeout(300);
   const hardware = await page.evaluate(() => {

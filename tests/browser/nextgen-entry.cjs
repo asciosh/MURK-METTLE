@@ -7,17 +7,21 @@ const {launchBrowser}=require('./support.cjs');
   const browser=await launchBrowser();
   try{
     const ctx=await browser.newContext(), page=await ctx.newPage();
-    await page.goto(new URL('/?nextgen=lobby',base).href);
+    await page.goto(new URL('/',base).href);
     await page.locator('#nextgen-lobby').waitFor();
     assert.equal(await page.locator('#game-viewport').count(),0);
+    await page.getByRole('button',{name:'Settings'}).click();
+    const archived=page.locator('a[href="/?legacy=1"]');await archived.waitFor();await archived.click();
+    await page.locator('#game-viewport').waitFor({state:'attached'});assert.equal(await page.locator('#nextgen-lobby').count(),0);
     await page.goto(new URL('/?nextgenRoom=BLOOM',base).href);
     await page.locator('#nextgen-lobby').waitFor();
     assert.equal(await page.locator('input[name=room]').inputValue(),'BLOOM');
+    await page.getByRole('button',{name:'Play',exact:true}).click();
     await page.locator('a[href="/?nextgen=playable"]').click();
     await page.waitForFunction(()=>window.__m01DemoLoaded&&!!window.__m01Demo?.getPlayerState(),null,{timeout:90000});
     assert.equal(await page.locator('#game-viewport').count(),0);
     await page.locator('.nextgen-hud[data-mode="solo"] .nextgen-health').waitFor();
     await page.locator('.nextgen-hud[data-mode="solo"] .nextgen-ability-panel').waitFor();
-    console.log('NEXTGEN ENTRY: dedicated lobby, unauthenticated room gate, production-built solo prototype passed.');
+    console.log('NEXTGEN ENTRY: default lobby, explicit legacy archive, unauthenticated room gate and production-built solo prototype passed.');
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

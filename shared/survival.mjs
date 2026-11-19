@@ -421,7 +421,7 @@ export class HordeSimulation {
     this.enemies = spawnHorde(players, this.wave, this.runId,this.map);
     this.nextWaveAt = 0;
   }
-  step(players, dt, now) {
+  step(players, dt, now, companions = []) {
     const living = players.filter((p) => p.hp > 0);
     if (!living.length) return [];
     if (!this.enemies.length) this.spawn(living);
@@ -439,7 +439,8 @@ export class HordeSimulation {
         this.relocateAt = 0;
       }
     } else this.relocateAt = 0;
-    return stepHorde(this.enemies, players, dt, now,this.map);
+    // Deputized creatures can be targeted, but do not inflate party-size waves or relocation.
+    return stepHorde(this.enemies, [...players,...companions], dt, now,this.map);
   }
   packet() {
     return {

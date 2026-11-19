@@ -20,7 +20,7 @@ npm run build
 npm run dev:cloudflare
 ```
 
-Open the local Wrangler address (normally `http://localhost:8787`). Local accounts and rooms are separate from production. `npm run dev` builds, watches and runs the complete Worker; `npm run server` is an alias for the complete local Worker. The obsolete unauthenticated Node server has been removed.
+Open the local Wrangler address (normally `http://localhost:8787`) for the NEXTGEN 2.0 main menu. The archived v0.27 game remains accessible at `/?legacy=1` or from NEXTGEN Settings. Local accounts and rooms are separate from production. `npm run dev` builds, watches and runs the complete Worker; `npm run server` is an alias for the complete local Worker. The obsolete unauthenticated Node server has been removed.
 
 See [developer setup](docs/development/SETUP.md), [testing and manual checks](docs/development/TESTING.md) and [Cloudflare deployment](docs/development/CLOUDFLARE.md). Production deployment is a separate operator action.
 

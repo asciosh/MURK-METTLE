@@ -36,7 +36,7 @@ export const NEXTGEN_CONTROLS = {
   coop: [
     ['Ctrl', 'Server-validated dodge'], ['Space', 'Server-validated jump'],
     ['1 / 2 / 3', 'Pistol / Rifle / Shotgun'],
-    ['C', 'Cycle bonded creatures'], ['G', 'Companion strike'],
+    ['C', 'Native creature tactics / cycle legacy bonds'], ['G', 'Companion strike'],
     ['X', 'Creature Pulse'], ['V', 'Revive nearby teammate'],
     ['Enter', 'Respawn when down'],
   ],

@@ -17,7 +17,7 @@ export function roomFieldTargets(collection: CollectionState | null, mission: Mi
     result.push({ id: species, species, x: d.x, z: d.z, kind: 'bond', range: 2.7, label: `Bond creature · ${d.name}`, available: true });
   }
   if (mission) {
-    if (capture && collection && mission.phase === 'active') result.push({ ...NATIVE_CAPTURE, kind:'capture', label:'Capture wild Lanternkin · once per expedition', available:true });
+    if (capture && collection && mission.phase === 'active') result.push({ ...NATIVE_CAPTURE, kind:'capture', label:'Deploy capsule · wild Lanternkin · stand still', available:true });
     for (const p of mission.pickups) result.push({ ...p, kind: 'pickup', range: 2.7, label: `Collect sample · ${p.id}`, available: mission.phase === 'active' });
     result.push({ id: 'extraction', x: EXTRACTION.x, z: EXTRACTION.z, kind: 'extract', range: EXTRACTION.radius, label: mission.ready ? 'Extract · complete expedition' : 'Extraction locked · complete team objectives', available: mission.ready && mission.phase === 'active' });
   }

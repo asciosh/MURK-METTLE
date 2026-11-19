@@ -15,7 +15,7 @@ const { launchBrowser } = require('./support.cjs');
     r.fulfill({ json: authenticated ? { username: 'benchmark', revision: 0, data: null } : {} }),
   );
   const url = process.env.GAME_URL || 'http://localhost:8787';
-  await page.goto(url + '/?perf=1');
+  await page.goto(new URL('/?legacy=1&perf=1',url).href);
   await page.waitForTimeout(300);
   if (requests.some((u) => /\/(Game|three-core|SceneEffects)-.*\.js/.test(u)))
     throw Error('Engine downloaded at login');

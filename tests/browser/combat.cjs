@@ -9,7 +9,7 @@ fs.mkdirSync(output, { recursive: true });
   const errors = [];
   p.on('pageerror', (e) => errors.push(String(e)));
   await p.route('**/api/account/**', (r) => r.fulfill({ json: {} }));
-  await p.goto(process.env.GAME_URL || 'http://localhost:5173');
+  await p.goto(new URL('/?legacy=1',process.env.GAME_URL || 'http://localhost:5173').href);
   const result = await p.evaluate(async () => {
     const T = await import('/node_modules/three/build/three.module.js');
     const { Game } = await import('/src/client/game/Game.ts');

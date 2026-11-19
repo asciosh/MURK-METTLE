@@ -14,7 +14,7 @@ const { launchBrowser } = require('./support.cjs');
   await page.route('**/api/account/**', (r) =>
     r.fulfill({ json: { username: 'production_test', revision: 0, data: null } }),
   );
-  await page.goto(process.env.GAME_URL || 'http://localhost:8787');
+  await page.goto(new URL('/?legacy=1',process.env.GAME_URL || 'http://localhost:8787').href);
   await page.waitForFunction(
     () => document.querySelector('#game-load-status').textContent.includes('Field ready'),
     { timeout: 90000 },
