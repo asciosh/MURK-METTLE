@@ -126,7 +126,10 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 48
-        }
+        },
+        "cast": { "type": "string", "minLength": 1, "maxLength": 48 },
+        "charge": { "type": "string", "minLength": 1, "maxLength": 48 },
+        "heal": { "type": "string", "minLength": 1, "maxLength": 48 }
       }
     },
     "effects": {

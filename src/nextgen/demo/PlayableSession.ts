@@ -27,6 +27,8 @@ import { CombatFeedback } from '../core/CombatFeedback';
 import { CompanionController } from '../core/CompanionController';
 import { CompanionAvatar } from '../core/CompanionAvatar';
 import { NextgenModBridge } from '../modding/NextgenModBridge';
+import { readLocalMovePack, selectLocalMoveProfile } from '../modding/LocalMoveStore';
+import { CreatureMoveFx } from '../core/CreatureMoveFx';
 import { WEAPONS, ammoKind, fullLootNotice, lootLabel, INVENTORY_ROWS, inventoryDropKind, type WeaponId, type LootKind } from '../core/EquipmentInventory';
 import {
   HordeDirector,
@@ -65,6 +67,10 @@ export class PlayableSession {
   private bandagePressed = false;
   private pickupPressed = false;
   private pulsePressed = false;
+  private moveSlot:number|undefined;
+  private readonly movePack=readLocalMovePack();
+  private readonly moveFx=this.movePack?new CreatureMoveFx():null;
+  private readonly companionStuns=new Map<InfectedAvatar,number>();
   private readonly companion:CompanionController|null;
   private readonly companionAvatar:CompanionAvatar|null;
   private readonly companionCosmetic:NextgenModBridge|null;
@@ -115,6 +121,7 @@ export class PlayableSession {
     scene.add(this.avatar.root);
     scene.add(this.loot.root);
     scene.add(this.feedback.root);
+    if(this.moveFx)scene.add(this.moveFx.root);
 
     void this.loadSelectedSurvivor().then(loaded => {
       if (!loaded || this.disposed) return;
@@ -185,6 +192,7 @@ export class PlayableSession {
   }
 
   private clearInfected(): void {
+    this.companionStuns.clear();this.moveFx?.reset();
     this.infectedVariants.clear();
   for (const enemy of this.infected) {
     enemy.dispose();
@@ -348,6 +356,7 @@ getHordeInfo() {
         this.keyboard.reset(); this.clearAim(); this.combat.interruptActions();
         if(this.pickup.active)this.cancelPickup();
         this.meleePressed=this.bandagePressed=this.pickupPressed=false;
+        this.moveSlot=undefined;this.companion?.cancelMove();
       }
       event.preventDefault();return;
     }
@@ -362,13 +371,17 @@ getHordeInfo() {
       if(!event.repeat&&event.code==='KeyG')this.dropSelectedItem();
       event.preventDefault();return;
     }
+    if(/^Digit[5-8]$/.test(event.code)&&this.companion?.hasMoves){
+      if(!event.repeat)this.moveSlot=Number(event.code.slice(-1))-5;
+      event.preventDefault();return;
+    }
     if(['KeyQ','KeyC','KeyX'].includes(event.code)){
       if(!event.repeat){
         if(event.code==='KeyQ'){
           if(this.pickup.active||this.state.airborne||this.state.dodging||this.avatar.getActiveClip()==='hit'||this.avatar.getWeaponAction()!==null||!this.combat.toggleResonance())this.showLootNotice('RESONANCE NOT READY');
           else {this.clearAim();this.feedback.sound('resonance');this.showLootNotice(this.combat.getState().resonance.active?'RESONANCE FORM':'STANDARD FORM');}
         }
-        if(event.code==='KeyC'&&this.companion)this.showLootNotice(this.companion.toggleAssist()?'LANTERNKIN: ENGAGE':'LANTERNKIN: FOLLOW');
+        if(event.code==='KeyC'&&this.companion)this.showLootNotice(this.companion.getState().name+': '+(this.companion.toggleAssist()?'ENGAGE':'FOLLOW'));
         if(event.code==='KeyX'&&this.companion)this.pulsePressed=true;
       }
       event.preventDefault();return;
@@ -466,6 +479,7 @@ private readonly onReset = () => {
   this.bandagePressed = false;
   this.pickupPressed = false;
   this.pulsePressed = false;
+  this.moveSlot=undefined;this.companion?.cancelMove();
   this.combat.interruptActions();
 };
 
@@ -506,20 +520,32 @@ private fireShot(resonant=false): void {
 
 private stepCompanion(delta:number):void {
   if(!this.companion)return;
+  this.companion.setMoveProfile(selectLocalMoveProfile(this.movePack,this.companionCosmetic?.appearanceId));
   const pulse=this.pulsePressed&&this.isLocked()&&!this.inventoryOpen&&this.combat.alive;
+  const slot=this.isLocked()&&!this.inventoryOpen&&this.combat.alive?this.moveSlot:undefined;
+  this.moveSlot=undefined;
   const strikes=this.companion.step(delta,this.combat.alive?this.state.position:null,this.state.facing,
-    this.infected.map(enemy=>enemy.getState()),pulse,this.companionHeight);
-  if(pulse){const s=this.companion.getState();this.showLootNotice(strikes.some(hit=>hit.kind==='pulse')?'LANTERNKIN: LUMEN PULSE':s.pulseCooldownMs>0?'ABILITY COOLING DOWN':'NO VISIBLE TARGET IN RANGE');}
+    this.infected.map(enemy=>enemy.getState()),pulse,this.companionHeight,slot,this.isLocked()&&!this.inventoryOpen);
+  if(this.companion.hasMoves){if(this.companion.moveMessage)this.showLootNotice(this.companion.moveMessage);}
+  else if(pulse){const s=this.companion.getState();this.showLootNotice(strikes.some(hit=>hit.kind==='pulse')?'LANTERNKIN: LUMEN PULSE':s.pulseCooldownMs>0?'ABILITY COOLING DOWN':'NO VISIBLE TARGET IN RANGE');}
   if(strikes.some(hit=>hit.kind==='pulse'))this.feedback.sound('pulse');
   const from=this.companion.getState().position;
-  for(const strike of strikes){const enemy=this.infected[strike.index];if(!enemy||!enemy.damage(strike.damage))continue;
-    const dead=enemy.getState().health===0;this.combat.recordCompanionHit(dead);this.feedback.impact(enemy.getState().position,from,strike.kind==='basic');if(dead)this.dropLoot(enemy);}
+  for(const strike of strikes){const enemy=this.infected[strike.index];if(!enemy||enemy.getState().health<=0)continue;
+    const before=enemy.getState().health;
+    if(strike.move){this.moveFx?.play(strike.move,from,enemy.getState().position);if(strike.move.statusMs)this.companionStuns.set(enemy,strike.move.statusMs);}
+    if(!strike.damage||!enemy.damage(strike.damage))continue;
+    const dead=enemy.getState().health===0;this.combat.recordCompanionHit(dead);this.feedback.impact(enemy.getState().position,from,strike.kind==='basic');
+    if(strike.move?.healPercent)this.combat.healCompanionSupport((before-enemy.getState().health)*strike.move.healPercent/100);
+    if(dead){this.companionStuns.delete(enemy);this.dropLoot(enemy);}}
   this.companionAvatar?.update(delta,this.companion.getState());
   if (this.companionAvatar) {
     const hasCosmetic = this.companionCosmetic?.update(this.companionAvatar.root, delta, this.companion.getState().moving, true) ?? false;
     this.companionAvatar.root.visible = !hasCosmetic;
   }
-  if (strikes.some(hit => hit.kind === 'pulse')) this.companionCosmetic?.pulse();
+  const cast=this.companion.moveCast,performed=strikes.find(hit=>hit.move)?.move;
+  if(cast)this.companionCosmetic?.playMove(cast.pose,cast.windupMs+450);
+  else if(performed?.windupMs)this.companionCosmetic?.playMove(performed.pose==='charge'?'cast':performed.pose,650);
+  else if (strikes.some(hit => hit.kind === 'pulse')) this.companionCosmetic?.pulse();
   else if (strikes.some(hit => hit.kind === 'basic')) this.companionCosmetic?.attack();
 }
 
@@ -668,9 +694,11 @@ step(deltaTimeMs: number): void {
   let totalDamage = 0;
 
   for (const infected of this.infected) {
+    const sleep=Math.max(0,(this.companionStuns.get(infected)??0)-deltaTimeMs);
+    if(sleep>0)this.companionStuns.set(infected,sleep);else this.companionStuns.delete(infected);
     const state = infected.update(
       deltaTimeMs,
-      this.combat.alive ? this.state.position : null
+      this.combat.alive && !sleep ? this.state.position : null
     );
 
     if (state.attackHit) {
@@ -819,6 +847,7 @@ step(deltaTimeMs: number): void {
     const muzzle = this.feedback.needsMuzzle &&
       this.avatar.getMuzzlePosition(this.muzzlePosition) ? this.muzzlePosition : null;
     this.feedback.update(deltaTimeMs, muzzle);
+    this.moveFx?.update(deltaTimeMs);
 
   const pose = this.followCamera.update(
     deltaTimeMs,
@@ -843,7 +872,8 @@ step(deltaTimeMs: number): void {
       this.lootNoticeMs > 0 ? this.lootNotice : '',
       this.pickup.active,
       this.inventoryIndex,
-      this.companion?.getState()??null
+      this.companion?.getState()??null,
+      this.companion?.moveHud??null
     );
   }
 
@@ -867,6 +897,7 @@ getCombatInfo() {
     inventoryOpen: this.inventoryOpen,
     companionAppearance: this.companionCosmetic?.appearanceKind ?? 'original',
     companionMotion: this.companionCosmetic?.motionInfo ?? null,
+    companionMoves:this.companion?.moveHud??null,
     companion: this.companion?.getState()??null
   };
 }
@@ -942,6 +973,7 @@ damageInfected(index: number, amount: number): boolean {
     this.infectedLoads.clear();
     this.loot.dispose();
     this.feedback.dispose();
+    this.moveFx?.dispose();this.companionStuns.clear();
     this.companionCosmetic?.dispose();
     this.companionAvatar?.dispose();
     this.avatar.dispose();

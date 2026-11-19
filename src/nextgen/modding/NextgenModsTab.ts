@@ -5,6 +5,7 @@ import type { ModPreview } from '../../client/mods/ModPreview';
 import { validateImport } from '../../client/mods/ValidateImport';
 import { drawSpritePackRow } from './SpritePackPanel';
 import { nextgenSpriteRegistry } from './SpritePackRegistry';
+import { mountLocalMovePanel } from './LocalMovePanel';
 
 /** One local appearance library, independent of playable species and trusted progress. */
 export function mountNextgenModsTab(host: HTMLElement): { closePreview(): void } {
@@ -33,6 +34,7 @@ export function mountNextgenModsTab(host: HTMLElement): { closePreview(): void }
   const labBody=create('div');labPanel.append(labBody);mountCreatureEvolutionLab(labBody);
   advanced.append(create('p','ng-note','Optional test assets and rule previews. Import only original or appropriately licensed art.'),demos,labPanel);
   packsPanel.append(input,toolbar,summary,status,list,previewHost,previewActions,advanced);host.append(packsPanel);
+  mountLocalMovePanel(host);
   if(new URLSearchParams(location.search).get('view')==='lab'){advanced.open=true;labPanel.open=true;}
 
   const message=(value:string)=>{status.textContent=value;status.hidden=!value;};

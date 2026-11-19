@@ -14,7 +14,7 @@ export interface ModManifest {
   model: string;
   textures?: string[];
   icon?: string;
-  animations?: Partial<Record<'idle' | 'walk' | 'run' | 'pulse' | 'hit' | 'attack', string>>;
+  animations?: Partial<Record<'idle' | 'walk' | 'run' | 'pulse' | 'hit' | 'attack' | 'cast' | 'charge' | 'heal', string>>;
   effects?: { type: 'pulse-glow'; strength: number }[];
 }
 export interface ValidatedMod {

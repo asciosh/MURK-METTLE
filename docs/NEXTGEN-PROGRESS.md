@@ -12,6 +12,13 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## 2026-11-19 — M04-C10A: local solo moveset prototype
+
+- Separate validated `.mmmoves` data, keyed to the enabled cosmetic ID, with one to four equipped slots, a loadout editor, local persistence and an original fallback. The normal cosmetic-only packs remain supported.
+- Solo companion targeting, manual keys 5–8, automatic slot one while engaged, simulation-clock cooldowns, cancellable windup and range/terrain rechecks. Generic impact, lash, projectile, sleep, drain and beam effects, optionally distinct cast/charge/heal skeletal clips. Drain currently recovers the survivor's health; values are real-time game balance, not another game's exact mechanics.
+- No third-party character data or assets, server/network changes, save schema changes or external uploads. Co-op still uses the trusted native combat contracts. This checkpoint does not yet add full learnset/progression, elemental effectiveness or modded multiplayer combat.
+- All 110 Node tests, TypeScript check and production build passed. Browser fixture prepared, but Chromium launch is blocked by the execution environment; operator browser and manual gameplay acceptance pending. **Next:** verify local moveset playback and then design explicit trusted private-host gameplay pack admission, shared combat semantics, progression and type interactions before enabling co-op move packs.
+
 ## 2026-11-19 — M04-C9: bounded animated 3D creature import
 
 - Added one-skin/32-joint validation, bounded quaternion tracks, strict joint indices, normalized skin weights, rigid inverse binds and conservative animated geometry bounds. Existing rigid/sprite support and permissions are unchanged.

@@ -4,6 +4,7 @@ import { ModRegistry } from '../../client/mods/ModRegistry';
 import type { ModVisual } from '../../client/mods/ModVisual';
 import { nextgenSpriteRegistry } from './SpritePackRegistry';
 import { SpriteCompanionVisual } from './SpriteCompanionVisual';
+import type { MovePose } from '../../../shared/local-creature-moves.mjs';
 
 // Reuse the legacy game's bounded, browser-only validator and IndexedDB store.
 // Nothing here can update trusted room species, combat, rewards or account saves.
@@ -58,6 +59,7 @@ export class NextgenModBridge {
       cosmetic.dispose();
       return;
     }
+    if (!(cosmetic instanceof SpriteCompanionVisual)) cosmetic.fitNextgenRig();
     this.visual = cosmetic;
     this.scene.add(cosmetic.root);
   }
@@ -75,6 +77,10 @@ export class NextgenModBridge {
 
   pulse(): void { this.visual?.pulse(); }
   attack(): void { this.visual?.attack(); }
+  playMove(pose:MovePose,ms:number):void {
+    if(this.visual instanceof SpriteCompanionVisual){if(pose==='attack')this.visual.attack();else this.visual.pulse();}
+    else this.visual?.playMove(pose,ms);
+  }
   get appearanceKind(): 'sprite' | 'glb' | 'original' { return this.visual instanceof SpriteCompanionVisual ? 'sprite' : this.visual ? 'glb' : 'original'; }
   get appearanceId(): string | undefined { return this.visual && !(this.visual instanceof SpriteCompanionVisual) ? this.visual.mod.manifest.id : undefined; }
   get motionInfo() { return this.visual && !(this.visual instanceof SpriteCompanionVisual) ? this.visual.motionInfo : null; }

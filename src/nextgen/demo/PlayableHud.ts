@@ -7,6 +7,7 @@ import type { LootItem } from '../core/LootField';
 import { PICKUP } from '../core/PickupController';
 import { WEAPONS, ammoWeapon, lootLabel, fullLootNotice } from '../core/EquipmentInventory';
 import type { CompanionState } from '../core/CompanionController';
+import type { MoveHud } from '../../../shared/local-creature-moves.mjs';
 import type { NativeCompanionSnapshot } from '../../../shared/nextgen-companion-combat.mjs';
 import type { NativeTrainingProgress } from '../../../shared/nextgen-creature-roster.mjs';
 import type { SquadView } from '../core/RoomSquadState.mjs';
@@ -425,7 +426,8 @@ this.hordeStatus.style.cssText = `
     lootNotice = '',
     pickingUp = false,
     inventoryIndex = 0,
-    companion:CompanionState|null=null
+    companion:CompanionState|null=null,
+    moves:MoveHud[]|null=null
   ): void {
     const fraction = Math.max(
       0,
@@ -469,6 +471,7 @@ this.hordeStatus.style.cssText = `
     this.resonanceFill.style.transform=`scaleX(${r.charge/r.maxCharge})`;
     this.companionLabel.textContent=companion?`C  ${companion.name.toUpperCase()} · ${companion.assist?'ENGAGE':'FOLLOW'}`:'';
     this.pulseLabel.textContent=companion?`X  LUMEN PULSE · ${companion.pulseCooldownMs>0?(companion.pulseCooldownMs/1000).toFixed(1)+'s':'READY'}`:'';
+    if(moves){this.pulseLabel.style.whiteSpace='pre-line';this.pulseLabel.textContent=moves.map((m,i)=>`${i+5}  ${m.name} · ${m.casting?'CASTING':m.remaining>0?(m.remaining/1000).toFixed(1)+'s':'READY'}`).join('\n');}
     this.abilityPanel.style.display=combat.alive?'block':'none';
 
   this.hordeStatus.textContent = horde.training

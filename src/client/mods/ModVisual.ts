@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import type { ValidatedMod } from './format.mjs';
+import type { MovePose } from '../../../shared/local-creature-moves.mjs';
 export function disposeAsset(gltf: GLTF): void {
   const images = new Set<ImageBitmap>();
   const skeletons = new Set<THREE.Skeleton>();
@@ -71,8 +72,11 @@ export class ModVisual {
   private restart = false;
   private pulseRemaining = 0;
   private attackRemaining = 0;
+  private moveRemaining=0;
+  private movePose:MovePose='attack';
   private readonly skeletons = new Set<THREE.Skeleton>();
   private readonly playedClips = new Set<string>();
+  private nextgenRestSize: number | null = null;
   private disposed = false;
   private readonly materials: THREE.MeshStandardMaterial[] = [];
   private readonly baseEmissive = new Map<THREE.MeshStandardMaterial, number>();
@@ -112,6 +116,30 @@ export class ModVisual {
     this.root.scale.setScalar(0.75 / mod.stats.radius); // Conservative radius across all allowed rotation tracks.
     this.mixer = new THREE.AnimationMixer(this.mesh);
   }
+  /** NEXTGEN companions use a ground-level anchor. Fit the visible rest pose,
+   * not the much larger conservative animation envelope. Presentation only. */
+  fitNextgenRig(): void {
+    if (!this.skeletons.size || this.nextgenRestSize !== null) return;
+    const previous = this.root.scale.x;
+    this.root.scale.setScalar(1);
+    this.root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(this.mesh, true);
+    const size = box.getSize(new THREE.Vector3());
+    const extent = Math.max(size.x, size.y, size.z);
+    if (!Number.isFinite(extent) || extent < 0.001 || !Number.isFinite(box.min.y)) {
+      this.root.scale.setScalar(previous);
+      return;
+    }
+    const scale = Math.min(1.35 / extent, 3 / this.mod.stats.radius, 8);
+    // Shift a separate parent, never an animated node or the gameplay anchor.
+    const grounded = new THREE.Group();
+    grounded.position.y = -box.min.y;
+    grounded.add(this.mesh);
+    this.root.add(grounded);
+    this.root.scale.setScalar(scale);
+    this.nextgenRestSize = extent * scale;
+    this.root.updateMatrixWorld(true);
+  }
   pulse(): void {
     this.pulseRemaining = 0.65;
     this.state = '';
@@ -123,21 +151,26 @@ export class ModVisual {
     this.state = '';
     this.restart = true;
   }
+  playMove(pose:MovePose,ms:number):void {
+    this.movePose=pose;this.moveRemaining=Math.max(.3,Math.min(3,ms/1000));
+    this.state='';this.restart=true;
+  }
   update(dt: number, moving: boolean, effects = true): void {
     if (this.disposed) return;
     this.pulseRemaining = Math.max(0, this.pulseRemaining - dt);
     this.attackRemaining = Math.max(0, this.attackRemaining - dt);
-    const state = this.pulseRemaining > 0 ? 'pulse' : this.attackRemaining > 0 ? 'attack' : moving ? 'walk' : 'idle';
+    this.moveRemaining=Math.max(0,this.moveRemaining-dt);
+    const state = this.moveRemaining>0 ? this.movePose : this.pulseRemaining > 0 ? 'pulse' : this.attackRemaining > 0 ? 'attack' : moving ? 'walk' : 'idle';
     if (state !== this.state) {
       this.state = state;
       const mapping = this.mod.manifest.animations || {},
-        clipName = mapping[state as keyof typeof mapping] || (state === 'attack' ? mapping.pulse : undefined) || mapping.idle;
+        clipName = mapping[state as keyof typeof mapping] || (['attack','cast','charge','heal'].includes(state) ? mapping.pulse||mapping.attack : undefined) || mapping.idle;
       const clip =
         this.asset.animations.find((c) => c.name === clipName) ||
         this.asset.animations.find((c) => c.name === mapping.idle);
       if (clip) {
         const next = this.mixer.clipAction(clip);
-        const once = (state === 'pulse' && clip.name === mapping.pulse) ||
+        const once = (this.moveRemaining>0 && clip.name!==mapping.idle) || (state === 'pulse' && clip.name === mapping.pulse) ||
           (state === 'attack' && clip.name === (mapping.attack || mapping.pulse));
         next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
         next.clampWhenFinished = once;
@@ -158,7 +191,8 @@ export class ModVisual {
   }
   get motionInfo() {
     return { bones: Math.max(0, ...Array.from(this.skeletons, s => s.bones.length)),
-      clip: this.action?.getClip().name ?? null, played: [...this.playedClips] };
+      clip: this.action?.getClip().name ?? null, played: [...this.playedClips],
+      restSize: this.nextgenRestSize };
   }
   dispose(): void {
     if (this.disposed) return;

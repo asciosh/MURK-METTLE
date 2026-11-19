@@ -241,6 +241,9 @@ export class CombatController {
     return true;
   }
 
+  healCompanionSupport(amount:number):void {
+    if(this.alive&&Number.isFinite(amount)&&amount>0)this.health=Math.min(COMBAT.maxHealth,this.health+Math.min(38,amount));
+  }
   recordHit(killed: boolean): void {
     this.shotsHit++;
 
