@@ -39,7 +39,7 @@ export class NextgenModBridge {
     if (this.disposed) return;
     const registry = nextgenModRegistry();
     const sprite = nextgenSpriteRegistry().selection(this.species, this.xp);
-    const glb = registry.selection(this.species);
+    const glb = registry.selection(this.species, this.xp);
     const id = sprite ? `sprite:${sprite.id}:${glb ?? ''}` : glb ? `glb:${glb}` : undefined;
     if (id === this.selection) return;
     this.selection = id;
@@ -52,7 +52,7 @@ export class NextgenModBridge {
       try { cosmetic = await SpriteCompanionVisual.create(sprite); }
       catch (error) { console.warn('Local sprite appearance unavailable; using original/GLB fallback', error); }
     }
-    if (!cosmetic && glb && generation === this.generation && !this.disposed) cosmetic = await registry.acquire(this.species);
+    if (!cosmetic && glb && generation === this.generation && !this.disposed) cosmetic = await registry.acquire(this.species, this.xp);
     if (!cosmetic) return;
     if (this.disposed || generation !== this.generation) {
       cosmetic.dispose();
@@ -76,6 +76,7 @@ export class NextgenModBridge {
   pulse(): void { this.visual?.pulse(); }
   attack(): void { if (this.visual instanceof SpriteCompanionVisual) this.visual.attack(); }
   get appearanceKind(): 'sprite' | 'glb' | 'original' { return this.visual instanceof SpriteCompanionVisual ? 'sprite' : this.visual ? 'glb' : 'original'; }
+  get appearanceId(): string | undefined { return this.visual && !(this.visual instanceof SpriteCompanionVisual) ? this.visual.mod.manifest.id : undefined; }
   hide(): void { if (this.visual) this.visual.root.visible = false; }
   get active(): boolean { return !!this.visual; }
   dispose(): void {

@@ -156,7 +156,7 @@ export class ModManager {
         rights = document.createElement('p'),
         licenseText = document.createElement('pre');
       heading.textContent = row.manifest.name;
-      summary.textContent = `${CREATURES[row.manifest.species].name} · v${row.manifest.version} · ${row.enabled ? 'ENABLED LOCALLY' : 'DISABLED'}`;
+      summary.textContent = `${CREATURES[row.manifest.species].name}${row.manifest.form ? ' · NEXTGEN form ' + row.manifest.form : ''} · v${row.manifest.version} · ${row.enabled ? 'ENABLED LOCALLY' : 'DISABLED'}`;
       title.textContent = `Author & license · ${row.manifest.license}`;
       rights.textContent = `${row.manifest.author} · Declared ${row.manifest.rights} rights. ${row.manifest.attribution}`;
       license.append(title, rights, licenseText);
@@ -245,7 +245,7 @@ export class ModManager {
       const mapped = Object.values(visual.mod.manifest.animations || {}),
         available = visual.mod.manifest.animations?.idle;
       document.querySelector('#mod-preview-caption')!.textContent =
-        `${visual.mod.manifest.name} · ${visual.mod.stats.triangles.toLocaleString()} triangles · same cosmetic across all three official growth stages. Missing mapped clips use idle or static pose; official bob/pulse remains.${!available || !mapped.length ? ' No idle clip mapped.' : ''}`;
+        `${visual.mod.manifest.name} · ${visual.mod.stats.triangles.toLocaleString()} triangles · ${visual.mod.manifest.form ? 'NEXTGEN-only form '+visual.mod.manifest.form : 'same cosmetic across all three official growth stages'}. Missing mapped clips use idle or static pose; official bob/pulse remains.${!available || !mapped.length ? ' No idle clip mapped.' : ''}`;
     } catch (error) {
       visual.dispose();
       throw error;

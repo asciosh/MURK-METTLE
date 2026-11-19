@@ -12,6 +12,28 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## 2026-11-19 — M04-C8: streamlined local appearance library
+
+- Operator verified C7 in a real two-client room: 176 actual combat XP, explicit Luminbloom evolution, persistent identity and 120 HP, three independent GLB form slots correctly restored, evolved model used on redeployment, unmodded peer retained original art.
+- Replaced the split Creature Studio with a compact default appearance library. One multi-file Import & Enable button routes GLB and sprite packs through the existing worker validation; three separate form archives can be selected together. Existing per-pack enable/disable and restore-originals remain available. Disabled packs, preview/removal/license details, demo tools and the Evolution Lab are expandable instead of always visible.
+- Kept existing validation bounds, eight-GLB/one-sprite storage limits, sprite priority, account schema and room protocol unchanged. Successful files are reported even if another file in the batch fails validation; no auto-deployment or external upload.
+- Source verification: 104/104 unit tests pass; updated browser scripts parse. Operator typecheck/build and menu, unified import, sprite and room browser checks pending; no further milestone implementation until review.
+
+## 2026-11-19 — M04-C7: automatic 3D evolution appearance slots
+
+- Operator manually verified both external CC0 2.5D and 3D pack imports. Keep 3D as the default art direction and sprite packs optional.
+- Added optional validated exact `form` (1/2/3) to GLB cosmetics. One enabled pack per species/form; existing species-wide packs and legacy selection remain compatible. NEXTGEN selects exact form from the room's existing authoritative form projection, not native lifetime XP. Sprite priority, validation, storage cap, cloud schema, combat and room protocol remain unchanged.
+- Added an offline validated retarget helper for existing local GLB packs; it preserves asset/license bytes and creates unique files outside Git. Menu identifies the exact official form. No third-party art bundled.
+- Source verification: 104/104 repository unit tests passed, including all three form slots and no premature native switch. Browser test syntax passed; offline dependency installation unavailable, so operator typecheck/build and opt-in real two-client test remain pending. See [C7 guide](nextgen/M04-C7-GLB-FORMS.md).
+- **Next:** verify C7 on Windows, then pause for operator review before M05. Broader native creature roster and secure expedition banking remain unfinished; no M05 implementation or deployment yet.
+
+## 2026-11-19 — M04-C6: offline creature-pack authoring checkpoint
+
+- Operator verified C5 in a real two-client game: 120 actual combat XP, explicit evolution to Luminbloom, persistent specimen identity and 120 HP evolved form rendered on both players.
+- Added `scripts/build-local-creature-pack.mjs`, an offline author-side tool for supplied original or properly licensed PNG sheets and self-contained GLBs. It generates manifests for existing v1/v2 cosmetic formats, enforces source-folder boundaries and existing importer limits, requires license/provenance, checks without writing, and refuses to overwrite or generate packs inside the repository. No gameplay, account or cloud changes.
+- Source tests cover both formats using original demo assets, invalid permissions declarations, traversal, gameplay fields and malformed PNG rejection. Actual external art and browser acceptance pending; no third-party art bundled. See [C6 guide](nextgen/M04-C6-LOCAL-PACK-WORKSHOP.md).
+- **Next task:** operator verifies the workshop with authorized external assets and imports a small appearance pack locally. Then broaden the native species roster and design secure expedition banking.
+
 ## 2026-11-19 — M04-C5: live creature training and evolution
 
 - Operator verified C4 on the actual local two-client stack: default NEXTGEN entry, legacy archive, visible wild creature, timed capture, capsule consumption, independent ownership, native autonomous combat and account isolation. Committed and pushed as `6196e0c`; portable transfer restored with a clean working tree.

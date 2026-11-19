@@ -61,3 +61,22 @@
 .ng-shell .ng-pause-details>summary{font-weight:700;color:#cfe7bc;cursor:pointer}
 .ng-shell .ng-pause-details .ng-controls{margin-top:12px}
 @media(max-width:540px){.ng-shell #nextgen-evolution-lab{grid-template-columns:1fr}.ng-shell .ng-mod-toolbar .ng-button{flex-basis:100%}}
+
+/* M04-C8: one compact appearance library. Secondary controls stay behind disclosure. */
+.ng-shell .ng-appearance-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:12px 0}
+.ng-shell .ng-appearance-toolbar .ng-button{margin:0;padding:10px 12px;font-size:12px;white-space:normal}
+.ng-shell .ng-appearance-summary{font-size:12px;font-weight:650;color:#cbe4af;margin:8px 0}
+.ng-shell .ng-appearance-row{padding:10px 11px;margin:7px 0;border:1px solid #455f4b;border-radius:9px;background:#182e22;overflow-wrap:anywhere}
+.ng-shell .ng-appearance-row[data-enabled="true"]{border-color:#80a76a}
+.ng-shell .ng-appearance-main{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}
+.ng-shell .ng-appearance-main strong{font-size:14px;display:block}
+.ng-shell .ng-appearance-main p{margin:2px 0;font-size:11px;line-height:1.4}
+.ng-shell .ng-appearance-main>.ng-button{width:auto;min-width:76px;margin:0;padding:7px 9px;font-size:11px}
+.ng-shell .ng-appearance-more{font-size:12px;color:#c1d2b8;margin-top:5px}
+.ng-shell .ng-appearance-more>summary,.ng-shell .ng-appearance-advanced>summary{cursor:pointer;color:#d3e5c6;font-weight:650;padding:3px 0}
+.ng-shell .ng-appearance-more p{margin:6px 0;overflow-wrap:anywhere}
+.ng-shell .ng-appearance-advanced{margin-top:14px;border-top:1px solid #455f4b;padding-top:10px;font-size:13px}
+.ng-shell .ng-appearance-advanced #nextgen-mod-evolution[open]{margin-top:12px;padding:8px 0}
+.ng-shell .ng-appearance-advanced #nextgen-evolution-lab{margin-top:12px}
+.ng-shell #nextgen-mod-status{min-height:0;margin:6px 0;font-size:12px;overflow-wrap:anywhere}
+@media(max-width:360px){.ng-shell .ng-appearance-toolbar{grid-template-columns:1fr}.ng-shell .ng-appearance-main{gap:5px}.ng-shell .ng-appearance-main>.ng-button{min-width:60px}}

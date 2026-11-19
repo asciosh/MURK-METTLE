@@ -10,6 +10,7 @@ export interface ModManifest {
   rights: 'original' | 'licensed';
   compatibility: 'creature-cosmetics-v1';
   species: SpeciesId;
+  form?: 1 | 2 | 3;
   model: string;
   textures?: string[];
   icon?: string;
@@ -41,3 +42,5 @@ export const LIMITS: Readonly<{
 export const LICENSES: readonly string[];
 export const STATES: readonly string[];
 export function validateManifest(raw: unknown): ModManifest;
+export function sameCosmeticSlot(a: ModManifest, b: ModManifest): boolean;
+export function resolveCosmeticId(records: Iterable<{id: string; enabled: boolean; manifest: ModManifest}>, species: SpeciesId, formXP?: number): string | undefined;

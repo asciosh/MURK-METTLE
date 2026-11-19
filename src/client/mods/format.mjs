@@ -1,4 +1,4 @@
-import { SPECIES_IDS } from '../../../shared/expansion.mjs';
+import { SPECIES_IDS, evolutionStage } from '../../../shared/expansion.mjs';
 export const LIMITS = Object.freeze({
   archive: 8 * 1024 * 1024,
   extracted: 16 * 1024 * 1024,
@@ -62,6 +62,7 @@ export function validateManifest(raw) {
       'rights',
       'compatibility',
       'species',
+      'form',
       'model',
       'textures',
       'icon',
@@ -86,6 +87,7 @@ export function validateManifest(raw) {
   if (!LICENSES.includes(m.license) || !['original', 'licensed'].includes(m.rights))
     fail('Identify original/licensed rights and a supported redistribution license');
   if (!SPECIES_IDS.includes(m.species)) fail('Unknown official creature species');
+  if (m.form !== undefined && ![1, 2, 3].includes(m.form)) fail('Cosmetic form must be 1, 2 or 3');
   if (!path(m.model).endsWith('.glb')) fail('Model must be a GLB');
   if (m.textures !== undefined && (!Array.isArray(m.textures) || m.textures.length > 4))
     fail('At most four PNG textures');
@@ -111,6 +113,13 @@ export function validateManifest(raw) {
     }
   }
   return m;
+}
+// Old packs omit form and remain species-wide. The legacy client omits formXP.
+export const sameCosmeticSlot = (a, b) => a.species === b.species && a.form === b.form;
+export function resolveCosmeticId(records, species, formXP) {
+  const matches = [...records].filter(r => r.enabled && r.manifest.species === species);
+  const form = formXP === undefined ? undefined : evolutionStage(formXP) + 1;
+  return (matches.find(r => r.manifest.form === form) ?? matches.find(r => r.manifest.form === undefined))?.id;
 }
 export const crc32 = (bytes) => {
   let crc = 0xffffffff;

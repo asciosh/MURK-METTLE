@@ -69,6 +69,10 @@
         "reedwisp"
       ]
     },
+    "form": {
+      "enum": [1, 2, 3],
+      "description": "Optional NEXTGEN-only exact evolution stage; omitted means all forms."
+    },
     "model": {
       "type": "string",
       "maxLength": 120,

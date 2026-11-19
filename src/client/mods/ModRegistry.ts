@@ -1,4 +1,4 @@
-import { LIMITS, validateManifest, type ValidatedMod } from './format.mjs';
+import { LIMITS, validateManifest, sameCosmeticSlot, resolveCosmeticId, type ValidatedMod } from './format.mjs';
 import type { SpeciesId } from '../../../shared/expansion.mjs';
 import { ModStore, type StoredMod } from './ModStore';
 import { validateImport } from './ValidateImport';
@@ -25,8 +25,8 @@ export class ModRegistry {
   private notify(): void {
     for (const callback of this.listeners) callback();
   }
-  selection(species: SpeciesId): string | undefined {
-    return [...this.records.values()].find((r) => r.enabled && r.manifest.species === species)?.id;
+  selection(species: SpeciesId, formXP?: number): string | undefined {
+    return resolveCosmeticId(this.records.values(), species, formXP);
   }
   private async restore(): Promise<void> {
     try {
@@ -36,7 +36,7 @@ export class ModRegistry {
           if (row.id !== manifest.id || !(row.zip instanceof Blob) || row.zip.size > LIMITS.archive)
             throw Error('Invalid local cache');
           row.manifest = manifest;
-          row.enabled = row.enabled === true && !this.selection(manifest.species);
+          row.enabled = row.enabled === true && ![...this.records.values()].some(r => r.enabled && sameCosmeticSlot(r.manifest, manifest));
           this.records.set(row.id, row);
         } catch {
           /* Untrusted/tampered cache records are never activated. */
@@ -116,7 +116,7 @@ export class ModRegistry {
       if (!record) throw Error('Mod is missing');
       await this.source(id);
       const changed = [...this.records.values()]
-        .filter((r) => r.manifest.species === record.manifest.species)
+        .filter((r) => sameCosmeticSlot(r.manifest, record.manifest))
         .map((r) => ({ ...r, enabled: r.id === id }));
       await this.store.save(changed);
       for (const row of changed) this.records.set(row.id, row);
@@ -154,8 +154,8 @@ export class ModRegistry {
       this.trim();
     });
   }
-  async acquire(species: SpeciesId): Promise<ModVisual | null> {
-    const id = this.selection(species);
+  async acquire(species: SpeciesId, formXP?: number): Promise<ModVisual | null> {
+    const id = this.selection(species, formXP);
     if (!id) return null;
     try {
       return await this.preview(id);

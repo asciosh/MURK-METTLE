@@ -10,7 +10,9 @@ const { launchBrowser } = require('./support.cjs');
   const suffix = Date.now().toString(36), room = `FD${suffix}`.toUpperCase();
   const browser = await launchBrowser();
   const spriteMode = process.env.NEXTGEN_SPRITE_TEST === '1';
-  const evolutionMode = process.env.NEXTGEN_EVOLUTION_TEST === '1';
+  const glbFormsMode = process.env.NEXTGEN_GLB_FORMS_TEST === '1';
+  const evolutionMode = process.env.NEXTGEN_EVOLUTION_TEST === '1' || glbFormsMode;
+  if(glbFormsMode && spriteMode) throw Error('Run GLB and sprite appearance tests separately.');
   const wait = { timeout: 45000, polling: 100 };
   try {
     const pages = await Promise.all([0, 1].map(async i => {
@@ -18,8 +20,20 @@ const { launchBrowser } = require('./support.cjs');
       const registration = await ctx.request.post(new URL(`/api/account/register?username=fd_${suffix}_${i}`, base).href, { headers: { Origin: base.origin }, data: { pin: '482716' } });
       assert.ok(registration.ok(), `Registration failed: ${registration.status()}`);
       const page = await ctx.newPage();
+      if (glbFormsMode && i === 0) {
+        const { retargetLocal3dPack } = await import('../../scripts/retarget-local-3d-pack.mjs');
+        const demo = require('node:fs').readFileSync(require('node:path').join(__dirname,'../../public/mod-examples/copperbloom.mmcosmetic'));
+        await page.goto(new URL('/?nextgen=lobby&tab=mods&view=packs',base).href);
+        const files=await Promise.all([1,2,3].map(async form=>({name:`form-${form}.mmcosmetic`,mimeType:'application/zip',buffer:(await retargetLocal3dPack(demo,form)).zip})));
+        await page.waitForFunction(()=>document.querySelector('#nextgen-mod-import')?.disabled===false,null,wait);
+        await page.locator('#nextgen-mod-file').setInputFiles(files);
+        await page.getByText('3/3 packs imported and enabled.',{exact:false}).waitFor({timeout:90000});
+        await page.reload();
+        await page.waitForFunction(()=>document.querySelectorAll('#nextgen-mod-list [data-enabled="true"]').length===3,null,wait);
+      }
       if (spriteMode && i === 0) {
         await page.goto(new URL('/?nextgen=lobby&tab=mods&view=packs',base).href);
+        await page.locator('#nextgen-mod-advanced > summary').click();
         await page.locator('#ng-sprite-demo').click({timeout:60000});
         await page.getByText('Original Pixel Companions',{exact:false}).waitFor({timeout:60000});
         await page.locator('#ng-sprite-enable').click();
@@ -136,6 +150,10 @@ const { launchBrowser } = require('./support.cjs');
     await Promise.all(pages.map(page => page.waitForFunction(id => window.__nextgenRoom.getRoomInfo().companionViews.some(v => v.id === id && v.species === 'lanternkin'), id, wait)));
     await actor.waitForFunction(() => !window.__nextgenRoom.getRoomInfo().fieldMarkers.includes('bond:lanternkin'), null, wait);
     console.log('Server-owned Lanternkin bonded; both clients render the companion.');
+    if(glbFormsMode) {
+      await pages[0].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearanceId==='asciosh-copperbloom-f1'),id,wait);
+      await pages[1].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearance==='original'),id,wait);
+    }
     if (spriteMode) {
       await pages[0].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearance==='sprite'),id,wait);
       await pages[1].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearance==='original'),id,wait);
@@ -238,6 +256,7 @@ const { launchBrowser } = require('./support.cjs');
         }
         assert.ok(trained.self.creatureXp>=120,`Actual combat training timed out at ${trained.self.creatureXp} XP, ${restarts} restarts`);
         assert.equal(trained.self.creatureFormXp,0);assert.equal(trained.self.creatureProgress.evolutionReady,true);
+        if(glbFormsMode) await actor.waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearanceId==='asciosh-copperbloom-f1'),id,wait);
         await actor.waitForFunction(()=>document.querySelector('.nextgen-creature-training')?.dataset.evolutionReady==='true',null,wait);
         const savedXP=trained.self.creatureXp;
         await actor.goto(new URL('/?nextgen=lobby&tab=collection',base).href);
@@ -254,6 +273,11 @@ const { launchBrowser } = require('./support.cjs');
         const newId=(await read()).id;
         await pages[1].waitForFunction(({nativeId,newId})=>{const s=window.__nextgenRoom?.getRoomInfo();return s?.remotePlayers.some(p=>p.creatureInstanceId===nativeId&&p.nativeCompanion?.maxHp===120)&&s.companionViews.some(v=>v.id===newId&&v.form==='Luminbloom');},{nativeId,newId},wait);
         console.log(`M04-C5: ${savedXP} real combat XP, explicit Luminbloom evolution, persistent identity and evolved 120 HP form rendered on both clients.`);
+        if(glbFormsMode) {
+          await actor.waitForFunction(newId=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===newId&&v.appearanceId==='asciosh-copperbloom-f2'),newId,wait);
+          await pages[1].waitForFunction(newId=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===newId&&v.appearance==='original'),newId,wait);
+          console.log('M04-C7: three enabled GLB form slots persisted; base model stayed until explicit evolution, form 2 model loaded on redeploy, unmodded peer retained original art.');
+        }
       }
     }
     console.log('NEXTGEN FIELD: owned companion, rejected unowned Pulse/strike, synchronized Pulse and strike VFX, shared salvage and resupply passed. Full extraction and manual gameplay remain pending.');

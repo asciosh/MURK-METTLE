@@ -7,9 +7,9 @@ const { launchBrowser } = require('./support.cjs');
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
-    await page.goto(new URL('/?nextgen=lobby&tab=mods', base).href);
+    await page.goto(new URL('/?nextgen=lobby&tab=mods&view=lab', base).href);
     await page.locator('#nextgen-evolution-lab').waitFor({ timeout: 60000 });
-    assert.equal(await page.locator('#nextgen-mod-appearances').isVisible(), false);
+    assert.equal(await page.locator('#nextgen-mod-advanced').getAttribute('open'), '');
     await page.getByText('M04-B rule preview only.', { exact: false }).waitFor();
     assert.equal(await page.locator('#ng-evolution-family').inputValue(), 'glimmerpaw');
     const sun = page.getByRole('button', { name: 'PREVIEW → Sunmane' });

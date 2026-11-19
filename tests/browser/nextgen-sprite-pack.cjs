@@ -10,6 +10,7 @@ const { launchBrowser } = require('./support.cjs');
   try {
     const context = await browser.newContext(), page = await context.newPage();
     await page.goto(menu);
+    await page.locator('#nextgen-mod-advanced > summary').click();
     await page.locator('#ng-sprite-demo').click({ timeout: 60000 });
     await page.getByText('Original Pixel Companions', {exact:false}).waitFor({ timeout: 60000 });
     await page.locator('#ng-sprite-enable').click();
