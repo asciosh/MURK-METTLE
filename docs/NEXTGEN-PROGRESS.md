@@ -12,6 +12,12 @@ Running log for the Murk & Mettle 2.0 program. Newest entries first. Every entry
 what was done, how it was verified, and what remains. See the
 [roadmap](nextgen/ROADMAP.md) for milestone definitions.
 
+## 2026-11-19 — M04-C9: bounded animated 3D creature import
+
+- Added one-skin/32-joint validation, bounded quaternion tracks, strict joint indices, normalized skin weights, rigid inverse binds and conservative animated geometry bounds. Existing rigid/sprite support and permissions are unchanged.
+- Independent cloned skeletons/mixers, instance disposal, idle/walk/Pulse/Strike clip blending and existing exact evolution appearance slots. No new combat move, remote asset transfer, authority change or franchise assets.
+- Original procedural rig fixture and adversarial tests. Source-only `npm test`: 106/106 pass. Browser scripts parse; Windows typecheck/build, solo skeletal rendering and two-client evolution/attack tests pending. Moveset selection remains a separate future checkpoint.
+
 ## 2026-11-19 — M04-C8: streamlined local appearance library
 
 - Operator verified C7 in a real two-client room: 176 actual combat XP, explicit Luminbloom evolution, persistent identity and 120 HP, three independent GLB form slots correctly restored, evolved model used on redeployment, unmodded peer retained original art.

@@ -74,9 +74,10 @@ export class NextgenModBridge {
   }
 
   pulse(): void { this.visual?.pulse(); }
-  attack(): void { if (this.visual instanceof SpriteCompanionVisual) this.visual.attack(); }
+  attack(): void { this.visual?.attack(); }
   get appearanceKind(): 'sprite' | 'glb' | 'original' { return this.visual instanceof SpriteCompanionVisual ? 'sprite' : this.visual ? 'glb' : 'original'; }
   get appearanceId(): string | undefined { return this.visual && !(this.visual instanceof SpriteCompanionVisual) ? this.visual.mod.manifest.id : undefined; }
+  get motionInfo() { return this.visual && !(this.visual instanceof SpriteCompanionVisual) ? this.visual.motionInfo : null; }
   hide(): void { if (this.visual) this.visual.root.visible = false; }
   get active(): boolean { return !!this.visual; }
   dispose(): void {

@@ -76,7 +76,7 @@ export class RoomCompanionView {
     this.ring.material.color.setHex(CREATURES[this.species].glow);
   }
   strike(target: { x: number; z: number }) { this.strikeTarget = { ...target }; this.strikeMs = 400; this.strikeCount++; this.cosmetic.attack(); }
-  info() { return { species: this.species, xp: this.xp, form: creaturePower(this.species, this.xp).name, visible: this.visible, pulseCount: this.pulseCount, strikeCount: this.strikeCount, appearance: this.cosmetic.appearanceKind, appearanceId: this.cosmetic.appearanceId }; }
+  info() { return { species: this.species, xp: this.xp, form: creaturePower(this.species, this.xp).name, visible: this.visible, pulseCount: this.pulseCount, strikeCount: this.strikeCount, appearance: this.cosmetic.appearanceKind, appearanceId: this.cosmetic.appearanceId, motion: this.cosmetic.motionInfo }; }
   hide() { this.nextgenPet.root.visible=this.pet.root.visible = this.ring.visible = false; this.cosmetic.hide(); }
   dispose() { this.cosmetic.dispose();this.nextgenPet.dispose();this.pet.dispose(); this.ring.removeFromParent(); this.ring.geometry.dispose(); this.ring.material.dispose(); }
 }

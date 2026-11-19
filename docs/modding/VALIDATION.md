@@ -35,6 +35,6 @@ The isolation fixture renders the same official peer state with and without a lo
 - Actual Android and WebView2 operating-system file chooser flows (Playwright supplies selected files directly), storage permissions/quota behavior and repeated real imports.
 - Full co-op play with three PC clients and one Android client, including a player with no installed pack. Inspect actual WebSocket frames/cloud saves for official IDs and no cosmetic payloads.
 - Windows fullscreen/focus/pointer-lock recovery and physical phone rotation/touch behavior while the manager is open.
-- Sustained device rendering with large permitted packs, all stages/species, and quality switching. Exporters must honor the v1 rigid/node-animation profile; skeletal assets/extensions remain explicitly unsupported.
+- Sustained device rendering with large permitted packs, all stages/species, and quality switching. M04-C9 adds a strict skeletal subset; arbitrary rigs, morphs and extensions remain unsupported. Run the new original-rig solo and room browser tests before acceptance.
 
 The game-dev CLI was not available. The demo was authored with original source code, validated from real bytes, parsed by Three.js and rendered in-browser; it is not a sealed game-dev asset package or a professional skeletal rig.

@@ -68,6 +68,7 @@ export async function validateGLB(bytes, manifest, files) {
       'textures',
       'samplers',
       'animations',
+      'skins',
     ],
     'GLB root',
   );
@@ -83,7 +84,8 @@ export async function validateGLB(bytes, manifest, files) {
     textures = list(gltf.textures, 4, 'textures'),
     samplers = list(gltf.samplers, 4, 'samplers'),
     scenes = list(gltf.scenes, 1, 'scenes'),
-    animations = list(gltf.animations, LIMITS.clips, 'clips');
+    animations = list(gltf.animations, LIMITS.clips, 'clips'),
+    skins = list(gltf.skins, 1, 'skins');
   if (buffers.length !== 1 || !meshes.length || !nodes.length || scenes.length !== 1)
     fail('GLB needs one scene and one embedded buffer');
   object(buffers[0], ['byteLength'], 'buffer');
@@ -166,21 +168,63 @@ export async function validateGLB(bytes, manifest, files) {
     primitives = 0;
   const meshRadius = [];
   const meshCost = [];
+  const meshSkinned = [];
+  const skin = skins[0];
+  const joints = skin ? list(skin.joints, 32, 'skin joints') : [];
+  const jointSet = new Set(joints);
+  if (skin) {
+    object(skin, ['name', 'joints', 'skeleton', 'inverseBindMatrices'], 'skin');
+    if (!joints.length || jointSet.size !== joints.length) fail('Skin needs unique joints');
+    for (const id of joints) index(id, nodes, 'joint');
+    if (!jointSet.has(skin.skeleton)) fail('Skin needs an explicit skeleton root joint');
+    const bind = index(skin.inverseBindMatrices, accessors, 'inverse bind');
+    if (bind.type !== 'MAT4' || bind.componentType !== 5126 || bind.normalized || bind.count !== joints.length)
+      fail('Invalid inverse bind matrices');
+    for (let i = 0; i < joints.length; i++) {
+      const m = data[skin.inverseBindMatrices].slice(i * 16, i * 16 + 16);
+      const columns = [m.slice(0, 3), m.slice(4, 7), m.slice(8, 11)];
+      const dot = (a, b) => a.reduce((sum, x, k) => sum + x * b[k], 0);
+      if ([m[3], m[7], m[11], m[15] - 1].some(v => Math.abs(v) > 0.0001) ||
+          Math.hypot(...m.slice(12, 15)) > 8 ||
+          columns.some((c, j) => columns.some((d, k) => Math.abs(dot(c, d) - Number(j === k)) > 0.0001)))
+        fail('Inverse bind matrices must be bounded rigid affine transforms');
+      const [a, b, c] = columns;
+      if (dot([a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]], c) < 0.999)
+        fail('Reflected inverse bind matrix');
+    }
+  }
   for (const mesh of meshes) {
     const before = { triangles, vertices, primitives };
     object(mesh, ['name', 'primitives'], 'mesh');
     if (mesh.name !== undefined && !/^[-_a-zA-Z0-9]{1,48}$/.test(mesh.name)) fail('Invalid mesh name');
     let radius = 0;
+    let skinned;
     for (const p of list(mesh.primitives, LIMITS.primitives, 'primitives')) {
       if (++primitives > LIMITS.primitives) fail('Primitive budget exceeded');
       object(p, ['attributes', 'indices', 'material', 'mode'], 'primitive');
       if ((p.mode ?? 4) !== 4) fail('Only triangle meshes are supported');
       object(
         p.attributes,
-        ['POSITION', 'NORMAL', 'TEXCOORD_0', 'TEXCOORD_1', 'COLOR_0'],
+        ['POSITION', 'NORMAL', 'TEXCOORD_0', 'TEXCOORD_1', 'COLOR_0', 'JOINTS_0', 'WEIGHTS_0'],
         'vertex attributes',
       );
       const pos = index(p.attributes.POSITION, accessors, 'position');
+      const hasSkin = p.attributes.JOINTS_0 !== undefined;
+      if (hasSkin !== (p.attributes.WEIGHTS_0 !== undefined) || (hasSkin && !skin) ||
+          (skinned !== undefined && skinned !== hasSkin)) fail('Inconsistent skin attributes');
+      skinned = hasSkin;
+      if (hasSkin) {
+        const j = index(p.attributes.JOINTS_0, accessors, 'joint attribute');
+        const w = index(p.attributes.WEIGHTS_0, accessors, 'weight attribute');
+        if (j.type !== 'VEC4' || ![5121, 5123].includes(j.componentType) || j.normalized ||
+            w.type !== 'VEC4' || w.componentType !== 5126 || w.normalized ||
+            data[p.attributes.JOINTS_0].some(v => v >= joints.length)) fail('Invalid skin joint or weight attribute');
+        const weights = data[p.attributes.WEIGHTS_0];
+        if (weights.some(v => v < 0 || v > 1)) fail('Invalid skin weight range');
+        for (let i = 0; i < weights.length; i += 4)
+          if (Math.abs(weights.slice(i, i + 4).reduce((a, b) => a + b, 0) - 1) > 0.0001)
+            fail('Skin weights must sum to one');
+      }
       if (pos.componentType !== 5126 || pos.type !== 'VEC3' || pos.normalized)
         fail('Positions must be float VEC3');
       vertices += pos.count;
@@ -228,6 +272,7 @@ export async function validateGLB(bytes, manifest, files) {
       if (p.material !== undefined) index(p.material, materials, 'material');
     }
     meshRadius.push(radius);
+    meshSkinned.push(Boolean(skinned));
     meshCost.push({
       triangles: triangles - before.triangles,
       vertices: vertices - before.vertices,
@@ -239,13 +284,16 @@ export async function validateGLB(bytes, manifest, files) {
   const names = new Set(),
     parents = new Set();
   for (const node of nodes) {
-    object(node, ['name', 'mesh', 'children', 'translation', 'rotation', 'scale'], 'node');
+    object(node, ['name', 'mesh', 'children', 'translation', 'rotation', 'scale', 'skin'], 'node');
     if (node.name !== undefined) {
       if (typeof node.name !== 'string' || !/^[-_a-zA-Z0-9]{1,48}$/.test(node.name) || names.has(node.name))
         fail('Node names must be unique simple identifiers');
       names.add(node.name);
     }
     if (node.mesh !== undefined) index(node.mesh, meshes, 'mesh');
+    if (node.skin !== undefined && (node.skin !== 0 || !skin || node.mesh === undefined || !meshSkinned[node.mesh]))
+      fail('Invalid skinned mesh node');
+    if (node.mesh !== undefined && meshSkinned[node.mesh] && node.skin !== 0) fail('Missing mesh skin');
     if (node.translation) vector(node.translation, 3, -2, 2, 'node translation');
     if (node.scale) vector(node.scale, 3, 0.001, 2, 'node scale');
     if (node.rotation) {
@@ -262,19 +310,42 @@ export async function validateGLB(bytes, manifest, files) {
   const roots = list(scenes[0].nodes, LIMITS.nodes, 'roots');
   if (gltf.scene !== undefined && gltf.scene !== 0) fail('Invalid default scene');
   const visited = new Set();
+  const offsets = new Map();
   let radius = 0;
   const visit = (id, depth, offset, scale) => {
     const n = index(id, nodes, 'node');
-    if (depth > 6 || visited.has(id)) fail('Cyclic, duplicate or excessive node hierarchy');
+    if (depth > (skin ? 12 : 6) || visited.has(id)) fail('Cyclic, duplicate or excessive node hierarchy');
     visited.add(id);
     offset += Math.hypot(...(n.translation || [0, 0, 0])) * scale;
     scale *= Math.max(...(n.scale || [1, 1, 1]));
+    offsets.set(id, offset);
+    if (skin && (scale !== 1 || (n.scale || []).some(v => v !== 1) ||
+        (n.rotation && Math.abs(Math.hypot(...n.rotation) - 1) > 0.0001))) fail('Skin profile requires unit node transforms');
     if (n.mesh !== undefined) radius = Math.max(radius, offset + scale * meshRadius[n.mesh]);
     for (const c of n.children || []) visit(c, depth + 1, offset, scale);
   };
   for (const root of roots) {
     if (parents.has(root)) fail('Scene root is a child');
     visit(root, 0, 0, 1);
+  }
+  if (skin) {
+    const subtree = new Set();
+    const gather = id => { subtree.add(id); for (const child of nodes[id].children || []) gather(child); };
+    if (visited.size !== nodes.length) fail('Unreachable nodes');
+    gather(skin.skeleton);
+    if (joints.some(id => !subtree.has(id) || nodes[id].mesh !== undefined || !nodes[id].name))
+      fail('Joints must be named mesh-free descendants of the skeleton root');
+    const skinNodes = nodes.filter(n => n.skin !== undefined);
+    if (!skinNodes.length || skinNodes.length > 4) fail('Invalid skinned mesh instance count');
+    for (const n of skinNodes) {
+      if (!roots.includes(nodes.indexOf(n)) || (n.translation || []).some(v => v !== 0) ||
+          (n.rotation && n.rotation.some((v, i) => v !== Number(i === 3))) || (n.children || []).length)
+        fail('Skinned meshes require identity scene-root transforms');
+      for (let i = 0; i < joints.length; i++) {
+        const bindOffset = Math.hypot(...data[skin.inverseBindMatrices].slice(i * 16 + 12, i * 16 + 15));
+        radius = Math.max(radius, 1.01 * (offsets.get(joints[i]) + bindOffset + meshRadius[n.mesh]));
+      }
+    }
   }
   if (visited.size !== nodes.length || radius < 0.01 || radius > 64)
     fail('Unreachable nodes or invalid visual radius');
@@ -320,7 +391,7 @@ export async function validateGLB(bytes, manifest, files) {
       if (times.some((t, i) => t < 0 || t > 10 || (i && t <= times[i - 1]))) fail('Invalid animation time');
       const quats = data[s.output];
       for (let i = 0; i < quats.length; i += 4)
-        if (Math.abs(Math.hypot(...quats.slice(i, i + 4)) - 1) > 0.01) fail('Invalid animation quaternion');
+        if (Math.abs(Math.hypot(...quats.slice(i, i + 4)) - 1) > (skin ? 0.0001 : 0.01)) fail('Invalid animation quaternion');
     }
     const targets = new Set();
     for (const ch of channels) {
@@ -329,6 +400,7 @@ export async function validateGLB(bytes, manifest, files) {
       index(ch.sampler, ss, 'sampler');
       object(ch.target, ['node', 'path'], 'animation target');
       index(ch.target.node, nodes, 'target');
+      if (skin && nodes[ch.target.node].skin !== undefined) fail('Skinned mesh root animation is unsupported');
       if (ch.target.path !== 'rotation' || targets.has(ch.target.node))
         fail('Only unique node rotation tracks are supported; no root motion');
       targets.add(ch.target.node);

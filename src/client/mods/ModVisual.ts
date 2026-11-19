@@ -1,12 +1,15 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import type { ValidatedMod } from './format.mjs';
 export function disposeAsset(gltf: GLTF): void {
   const images = new Set<ImageBitmap>();
+  const skeletons = new Set<THREE.Skeleton>();
   const geometries = new Set<THREE.BufferGeometry>(),
     materials = new Set<THREE.Material>(),
     textures = new Set<THREE.Texture>();
   gltf.scene.traverse((o) => {
+    if (o instanceof THREE.SkinnedMesh) skeletons.add(o.skeleton);
     if (o instanceof THREE.Mesh) {
       geometries.add(o.geometry);
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
@@ -16,6 +19,7 @@ export function disposeAsset(gltf: GLTF): void {
     }
   });
   geometries.forEach((g) => g.dispose());
+  skeletons.forEach((s) => s.dispose());
   materials.forEach((m) => m.dispose());
   textures.forEach((t) => {
     t.dispose();
@@ -66,6 +70,9 @@ export class ModVisual {
   private state = '';
   private restart = false;
   private pulseRemaining = 0;
+  private attackRemaining = 0;
+  private readonly skeletons = new Set<THREE.Skeleton>();
+  private readonly playedClips = new Set<string>();
   private disposed = false;
   private readonly materials: THREE.MeshStandardMaterial[] = [];
   private readonly baseEmissive = new Map<THREE.MeshStandardMaterial, number>();
@@ -74,11 +81,16 @@ export class ModVisual {
     readonly mod: ValidatedMod,
     private readonly release: () => void,
   ) {
-    this.mesh = asset.scene.clone(true);
-    // V1 rejects skins and morph targets: geometry/textures are shared; each visual owns its materials and mixer.
+    this.mesh = cloneSkeleton(asset.scene);
+    // Geometry/textures are shared; each visual owns its skeletons, materials and mixer.
     const copies = new Map<THREE.Material, THREE.Material>();
     this.mesh.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
+      if (o instanceof THREE.SkinnedMesh) {
+        this.skeletons.add(o.skeleton);
+        // Animated bounds are conservatively validated; avoid rest-pose frustum clipping.
+        o.frustumCulled = false;
+      }
       o.castShadow = o.receiveShadow = true;
       const own = (m: THREE.Material) => {
         let c = copies.get(m);
@@ -105,24 +117,33 @@ export class ModVisual {
     this.state = '';
     this.restart = true;
   }
+  attack(): void {
+    if (this.pulseRemaining > 0) return;
+    this.attackRemaining = 0.45;
+    this.state = '';
+    this.restart = true;
+  }
   update(dt: number, moving: boolean, effects = true): void {
     if (this.disposed) return;
     this.pulseRemaining = Math.max(0, this.pulseRemaining - dt);
-    const state = this.pulseRemaining > 0 ? 'pulse' : moving ? 'walk' : 'idle';
+    this.attackRemaining = Math.max(0, this.attackRemaining - dt);
+    const state = this.pulseRemaining > 0 ? 'pulse' : this.attackRemaining > 0 ? 'attack' : moving ? 'walk' : 'idle';
     if (state !== this.state) {
       this.state = state;
       const mapping = this.mod.manifest.animations || {},
-        clipName = mapping[state as keyof typeof mapping] || mapping.idle;
+        clipName = mapping[state as keyof typeof mapping] || (state === 'attack' ? mapping.pulse : undefined) || mapping.idle;
       const clip =
         this.asset.animations.find((c) => c.name === clipName) ||
         this.asset.animations.find((c) => c.name === mapping.idle);
       if (clip) {
         const next = this.mixer.clipAction(clip);
-        const once = state === 'pulse' && clip.name === mapping.pulse;
+        const once = (state === 'pulse' && clip.name === mapping.pulse) ||
+          (state === 'attack' && clip.name === (mapping.attack || mapping.pulse));
         next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
         next.clampWhenFinished = once;
         if (next !== this.action || this.restart) {
           next.reset().play();
+          this.playedClips.add(clip.name);
           if (this.action && next !== this.action) next.crossFadeFrom(this.action, 0.16, false);
           this.action = next;
         }
@@ -135,12 +156,17 @@ export class ModVisual {
       m.emissiveIntensity =
         (this.baseEmissive.get(m) || 0) + strength * Math.sin((Math.PI * this.pulseRemaining) / 0.65) * 0.6;
   }
+  get motionInfo() {
+    return { bones: Math.max(0, ...Array.from(this.skeletons, s => s.bones.length)),
+      clip: this.action?.getClip().name ?? null, played: [...this.playedClips] };
+  }
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.mesh);
     this.materials.forEach((m) => m.dispose());
+    this.skeletons.forEach((s) => s.dispose());
     this.root.removeFromParent();
     this.release();
   }

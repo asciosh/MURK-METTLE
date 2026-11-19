@@ -10,7 +10,9 @@ const { launchBrowser } = require('./support.cjs');
   const suffix = Date.now().toString(36), room = `FD${suffix}`.toUpperCase();
   const browser = await launchBrowser();
   const spriteMode = process.env.NEXTGEN_SPRITE_TEST === '1';
-  const glbFormsMode = process.env.NEXTGEN_GLB_FORMS_TEST === '1';
+  const skeletalMode = process.env.NEXTGEN_SKELETAL_TEST === '1';
+  const glbFormsMode = process.env.NEXTGEN_GLB_FORMS_TEST === '1' || skeletalMode;
+  const appearancePrefix = skeletalMode ? 'mm-articulated-demo' : 'asciosh-copperbloom';
   const evolutionMode = process.env.NEXTGEN_EVOLUTION_TEST === '1' || glbFormsMode;
   if(glbFormsMode && spriteMode) throw Error('Run GLB and sprite appearance tests separately.');
   const wait = { timeout: 45000, polling: 100 };
@@ -22,7 +24,7 @@ const { launchBrowser } = require('./support.cjs');
       const page = await ctx.newPage();
       if (glbFormsMode && i === 0) {
         const { retargetLocal3dPack } = await import('../../scripts/retarget-local-3d-pack.mjs');
-        const demo = require('node:fs').readFileSync(require('node:path').join(__dirname,'../../public/mod-examples/copperbloom.mmcosmetic'));
+        const demo = skeletalMode ? (await import('../../scripts/build-rigged-cosmetic-demo.mjs')).rigPack() : require('node:fs').readFileSync(require('node:path').join(__dirname,'../../public/mod-examples/copperbloom.mmcosmetic'));
         await page.goto(new URL('/?nextgen=lobby&tab=mods&view=packs',base).href);
         const files=await Promise.all([1,2,3].map(async form=>({name:`form-${form}.mmcosmetic`,mimeType:'application/zip',buffer:(await retargetLocal3dPack(demo,form)).zip})));
         await page.waitForFunction(()=>document.querySelector('#nextgen-mod-import')?.disabled===false,null,wait);
@@ -151,7 +153,7 @@ const { launchBrowser } = require('./support.cjs');
     await actor.waitForFunction(() => !window.__nextgenRoom.getRoomInfo().fieldMarkers.includes('bond:lanternkin'), null, wait);
     console.log('Server-owned Lanternkin bonded; both clients render the companion.');
     if(glbFormsMode) {
-      await pages[0].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearanceId==='asciosh-copperbloom-f1'),id,wait);
+      await pages[0].waitForFunction(({id,appearancePrefix,skeletalMode})=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearanceId===appearancePrefix+'-f1'&&(!skeletalMode||v.motion?.bones===2)),{id,appearancePrefix,skeletalMode},wait);
       await pages[1].waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearance==='original'),id,wait);
     }
     if (spriteMode) {
@@ -178,6 +180,7 @@ const { launchBrowser } = require('./support.cjs');
     await perform('pulse', null, {});
     await Promise.all(pages.map(page => page.waitForFunction(id => { const s = window.__nextgenRoom.getRoomInfo(); return s.acceptedPulses >= 1 && s.companionViews.some(v => v.id === id && v.pulseCount >= 1); }, id, wait)));
     console.log('Server-confirmed Pulse broadcast and visual received on both clients.');
+    if(skeletalMode) await actor.waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.motion?.played.includes('Pulse')),id,wait);
     await perform('pickup', { ...PICKUPS[0], radius: 2.35 }, { id: PICKUPS[0].id });
     await Promise.all(pages.map(page => page.waitForFunction(id => { const s = window.__nextgenRoom.getRoomInfo(); return s.mission.salvage >= 1 && !s.fieldMarkers.includes(`pickup:${id}`); }, PICKUPS[0].id, wait)));
     console.log('Shared salvage marker removed only after server confirmation.');
@@ -185,6 +188,7 @@ const { launchBrowser } = require('./support.cjs');
     console.log('Server confirmed reserve ammo and bandage resupply.');
     await perform('strike', null, {});
     await Promise.all(pages.map(page => page.waitForFunction(id => { const s = window.__nextgenRoom.getRoomInfo(); return s.acceptedStrikes >= 1 && s.companionViews.some(v => v.id === id && v.strikeCount >= 1); }, id, wait)));
+    if(skeletalMode) await actor.waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.motion?.played.includes('Strike')),id,wait);
     const journal = await actor.context().newPage();
     try {
       await journal.goto(new URL('/?nextgen=lobby&tab=collection', base).href);
@@ -256,7 +260,7 @@ const { launchBrowser } = require('./support.cjs');
         }
         assert.ok(trained.self.creatureXp>=120,`Actual combat training timed out at ${trained.self.creatureXp} XP, ${restarts} restarts`);
         assert.equal(trained.self.creatureFormXp,0);assert.equal(trained.self.creatureProgress.evolutionReady,true);
-        if(glbFormsMode) await actor.waitForFunction(id=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearanceId==='asciosh-copperbloom-f1'),id,wait);
+        if(glbFormsMode) await actor.waitForFunction(({id,appearancePrefix})=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===id&&v.appearanceId===appearancePrefix+'-f1'),{id,appearancePrefix},wait);
         await actor.waitForFunction(()=>document.querySelector('.nextgen-creature-training')?.dataset.evolutionReady==='true',null,wait);
         const savedXP=trained.self.creatureXp;
         await actor.goto(new URL('/?nextgen=lobby&tab=collection',base).href);
@@ -274,9 +278,10 @@ const { launchBrowser } = require('./support.cjs');
         await pages[1].waitForFunction(({nativeId,newId})=>{const s=window.__nextgenRoom?.getRoomInfo();return s?.remotePlayers.some(p=>p.creatureInstanceId===nativeId&&p.nativeCompanion?.maxHp===120)&&s.companionViews.some(v=>v.id===newId&&v.form==='Luminbloom');},{nativeId,newId},wait);
         console.log(`M04-C5: ${savedXP} real combat XP, explicit Luminbloom evolution, persistent identity and evolved 120 HP form rendered on both clients.`);
         if(glbFormsMode) {
-          await actor.waitForFunction(newId=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===newId&&v.appearanceId==='asciosh-copperbloom-f2'),newId,wait);
+          await actor.waitForFunction(({newId,appearancePrefix,skeletalMode})=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===newId&&v.appearanceId===appearancePrefix+'-f2'&&(!skeletalMode||v.motion?.bones===2)),{newId,appearancePrefix,skeletalMode},wait);
           await pages[1].waitForFunction(newId=>window.__nextgenRoom.getRoomInfo().companionViews.some(v=>v.id===newId&&v.appearance==='original'),newId,wait);
           console.log('M04-C7: three enabled GLB form slots persisted; base model stayed until explicit evolution, form 2 model loaded on redeploy, unmodded peer retained original art.');
+          if(skeletalMode) console.log('M04-C9: skeletal GLB, acknowledged Pulse and Strike clips, evolved skeletal form and original peer fallback passed.');
         }
       }
     }

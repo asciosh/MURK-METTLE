@@ -866,6 +866,7 @@ getCombatInfo() {
     benchmark: this.benchmark,
     inventoryOpen: this.inventoryOpen,
     companionAppearance: this.companionCosmetic?.appearanceKind ?? 'original',
+    companionMotion: this.companionCosmetic?.motionInfo ?? null,
     companion: this.companion?.getState()??null
   };
 }

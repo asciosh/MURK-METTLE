@@ -17,7 +17,7 @@ export const LIMITS = Object.freeze({
   storedMods: 8,
 });
 export const LICENSES = Object.freeze(['CC0-1.0', 'CC-BY-4.0', 'MIT', 'Apache-2.0']);
-export const STATES = Object.freeze(['idle', 'walk', 'run', 'pulse', 'hit']);
+export const STATES = Object.freeze(['idle', 'walk', 'run', 'pulse', 'hit', 'attack']);
 export function fail(message) {
   throw new Error(message);
 }

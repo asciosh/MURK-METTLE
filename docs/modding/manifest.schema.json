@@ -121,6 +121,11 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 48
+        },
+        "attack": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48
         }
       }
     },
